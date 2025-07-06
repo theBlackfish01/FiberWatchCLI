@@ -45,7 +45,7 @@ Additional modules provide **SHAP interpretability** and a **natural-language ex
 .
 ├─ data/                     # not included in the repo, see below
 │  ├─ OTDR_DATA.csv
-├─ models/
+├─ models/                   # also not included in the repo, see below
 │  ├─ gru_ae_cond.pt
 │  ├─ gru_ae_deep.pt
 │  ├─ best_tcn.pt
