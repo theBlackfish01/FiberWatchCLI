@@ -108,12 +108,11 @@ Additional modules provide **SHAP interpretability** and a **natural-language ex
 
 ## Results
 
-| Metric            | GRU-AE    | TCN (direct) | TST (direct) | TST after GRU-AE |
-| ----------------- | --------- | ------------ | ------------ | ---------------- |
-| AUC (detector)    | **0.962** | –            | –            | –                |
-| Accuracy          | –         | **0.969**    | 0.961        | 0.958            |
-| Macro F1          | –         | 0.965        | 0.959        | 0.961            |
-| Localisation RMSE | –         | 0.038 m      | **0.016 m**  | 0.058 m          |
+| Metric            | TCN (direct) | TST (direct) | TST after GRU-AE |
+| ----------------- |--------------|--------------|------------------|
+| Accuracy          | **0.893**    | 0.882        | 0.961            |
+| Macro F1          | 0.892        | 0.881        | 0.917            |
+| Localisation RMSE | 0.038 m      | **0.028 m**  | 0.045m           |
 
 > *Key finding:* Attention-based TST halves localisation error relative to the TCN, but the TCN edges ahead on classification accuracy. A hard AE → TST cascade reduces throughput accuracy because detector recall = 90 %.
 
