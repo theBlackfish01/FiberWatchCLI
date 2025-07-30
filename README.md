@@ -1,5 +1,5 @@
-````markdown
-# OTDR ML Pipeline 🚦📈  
+# OTDR ML Pipeline 🚦📈
+
 *A modular, end-to-end toolkit for anomaly detection, fault classification & localisation on optical-fibre OTDR traces.*
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
@@ -9,13 +9,14 @@
 ---
 
 ## ✨ Key features
+
 * **GRU Auto-Encoder** for unsupervised anomaly detection (`models/gruae.py`)
 * **Dilated TCN** & **Time-Series Transformer** multitask models  
-  – predict *fault class* **and** *fault position* in metres  
+  – predict *fault class* **and** *fault position* in metres
 * **Unified training script**
   ```bash
   python -m train --mode all        # GRU-AE ➜ TCN ➜ TST
-````
+  ```
 
 * **Evaluation & visual analytics** (`evaluate.py`)
   Generates confusion matrices, random sample plots, and an **LLM explanation**.
@@ -70,5 +71,3 @@ config/          ← sets OpenAI API key, must be present at .env
 
 MIT – see `LICENSE`.
 
-```
-```
