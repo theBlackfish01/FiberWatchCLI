@@ -47,7 +47,6 @@ model_functions/
     tst.py       ← Time-Series Transformer multitask
 config/          ← sets OpenAI API key, must be present at .env
 
-tests/           ← pytest unit tests
 ```
 
 ---
