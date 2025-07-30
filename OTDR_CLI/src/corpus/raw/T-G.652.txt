@@ -1,0 +1,1621 @@
+I n t e r n a t i o n a l
+
+T e l e c o m m u n i c a t i o n
+
+ITU-T
+TELECOMMUNICATION
+STANDARDIZATION SECTOR
+OF ITU
+
+U n i o n
+
+G.652
+(11/2009)
+
+SERIES G: TRANSMISSION SYSTEMS AND MEDIA,
+DIGITAL SYSTEMS AND NETWORKS
+Transmission media and optical systems characteristics –
+Optical fibre cables
+
+Characteristics of a single-mode optical fibre
+and cable
+
+Recommendation ITU-T G.652
+
+ITU-T G-SERIES RECOMMENDATIONS
+TRANSMISSION SYSTEMS AND MEDIA, DIGITAL SYSTEMS AND NETWORKS
+INTERNATIONAL TELEPHONE CONNECTIONS AND CIRCUITS
+GENERAL CHARACTERISTICS COMMON TO ALL ANALOGUE CARRIERTRANSMISSION SYSTEMS
+INDIVIDUAL CHARACTERISTICS OF INTERNATIONAL CARRIER TELEPHONE
+SYSTEMS ON METALLIC LINES
+GENERAL CHARACTERISTICS OF INTERNATIONAL CARRIER TELEPHONE SYSTEMS
+ON RADIO-RELAY OR SATELLITE LINKS AND INTERCONNECTION WITH METALLIC
+LINES
+COORDINATION OF RADIOTELEPHONY AND LINE TELEPHONY
+TRANSMISSION MEDIA AND OPTICAL SYSTEMS CHARACTERISTICS
+General
+Symmetric cable pairs
+Land coaxial cable pairs
+Submarine cables
+Free space optical systems
+Optical fibre cables
+Characteristics of optical components and subsystems
+Characteristics of optical systems
+DIGITAL TERMINAL EQUIPMENTS
+DIGITAL NETWORKS
+DIGITAL SECTIONS AND DIGITAL LINE SYSTEM
+MULTIMEDIA QUALITY OF SERVICE AND PERFORMANCE – GENERIC AND USERRELATED ASPECTS
+TRANSMISSION MEDIA CHARACTERISTICS
+DATA OVER TRANSPORT – GENERIC ASPECTS
+PACKET OVER TRANSPORT ASPECTS
+ACCESS NETWORKS
+For further details, please refer to the list of ITU-T Recommendations.
+
+G.100–G.199
+G.200–G.299
+G.300–G.399
+G.400–G.449
+G.450–G.499
+G.600–G.699
+G.600–G.609
+G.610–G.619
+G.620–G.629
+G.630–G.639
+G.640–G.649
+G.650–G.659
+G.660–G.679
+G.680–G.699
+G.700–G.799
+G.800–G.899
+G.900–G.999
+G.1000–G.1999
+G.6000–G.6999
+G.7000–G.7999
+G.8000–G.8999
+G.9000–G.9999
+
+Recommendation ITU-T G.652
+Characteristics of a single-mode optical fibre and cable
+
+Summary
+Recommendation ITU-T G.652 describes the geometrical, mechanical and transmission attributes of
+a single-mode optical fibre and cable which has zero-dispersion wavelength around 1310 nm. The
+ITU-T G.652 fibre was originally optimized for use in the 1310 nm wavelength region, but can also
+be used in the 1550 nm region. This is the latest revision of a Recommendation that was first created
+in 1984 and deals with some relatively minor modifications. This revision is intended to maintain the
+continuing commercial success of this fibre in the evolving world of high-performance optical
+transmission systems.
+History
+Version
+
+Approval date
+
+Version 1
+
+(10/1984)
+
+Version 2
+
+(11/1988)
+
+Version 3
+
+(03/1993)
+
+Version 4
+
+(04/1997)
+
+Version 5
+
+(10/2000)
+
+This revision includes the addition of tables for different levels of system support.
+
+Version 6
+
+(03/2003)
+
+This revision clarified the nomenclature for the different categories or fibre. Also, in
+accordance with the agreement on spectral band description, the upper limit of the
+L-band is changed from 16XX to 1625 nm. The attenuation characteristics for reduced
+water peak categories, (G.652.C and G.652.D) are generalized to a broad region from a
+single wavelength. PMD requirements are added for all categories and two categories
+have reduced limits (compared to 0.5 ps/ km ). For the macrobending test, mandrel
+diameter is reduced to 30 mm radius. As seen above, this Recommendation has
+evolved considerably over the years; therefore the reader is warned to consider the
+appropriate version to determine the characteristics of already deployed product,
+taking into account the year of production. In fact, products are expected to comply
+with the Recommendation that was in force at the time of their manufacture, but may
+not fully comply with subsequent versions of the Recommendation.
+
+Version 7
+
+(06/2005)
+
+Support of G.695 applications is noted.
+A clarification of the method of fitting chromatic dispersion coefficient values and
+their use is provided in 5.10, along with some text on use of the statistics of chromatic
+dispersion for system design.
+A clarification of the relationship of the PMDQ of uncabled fibre to cabled fibre is
+provided in 6.2.
+In the tables of requirements:
+The uncabled fibre PMD line item is removed from the tables and the note on the
+requirement for uncabled fibre PMD is modified.
+The tolerance of MFD at 1310 nm is reduced.
+The maximum dispersion slope at the zero dispersion wavelength is reduced.
+The maximum concentricity error is reduced.
+The maximum macrobending loss is reduced.
+The wording for the water peak requirement in Tables 3 and 4 are modified to reflect a
+reference to the specification over the range vs the specification at 1310 nm.
+
+Rec. ITU-T G.652 (11/2009)
+
+i
+
+FOREWORD
+The International Telecommunication Union (ITU) is the United Nations specialized agency in the field of
+telecommunications, information and communication technologies (ICTs). The ITU Telecommunication
+Standardization Sector (ITU-T) is a permanent organ of ITU. ITU-T is responsible for studying technical,
+operating and tariff questions and issuing Recommendations on them with a view to standardizing
+telecommunications on a worldwide basis.
+The World Telecommunication Standardization Assembly (WTSA), which meets every four years,
+establishes the topics for study by the ITU-T study groups which, in turn, produce Recommendations on
+these topics.
+The approval of ITU-T Recommendations is covered by the procedure laid down in WTSA Resolution 1.
+In some areas of information technology which fall within ITU-T's purview, the necessary standards are
+prepared on a collaborative basis with ISO and IEC.
+
+NOTE
+In this Recommendation, the expression "Administration" is used for conciseness to indicate both a
+telecommunication administration and a recognized operating agency.
+Compliance with this Recommendation is voluntary. However, the Recommendation may contain certain
+mandatory provisions (to ensure e.g., interoperability or applicability) and compliance with the
+Recommendation is achieved when all of these mandatory provisions are met. The words "shall" or some
+other obligatory language such as "must" and the negative equivalents are used to express requirements. The
+use of such words does not suggest that compliance with the Recommendation is required of any party.
+
+INTELLECTUAL PROPERTY RIGHTS
+ITU draws attention to the possibility that the practice or implementation of this Recommendation may
+involve the use of a claimed Intellectual Property Right. ITU takes no position concerning the evidence,
+validity or applicability of claimed Intellectual Property Rights, whether asserted by ITU members or others
+outside of the Recommendation development process.
+As of the date of approval of this Recommendation, ITU had received notice of intellectual property,
+protected by patents, which may be required to implement this Recommendation. However, implementers
+are cautioned that this may not represent the latest information and are therefore strongly urged to consult the
+TSB patent database at http://www.itu.int/ITU-T/ipr/.
+
+ ITU 2010
+All rights reserved. No part of this publication may be reproduced, by any means whatsoever, without the
+prior written permission of ITU.
+
+ii
+
+Rec. ITU-T G.652 (11/2009)
+
+CONTENTS
+Page
+1
+
+Scope ............................................................................................................................
+
+1
+
+2
+
+References.....................................................................................................................
+2.1
+Normative references......................................................................................
+2.2
+Informative references ....................................................................................
+
+1
+1
+2
+
+3
+
+Terms and definitions ...................................................................................................
+
+2
+
+4
+
+Abbreviations and acronyms ........................................................................................
+
+2
+
+5
+
+Fibre attributes ..............................................................................................................
+5.1
+Mode field diameter .......................................................................................
+5.2
+Cladding diameter ..........................................................................................
+5.3
+Core concentricity error ..................................................................................
+5.4
+Non-circularity ...............................................................................................
+5.5
+Cut-off wavelength .........................................................................................
+5.6
+Macrobending loss..........................................................................................
+5.7
+Material properties of the fibre .......................................................................
+5.8
+Refractive index profile ..................................................................................
+5.9
+Longitudinal uniformity of chromatic dispersion...........................................
+5.10
+Chromatic dispersion coefficient ....................................................................
+
+3
+3
+3
+3
+3
+3
+4
+4
+4
+4
+5
+
+6
+
+Cable attributes .............................................................................................................
+6.1
+Attenuation coefficient ...................................................................................
+6.2
+Polarization mode dispersion coefficient .......................................................
+
+5
+5
+6
+
+7
+
+Tables of recommended values ....................................................................................
+
+6
+
+Appendix I – Information for link attributes and system design .............................................
+I.1
+Attenuation .....................................................................................................
+I.2
+Chromatic dispersion ......................................................................................
+I.3
+Differential group delay (DGD) .....................................................................
+I.4
+Non-linear coefficient .....................................................................................
+I.5
+Tables of common typical values ...................................................................
+
+11
+11
+11
+12
+12
+12
+
+Bibliography.............................................................................................................................
+
+14
+
+Rec. ITU-T G.652 (11/2009)
+
+iii
+
+Recommendation ITU-T G.652
+Characteristics of a single-mode optical fibre and cable
+1
+
+Scope
+
+This Recommendation describes a single-mode optical fibre and cable which has zero-dispersion
+wavelength around 1310 nm and which is optimized for use in the 1310 nm wavelength region, and
+which can also be used in the 1550 nm region (where this fibre is not optimized). Both analogue
+and digital transmission can be used with this fibre.
+The geometrical, optical, transmission and mechanical parameters are described below in three
+categories of attributes:
+•
+fibre attributes are those attributes that are retained throughout cabling and installation;
+•
+cable attributes that are recommended for cables as they are delivered;
+•
+link attributes that are characteristic of concatenated cables, describing estimation methods
+of system interface parameters based on measurements, modelling or other considerations.
+Information for link attributes and system design are in Appendix I.
+This Recommendation and the different performance categories found in the tables of clause 7 are
+intended to support the following related system Recommendations:
+•
+[ITU-T G.957].
+•
+[ITU-T G.691].
+•
+[ITU-T G.692].
+•
+[ITU-T G.693].
+•
+[ITU-T G.959.1].
+•
+[ITU-T G.695].
+NOTE – Depending on the length of the links, dispersion accommodation can be necessary for some
+ITU-T G.691, ITU-T G.692 or ITU-T G.959.1 application codes.
+
+The meaning of the terms used in this Recommendation and the guidelines to be followed in the
+measurement to verify the various characteristics are given in [ITU-T G.650.1] and
+[ITU-T G.650.2]. The characteristics of this fibre, including the definitions of the relevant
+parameters, their test methods and relevant values, will be refined as studies and experience
+progress.
+2
+
+References
+
+2.1
+
+Normative references
+
+The following ITU-T Recommendations and other references contain provisions which, through
+reference in this text, constitute provisions of this Recommendation. At the time of publication, the
+editions indicated were valid. All Recommendations and other references are subject to revision;
+users of this Recommendation are therefore encouraged to investigate the possibility of applying the
+most recent edition of the Recommendations and other references listed below. A list of the
+currently valid ITU-T Recommendations is regularly published. The reference to a document within
+this Recommendation does not give it, as a stand-alone document, the status of a Recommendation.
+[ITU-T G.650.1]
+
+Recommendation ITU-T G.650.1 (2004), Definitions and test methods for
+linear, deterministic attributes of single-mode fibre and cable.
+
+Rec. ITU-T G.652 (11/2009)
+
+1
+
+[ITU-T G.650.2]
+
+Recommendation ITU-T G.650.2 (2005), Definitions and test methods for
+statistical and non-linear related attributes of single-mode fibre and cable.
+
+[IEC 60793-2-50]
+
+IEC 60793-2-50 (2004), Optical fibres – Part 2-50: Product specifications –
+Sectional specification for class B single mode fibres.
+
+2.2
+
+Informative references
+
+[ITU-T G.663]
+
+Recommendation ITU-T G.663 (2000), Application related aspects of optical
+amplifier devices and subsystems.
+
+[ITU-T G.691]
+
+Recommendation ITU-T G.691 (2003), Optical interfaces for single channel
+STM-64 and other SDH systems with optical amplifiers.
+
+[ITU-T G.692]
+
+Recommendation ITU-T G.692 (1998), Optical interfaces for multichannel
+systems with optical amplifiers.
+
+[ITU-T G.693]
+
+Recommendation ITU-T G.693 (2005), Optical interfaces for intra-office
+systems.
+
+[ITU-T G.695]
+
+Recommendation ITU-T G.695 (2005), Optical interfaces for coarse
+wavelength division multiplexing applications.
+
+[ITU-T G.957]
+
+Recommendation ITU-T G.957 (1999), Optical interfaces for equipments and
+systems relating to the synchronous digital hierarchy.
+
+[ITU-T G.959.1]
+
+Recommendation ITU-T G.959.1 (2003), Optical transport network physical
+layer interfaces.
+
+[IEC 60794-2-11]
+
+IEC 60794-2-11 (2005), Optical fibre cables – Part 2-11: Indoor cables –
+Detailed specification for simplex and duplex cables for use in premises
+cabling.
+
+3
+
+Terms and definitions
+
+For the purposes of this Recommendation, the definitions given in [ITU-T G.650.1] and
+[ITU-T G.650.2] apply. Values shall be rounded to the number of digits given in the tables of
+Recommended values before conformance is evaluated.
+4
+
+Abbreviations and acronyms
+
+This Recommendation uses the following abbreviations and acronyms:
+Aeff
+
+Effective Area
+
+DGD
+
+Differential Group Delay
+
+DWDM
+
+Dense Wavelength Division Multiplexing
+
+GPa
+
+GigaPascal
+
+PMD
+
+Polarization Mode Dispersion
+
+PMDQ
+
+Statistical parameter for link PMD
+
+SDH
+
+Synchronous Digital Hierarchy
+
+TBD
+
+To Be Determined
+
+WDM
+
+Wavelength Division Multiplexing
+
+2
+
+Rec. ITU-T G.652 (11/2009)
+
+5
+
+Fibre attributes
+
+Only those characteristics of the fibre providing a minimum essential design framework for fibre
+manufacture are recommended in this clause. Ranges or limits on values are presented in the tables
+of clause 7. Of these, cable manufacture or installation may significantly affect the cabled fibre
+cut-off wavelength and PMD. Otherwise, the recommended characteristics will apply equally to
+individual fibres, fibres incorporated into a cable wound on a drum, and fibres in an installed cable.
+5.1
+
+Mode field diameter
+
+Both a nominal value and tolerance about that nominal value shall be specified at 1310 nm. The
+nominal value that is specified shall be within the range found in clause 7. The specified tolerance
+shall not exceed the value in clause 7. The deviation from nominal shall not exceed the specified
+tolerance.
+5.2
+
+Cladding diameter
+
+The recommended nominal value of the cladding diameter is 125 μm. A tolerance is also specified
+and shall not exceed the value in clause 7. The cladding deviation from nominal shall not exceed the
+specified tolerance.
+5.3
+
+Core concentricity error
+
+The core concentricity error shall not exceed the value specified in clause 7.
+5.4
+
+Non-circularity
+
+5.4.1
+
+Mode field non-circularity
+
+In practice, the mode field non-circularity of fibres having nominally circular mode fields is found
+to be sufficiently low that propagation and jointing are not affected. It is, therefore, not considered
+necessary to recommend a particular value for the mode field non-circularity. It is not normally
+necessary to measure the mode field non-circularity for acceptance purposes.
+5.4.2
+
+Cladding non-circularity
+
+The cladding non-circularity shall not exceed the value found in clause 7.
+5.5
+
+Cut-off wavelength
+
+Two useful types of cut-off wavelength can be distinguished:
+a)
+
+cable cut-off wavelength λcc;
+
+b)
+
+fibre cut-off wavelength λc.
+
+NOTE – For some specific submarine cable applications, other cable cut-off wavelength values may be
+required.
+
+The correlation of the measured values of λc and λcc depends on the specific fibre and cable design
+and the test conditions. While in general λcc < λc, a general quantitative relationship cannot be
+easily established. The importance of ensuring single-mode transmission in the minimum cable
+length between joints at the minimum operating wavelength is paramount. This may be performed
+by recommending the maximum cable cut-off wavelength λcc of a cabled single-mode fibre to be
+1260 nm or for worst case length and bends, by recommending a maximum fibre cut-off
+wavelength to be 1250 nm.
+The cable cut-off wavelength, λcc, shall be less than the maximum specified in clause 7.
+
+Rec. ITU-T G.652 (11/2009)
+
+3
+
+5.6
+
+Macrobending loss
+
+Macrobending loss varies with wavelength, bend radius and number of turns about a mandrel with a
+specified radius. Macrobending loss shall not exceed the maximum given in clause 7 for the
+specified wavelength(s), bend radius and number of turns.
+NOTE 1 – A qualification test may be sufficient to ensure that this requirement is being met.
+NOTE 2 – The recommended number of turns corresponds to the approximate number of turns deployed in
+all splice cases of a typical repeater span. The recommended radius is equivalent to the minimum
+bend-radius widely accepted for long-term deployment of fibres in practical systems installations to avoid
+static-fatigue failure.
+NOTE 3 – If, for practical reasons, fewer than the recommended number of turns are chosen to be
+implemented, it is suggested that not less than 40 turns, and that a proportionately smaller loss increase be
+required.
+NOTE 4 – The macrobending loss recommendation relates to the deployment of fibres in practical
+single-mode fibre installations. The influence of the stranding-related bending radii of cabled single-mode
+fibres on the loss performance is included in the loss specification of the cabled fibre.
+NOTE 5 – In the event that routine tests are required, a smaller diameter loop with one or several turns can
+be used instead of the recommended test, for accuracy and measurement ease. In this case, the loop diameter,
+number of turns and the maximum permissible bend loss for the several-turn test should be chosen so as to
+correlate with the recommended test and allowed loss.
+
+5.7
+
+Material properties of the fibre
+
+5.7.1
+
+Fibre materials
+
+The substances of which the fibres are made should be indicated.
+NOTE – Care may be needed in fusion splicing fibres of different substances. Provisional results indicate
+that adequate splice loss and strength can be achieved when splicing different high-silica fibres.
+
+5.7.2
+
+Protective materials
+
+The physical and chemical properties of the material used for the fibre primary coating and the best
+way of removing it (if necessary) should be indicated. In the case of single-jacketed fibre, similar
+indications shall be given.
+5.7.3
+
+Proofstress level
+
+The specified proofstress σp shall not be less than the minimum specified in clause 7.
+NOTE – The definitions of the mechanical parameters are contained in clauses 3.2 and 5.6 of
+[ITU-T G.650.1].
+
+5.8
+
+Refractive index profile
+
+The refractive index profile of the fibre does not generally need to be known.
+5.9
+
+Longitudinal uniformity of chromatic dispersion
+
+Under study.
+NOTE – At a particular wavelength, the local absolute value of the chromatic dispersion coefficient can vary
+away from the value measured on a long length. If the value decreases to a small value at a wavelength that
+is close to an operating wavelength in a wavelength division multiplexing (WDM) system, four-wave mixing
+can induce the propagation of power at other wavelengths including, but not limited to, other operating
+wavelengths. The magnitude of the four-wave mixing power is a function of the absolute value of the
+chromatic dispersion coefficient, the chromatic dispersion slope, the operating wavelengths, the optical
+power, and the distance over which four-wave mixing occurs.
+
+4
+
+Rec. ITU-T G.652 (11/2009)
+
+For dense wavelength division multiplexing (DWDM) operations in the 1550 nm region, the chromatic
+dispersion of ITU-T G.652 fibres is large enough to avoid four-wave mixing. Chromatic dispersion
+uniformity is, therefore, not a functional issue.
+
+5.10
+
+Chromatic dispersion coefficient
+
+The measured group delay or chromatic dispersion coefficient versus wavelength shall be fitted by
+the three-term Sellmeier equation as defined in Annex A of [ITU-T G.650.1] (see clause 5.5 of
+[ITU-T G.650.1] for guidance on the interpolation of dispersion values to unmeasured
+wavelengths).
+The Sellmeier equation can be used to fit the data in each range (1310 nm and 1550 nm) separately
+in two fits, or as one common fit, with data from both ranges.
+The Sellmeier fit in the 1310 nm region may not be sufficiently accurate when extrapolated to the
+1550 nm region. Because the chromatic dispersion in the latter region is large, the reduced accuracy
+may be acceptable; if not, it can be improved by including data from the 1550 nm region when
+performing the common fit, or by using a separate fit for the 1550 nm region. It should be noted that
+a common fit may reduce the accuracy in the 1310 nm region.
+The chromatic dispersion coefficient, D, is specified by putting limits on the parameters of a
+chromatic dispersion curve that is a function of wavelength in the 1310 nm region. The chromatic
+dispersion coefficient limit for any wavelength, λ, is calculated with the minimum zero-dispersion
+wavelength, λ0min, the maximum zero-dispersion wavelength, λ0max, and the maximum
+zero-dispersion slope coefficient, S0max, according to:
+4
+4
+λS0 max   λ 0 max  
+λS0 max   λ 0 min  
+(
+)
+1
+D
+λ
+1
+≤
+≤
+−
+−
+ 
+ 
+ 
+ 
+4   λ  
+4   λ  
+
+The values of λ0min, λ0max and S0max shall be within the limits indicated in the tables of clause 7.
+The chromatic dispersion coefficient values at wavelengths ranging from 1500 nm to 1625 nm are
+also used in system design or chromatic dispersion compensator design. Chromatic dispersion
+coefficient values at selected wavelengths in this range are evaluated by using either the five-term
+Sellmeier or the fourth order polynomial model based on measurements across these wavelength
+ranges. Designs with chromatic dispersion coefficient values are normally based on a statistical
+approach such as that found in Supplement 39 to ITU-T G-series Recommendations. Appendix I
+lists typical values for a band about 1550 nm.
+NOTE – It is not necessary to measure the chromatic dispersion coefficient of single-mode fibre on a routine
+basis.
+
+6
+
+Cable attributes
+
+Since the geometrical and optical characteristics of fibres given in clause 5 are barely affected by
+the cabling process, this clause gives recommendations mainly relevant to transmission
+characteristics of cabled factory lengths.
+Environmental and test conditions are paramount and are described in the guidelines for test
+methods.
+6.1
+
+Attenuation coefficient
+
+The attenuation coefficient is specified with a maximum value at one or more wavelengths in both
+the 1310 nm and 1550 nm regions. The optical fibre cable attenuation coefficient values shall not
+exceed the values found in clause 7.
+
+Rec. ITU-T G.652 (11/2009)
+
+5
+
+NOTE – The attenuation coefficient may be calculated across a spectrum of wavelengths, based on
+measurements at a few (3 to 4) predictor wavelengths. This procedure is described in clause 5.4.4 of
+[ITU-T G.650.1] and an example is given in Appendix III of [ITU-T G.650.1].
+
+6.2
+
+Polarization mode dispersion coefficient
+
+Cabled fibre polarization mode dispersion shall be specified on a statistical basis, not on an
+individual fibre basis. The requirements pertain only to the aspect of the link calculated from cable
+information. The metrics of the statistical specification are found below. Methods of calculations
+are found in [b-IEC/TR 61282-3], and are summarized in Appendix IV of [ITU-T G.650.2].
+The manufacturer shall supply a PMD link design value, PMDQ, that serves as a statistical upper
+bound for the PMD coefficient of the concatenated optical fibre cables within a defined possible
+link of M cable sections. The upper bound is defined in terms of a small probability level, Q, which
+is the probability that a concatenated PMD coefficient value exceeds PMDQ. For the values of M
+and Q given in clause 7, the value of PMDQ shall not exceed the maximum PMD coefficient
+specified in clause 7.
+Measurements and specifications on uncabled fibre are necessary, but not sufficient to ensure the
+cabled fibre specification. The maximum link design value specified on uncabled fibre shall be less
+than or equal to that specified for the cabled fibre. The ratio of PMD values for uncabled fibre to
+cabled fibre depends on the details of the cable construction and processing, as well as on the mode
+coupling condition of the uncabled fibre. [ITU-T G.650.2] recommends a low mode coupling
+deployment requiring a low tension wrap on a large diameter spool for uncabled fibre PMD
+measurements.
+The limits on the distribution of PMD coefficient values can be interpreted as being nearly
+equivalent to limits on the statistical variation of the differential group delay (DGD), that varies
+randomly with time and wavelength. When the PMD coefficient distribution is specified for optical
+fibre cable, equivalent limits on the variation of DGD can be determined. The metrics and values
+for link DGD distribution limits are found in Appendix I.
+NOTE 1 – PMDQ specification would be required only where cables are employed for systems that have the
+specification of the max DGD, i.e., for example, PMDQ specification would not be applied to systems
+recommended in [ITU-T G.957].
+NOTE 2 – PMDQ should be calculated for various types of cables, and they should usually be calculated
+using sampled PMD values. The samples would be taken from cables of similar construction.
+NOTE 3 – The PMDQ specification should not be applied to short cables such as jumper cables, indoor
+cables and drop cables.
+
+7
+
+Tables of recommended values
+
+The following tables summarize the recommended values for a number of categories of fibres that
+satisfy the objectives of this Recommendation. These categories are largely distinguished on the
+basis of PMD requirements and attenuation requirement at 1383 nm. See Appendix I for
+information about transmission distances and bit-rates relative to PMD requirements.
+Table 1, ITU-T G.652.A attributes, contains the recommended attributes and values needed to
+support applications such as those recommended in [ITU-T G.957] and [ITU-T G.691] up to
+STM-16, as well as 10 Gbit/s up to 40 km (Ethernet) and STM-256 for [ITU-T G.693].
+Table 2, ITU-T G.652.B attributes, contains recommended attributes and values needed to support
+higher bit rate applications, up to STM-64, such as some in [ITU-T G.691] and [ITU-T G.692],
+STM-256 for some applications in [ITU-T G.693] and [ITU-T G.959.1]. Depending on the
+application, chromatic dispersion accommodation may be necessary.
+Table 3, ITU-T G.652.C attributes, is similar to ITU-T G.652.A, but allows transmissions in
+portions of an extended wavelength range from 1360 nm to 1530 nm.
+6
+
+Rec. ITU-T G.652 (11/2009)
+
+Table 4, ITU-T G.652.D attributes, is similar to ITU-T G.652.B, but allows transmissions in
+portions of an extended wavelength range from 1360 nm to 1530 nm.
+Table 1 − ITU-T G.652.A attributes
+Fibre attributes
+Attribute
+Mode field diameter
+
+Detail
+
+Value
+
+Wavelength
+
+1310 nm
+
+Range of nominal values
+
+8.6-9.5 μm
+
+Tolerance
+
+±0.6 μm
+
+Nominal
+
+125.0 μm
+
+Tolerance
+
+±1 μm
+
+Core concentricity error
+
+Maximum
+
+0.6 μm
+
+Cladding noncircularity
+
+Maximum
+
+1.0%
+
+Cable cut-off wavelength
+
+Maximum
+
+1260 nm
+
+Macrobend loss
+
+Radius
+
+30 mm
+
+Number of turns
+
+100
+
+Maximum at 1550 nm
+
+0.1 dB
+
+Proof stress
+
+Minimum
+
+0.69 GPa
+
+Chromatic dispersion coefficient
+
+λ0min
+
+1300 nm
+
+λ0max
+
+1324 nm
+
+S0max
+
+0.092 ps/nm2 × km
+
+Cladding diameter
+
+Cable attributes
+Attribute
+Attenuation coefficient
+(Note 1)
+PMD coefficient
+(Note 2)
+
+Detail
+
+Value
+
+Maximum at 1310 nm
+
+0.5 dB/km
+
+Maximum at 1550 nm
+
+0.4 dB/km
+
+M
+
+20 cables
+
+Q
+
+0.01%
+
+Maximum PMDQ
+
+0.5 ps/ km
+
+NOTE 1 – The attenuation coefficient values listed in this table should not be applied to
+short cables such as jumper cables, indoor cables and drop cables. For example,
+[IEC 60794-2-11] specifies the attenuation coefficient of indoor cable as 1.0 dB/km or
+less at both 1310 and 1550 nm.
+NOTE 2 – According to clause 6.2, a maximum PMDQ value on uncabled fibre is
+specified in order to support the primary requirement on cable PMDQ.
+
+Rec. ITU-T G.652 (11/2009)
+
+7
+
+Table 2 − ITU-T G.652.B attributes
+Fibre attributes
+Attribute
+
+Mode field diameter
+
+Detail
+
+Value
+
+Wavelength
+
+1310 nm
+
+Range of nominal values
+
+8.6-9.5 μm
+
+Tolerance
+
+±0.6 μm
+
+Nominal
+
+125.0 μm
+
+Tolerance
+
+±1 μm
+
+Core concentricity error
+
+Maximum
+
+0.6 μm
+
+Cladding noncircularity
+
+Maximum
+
+1.0%
+
+Cable cut-off wavelength
+
+Maximum
+
+1260 nm
+
+Macrobend loss
+
+Radius
+
+30 mm
+
+Number of turns
+
+100
+
+Maximum at 1625 nm
+
+0.1 dB
+
+Proof stress
+
+Minimum
+
+0.69 GPa
+
+Chromatic dispersion coefficient
+
+λ0min
+
+1300 nm
+
+λ0max
+
+1324 nm
+
+S0max
+
+0.092 ps/nm2 × km
+
+Cladding diameter
+
+Cable attributes
+Attribute
+
+Attenuation coefficient
+(Note 1)
+PMD coefficient
+(Note 2)
+
+Detail
+
+Value
+
+Maximum at 1310 nm
+
+0.4 dB/km
+
+Maximum at 1550 nm
+
+0.35 dB/km
+
+Maximum at 1625 nm
+
+0.4 dB/km
+
+M
+
+20 cables
+
+Q
+
+0.01%
+
+Maximum PMDQ
+
+0.20 ps/ km
+
+NOTE 1 – The attenuation coefficient values listed in this table should not be applied to
+short cables such as jumper cables, indoor cables and drop cables. For example,
+[IEC 60794-2-11] specifies the attenuation coefficient of indoor cable as 1.0 dB/km or
+less at both 1310 and 1550 nm.
+NOTE 2 – According to clause 6.2, a maximum PMDQ value on uncabled fibre is
+specified in order to support the primary requirement on cable PMDQ.
+
+8
+
+Rec. ITU-T G.652 (11/2009)
+
+Table 3 − ITU-T G.652.C attributes
+Fibre attributes
+Attribute
+
+Mode field diameter
+
+Detail
+
+Value
+
+Wavelength
+
+1310 nm
+
+Range of nominal values
+
+8.6-9.5 μm
+
+Tolerance
+
+±0.6 μm
+
+Nominal
+
+125.0 μm
+
+Tolerance
+
+±1 μm
+
+Core concentricity error
+
+Maximum
+
+0.6 μm
+
+Cladding noncircularity
+
+Maximum
+
+1.0%
+
+Cable cut-off wavelength
+
+Maximum
+
+1260 nm
+
+Macrobend loss
+
+Radius
+
+30 mm
+
+Number of turns
+
+100
+
+Maximum at 1625 nm
+
+0.1 dB
+
+Proof stress
+
+Minimum
+
+0.69 GPa
+
+Chromatic dispersion coefficient
+
+λ0min
+
+1300 nm
+
+λ0max
+
+1324 nm
+
+S0max
+
+0.092 ps/nm2 × km
+
+Cladding diameter
+
+Cable attributes
+Attribute
+
+Attenuation coefficient
+(Note 1)
+
+PMD coefficient
+(Note 4)
+
+Detail
+
+Value
+
+Maximum from 1310 nm
+to 1625 nm (Note 2)
+
+0.4 dB/km
+
+Maximum at 1383 nm
+±3 nm (Note 3)
+
+0.4 dB/km
+
+Maximum at 1550 nm
+
+0.3 dB/km
+
+M
+
+20 cables
+
+Q
+
+0.01%
+
+Maximum PMDQ
+
+0.5 ps/ km
+
+NOTE 1 – The attenuation coefficient values listed in this table should not be applied to
+short cables such as jumper cables, indoor cables and drop cables. For example,
+[IEC 60794-2-11] specifies the attenuation coefficient of indoor cable as 1.0 dB/km or
+less at both 1310 and 1550 nm.
+NOTE 2 – This wavelength region can be extended to 1260 nm by adding 0.07 dB/km
+induced Rayleigh scattering loss to the attenuation value at 1310 nm. In this case, the
+cable cut-off wavelength should not exceed 1250 nm.
+NOTE 3 – The average attenuation coefficient at this wavelength shall be less than or
+equal to the maximum value specified for the range of 1310 nm to 1625 nm, after
+hydrogen ageing. The hydrogen ageing is a type test that shall be done to a sampled
+fibre, according to [IEC 60793-2-50] regarding the B1.3 fibre category.
+NOTE 4 – According to clause 6.2, a maximum PMDQ value on uncabled fibre is
+specified in order to support the primary requirement on cable PMDQ.
+
+Rec. ITU-T G.652 (11/2009)
+
+9
+
+Table 4 − ITU-T G.652.D attributes
+Fibre attributes
+Attribute
+
+Mode field diameter
+
+Detail
+
+Value
+
+Wavelength
+
+1310 nm
+
+Range of nominal values
+
+8.6-9.5 μm
+
+Tolerance
+
+±0.6 μm
+
+Nominal
+
+125.0 μm
+
+Tolerance
+
+±1 μm
+
+Core concentricity error
+
+Maximum
+
+0.6 μm
+
+Cladding noncircularity
+
+Maximum
+
+1.0%
+
+Cable cut-off wavelength
+
+Maximum
+
+1260 nm
+
+Macrobend loss
+
+Radius
+
+30 mm
+
+Number of turns
+
+100
+
+Maximum at 1625 nm
+
+0.1 dB
+
+Proof stress
+
+Minimum
+
+0.69 GPa
+
+Chromatic dispersion coefficient
+
+λ0min
+
+1300 nm
+
+λ0max
+
+1324 nm
+
+S0max
+
+0.092 ps/nm2 × km
+
+Cladding diameter
+
+Cable attributes
+Attribute
+
+Attenuation coefficient
+(Note 1)
+
+PMD coefficient
+(Note 4)
+
+Detail
+
+Value
+
+Maximum from 1310 nm to
+1625 nm (Note 2)
+
+0.4 dB/km
+
+Maximum at 1383 nm
+±3 nm (Note 3)
+
+0.4 dB/km
+
+Maximum at 1550 nm
+
+0.3 dB/km
+
+M
+
+20 cables
+
+Q
+
+0.01%
+
+Maximum PMDQ
+
+0.20 ps/ km
+
+NOTE 1 – The attenuation coefficient values listed in this table should not be applied to
+short cables such as jumper cables, indoor cables and drop cables. For example,
+[IEC 60794-2-11] specifies the attenuation coefficient of indoor cable as 1.0 dB/km or
+less at both 1310 and 1550 nm.
+NOTE 2 – This wavelength region can be extended to 1260 nm by adding 0.07 dB/km
+induced Rayleigh scattering loss to the attenuation value at 1310 nm. In this case, the
+cable cut-off wavelength should not exceed 1250 nm.
+NOTE 3 – The average attenuation coefficient at this wavelength shall be less than or
+equal to the maximum value specified for the range of 1310 nm to 1625 nm, after
+hydrogen ageing. The hydrogen ageing is a type test that shall be done to a sampled
+fibre, according to [IEC 60793-2-50] regarding the B1.3 fibre category.
+NOTE 4 – According to clause 6.2, a maximum PMDQ value on uncabled fibre is
+specified in order to support the primary requirement on cable PMDQ.
+
+10
+
+Rec. ITU-T G.652 (11/2009)
+
+Appendix I
+Information for link attributes and system design
+(This appendix does not form an integral part of this Recommendation)
+A concatenated link usually includes a number of spliced factory lengths of optical fibre cable. The
+requirements for factory lengths are given in clauses 5 and 6. The transmission parameters for
+concatenated links must take into account not only the performance of the individual cable lengths
+but also the statistics of concatenation.
+The transmission characteristics of the factory length optical fibre cables will have a certain
+probability distribution which often needs to be taken into account if the most economic designs are
+to be obtained. This appendix should be read with this statistical nature of the various parameters in
+mind.
+Link attributes are affected by factors other than optical fibre cables, by such things as splices,
+connectors and installation. These factors cannot be specified in this Recommendation. For the
+purpose of link attribute values estimation, typical values of optical fibre links are provided in the
+tables below. The estimation methods of parameters needed for system design are based on
+measurements, modelling or other considerations.
+I.1
+
+Attenuation
+
+The attenuation, A, of a link is given by:
+
+A = αL + α s x + α c y
+where:
+α typical attenuation coefficient of the fibre cables in a link;
+αs mean splice loss;
+x number of splices in a link;
+αc mean loss of line connectors;
+y number of line connectors in a link (if provided);
+L link length.
+A suitable margin should be allocated for future modifications of cable configurations (additional
+splices, extra cable lengths, ageing effects, temperature variations, etc.). The above equation does
+not include the loss of equipment connectors. The typical values found in clause I.5 are for the
+attenuation coefficient of optical fibre links. The attenuation budget used in designing an actual
+system should account for the statistical variations in these parameters.
+I.2
+
+Chromatic dispersion
+
+The chromatic dispersion in ps/nm can be calculated from the chromatic dispersion coefficients of
+the factory lengths, assuming a linear dependence on length, and with due regard for the signs of the
+coefficients (see clause 5.10).
+When these fibres are used for transmission in the 1550 nm region, some forms of chromatic
+dispersion compensation are often employed. In this case, the average link chromatic dispersion is
+used for design purposes. The measured dispersion in the 1550 nm window can be characterized
+within the 1550 nm window by a linear relationship with wavelength. The relationship is described
+in terms of the typical chromatic dispersion coefficient and dispersion slope coefficient at 1550 nm.
+
+Rec. ITU-T G.652 (11/2009)
+
+11
+
+Typical values for the chromatic dispersion coefficient, D1550, and chromatic dispersion slope
+coefficient, S1550, at 1550 nm are found in Table I.1. These values, together with link length, LLink,
+can be used to calculate the typical chromatic dispersion for use in optical link design.
+
+DLink (λ ) = LLink [D1550 + S1550 (λ − 1550)] [ps/nm]
+I.3
+
+Differential group delay (DGD)
+
+The differential group delay is the difference in arrival times of the two polarization modes at a
+particular wavelength and time. For a link with a specific PMD coefficient, the DGD of the link
+varies randomly with time and wavelength as a Maxwell distribution that contains a single
+parameter, which is the product of the PMD coefficient of the link and the square root of the link
+length. The system impairment due to PMD at a specific time and wavelength depends on the DGD
+at that time and wavelength. So, means of establishing useful limits on the DGD distribution as it
+relates to the optical fibre cable PMD coefficient distribution and its limits have been developed and
+are documented in [b-IEC/TR 61282-3] and are summarized in Appendix IV of [ITU-T G.650.2].
+The metrics of the limitations of the DGD distribution follow:
+NOTE – The determination of the contribution of components other than optical fibre cable is beyond the
+scope of this Recommendation, but is discussed in [b-IEC/TR 61282-3].
+
+Reference link length, LRef: A maximum link length to which the maximum DGD and probability
+will apply. For longer link lengths, multiply the maximum DGD by the square root of the ratio of
+actual length to the reference length.
+Typical maximum cable length, LCab: The maxima are assured when the typical individual cables of
+the concatenation or the lengths of the cables that are measured in determining the PMD coefficient
+distribution are less than this value.
+Maximum DGD, DGDmax: The DGD value that can be used when considering optical system
+design.
+Maximum probability, PF: The probability that an actual DGD value exceeds DGDmax.
+I.4
+
+Non-linear coefficient
+
+The effect of chromatic dispersion is interactive with the non-linear coefficient, n2/Aeff, regarding
+system impairments induced by non-linear optical effects (see [ITU-T G.663] and
+[ITU-T G.650.2]). Typical values vary with the implementation. The test methods for non-linear
+coefficient remain under study.
+I.5
+
+Tables of common typical values
+
+The values in Tables I.1 and I.2 are representative of concatenated optical fibre links according
+to clauses I.1 and I.3, respectively. The implied fibre induced maximum DGD values in Table I.2
+are intended for guidance in regard to the requirements for other optical elements that may be in the
+link.
+NOTE – Cable section length is 10 km except for the 0.10 ps/ km /> 4000 km link, where it is set to 25 km,
+the error probability level is 6.5 × 10–8.
+
+12
+
+Rec. ITU-T G.652 (11/2009)
+
+Table I.1 − Representative value of concatenated optical fibre links
+Attenuation coefficient
+
+(Note)
+
+Chromatic dispersion coefficient
+
+Wavelength region
+
+Typical link value
+
+1260 nm-1360 nm
+
+0.5 dB/km
+
+1530 nm-1565 nm
+
+0.275 dB/km
+
+1565 nm-1625 nm
+
+0.35 dB/km
+
+D1550
+
+17 ps/nm × km
+
+S1550
+
+0.056 ps/nm2 × km
+
+NOTE – Typical link value corresponds to the link attenuation coefficient used in
+[ITU-T G.957] and [ITU-T G.691].
+
+Table I.2 – Differential group delay
+Maximum PMDQ
+[ps/ km]
+
+Link length
+[km]
+
+Implied fibre induced
+maximum DGD
+[ps]
+
+No specification
+0.5
+
+0.20
+0.10
+
+Channel bit rates
+Up to 2.5 Gbit/s
+
+400
+
+25.0
+
+10 Gbit/s
+
+40
+
+19.0 (Note)
+
+10 Gbit/s
+
+2
+
+7.5
+
+40 Gbit/s
+
+3000
+
+19.0
+
+10 Gbit/s
+
+80
+
+7.0
+
+40 Gbit/s
+
+>4000
+
+12.0
+
+10 Gbit/s
+
+400
+
+5.0
+
+40 Gbit/s
+
+NOTE – This value applies also for 10 Gigabit Ethernet systems.
+
+Rec. ITU-T G.652 (11/2009)
+
+13
+
+Bibliography
+[b-IEC 60793-2]
+
+IEC 60793-2 (2003), Optical fibres – Part 2: Product specifications –
+General.
+
+[b-IEC/TR 61282-3] IEC/TR 61282-3 (2002), Fibre optic communication system design guides –
+Part 3: Calculation of polarization mode dispersion.
+
+14
+
+Rec. ITU-T G.652 (11/2009)
+
+SERIES OF ITU-T RECOMMENDATIONS
+Series A
+
+Organization of the work of ITU-T
+
+Series D
+
+General tariff principles
+
+Series E
+
+Overall network operation, telephone service, service operation and human factors
+
+Series F
+
+Non-telephone telecommunication services
+
+Series G
+
+Transmission systems and media, digital systems and networks
+
+Series H
+
+Audiovisual and multimedia systems
+
+Series I
+
+Integrated services digital network
+
+Series J
+
+Cable networks and transmission of television, sound programme and other multimedia signals
+
+Series K
+
+Protection against interference
+
+Series L
+
+Construction, installation and protection of cables and other elements of outside plant
+
+Series M
+
+Telecommunication management, including TMN and network maintenance
+
+Series N
+
+Maintenance: international sound programme and television transmission circuits
+
+Series O
+
+Specifications of measuring equipment
+
+Series P
+
+Terminals and subjective and objective assessment methods
+
+Series Q
+
+Switching and signalling
+
+Series R
+
+Telegraph transmission
+
+Series S
+
+Telegraph services terminal equipment
+
+Series T
+
+Terminals for telematic services
+
+Series U
+
+Telegraph switching
+
+Series V
+
+Data communication over the telephone network
+
+Series X
+
+Data networks, open system communications and security
+
+Series Y
+
+Global information infrastructure, Internet protocol aspects and next-generation networks
+
+Series Z
+
+Languages and general software aspects for telecommunication systems
+
+Printed in Switzerland
+Geneva, 2010
+
+

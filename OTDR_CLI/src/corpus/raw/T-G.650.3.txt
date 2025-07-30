@@ -1,0 +1,2017 @@
+I n t e r n a t i o n a l
+
+T e l e c o m m u n i c a t i o n
+
+ITU-T
+TELECOMMUNICATION
+STANDARDIZATION SECTOR
+OF ITU
+
+U n i o n
+
+G.650.3
+(08/2017)
+
+SERIES G: TRANSMISSION SYSTEMS AND MEDIA,
+DIGITAL SYSTEMS AND NETWORKS
+Transmission media and optical systems characteristics –
+Optical fibre cables
+
+Test methods for installed single-mode optical
+fibre cable links
+
+Recommendation ITU-T G.650.3
+
+ITU-T G-SERIES RECOMMENDATIONS
+TRANSMISSION SYSTEMS AND MEDIA, DIGITAL SYSTEMS AND NETWORKS
+INTERNATIONAL TELEPHONE CONNECTIONS AND CIRCUITS
+GENERAL CHARACTERISTICS COMMON TO ALL ANALOGUE CARRIERTRANSMISSION SYSTEMS
+INDIVIDUAL CHARACTERISTICS OF INTERNATIONAL CARRIER TELEPHONE
+SYSTEMS ON METALLIC LINES
+GENERAL CHARACTERISTICS OF INTERNATIONAL CARRIER TELEPHONE SYSTEMS
+ON RADIO-RELAY OR SATELLITE LINKS AND INTERCONNECTION WITH METALLIC
+LINES
+COORDINATION OF RADIOTELEPHONY AND LINE TELEPHONY
+TRANSMISSION MEDIA AND OPTICAL SYSTEMS CHARACTERISTICS
+General
+Symmetric cable pairs
+Land coaxial cable pairs
+Submarine cables
+Free space optical systems
+Optical fibre cables
+Characteristics of optical components and subsystems
+Characteristics of optical systems
+DIGITAL TERMINAL EQUIPMENTS
+DIGITAL NETWORKS
+DIGITAL SECTIONS AND DIGITAL LINE SYSTEM
+MULTIMEDIA QUALITY OF SERVICE AND PERFORMANCE – GENERIC AND USERRELATED ASPECTS
+TRANSMISSION MEDIA CHARACTERISTICS
+DATA OVER TRANSPORT – GENERIC ASPECTS
+PACKET OVER TRANSPORT ASPECTS
+ACCESS NETWORKS
+For further details, please refer to the list of ITU-T Recommendations.
+
+G.100–G.199
+G.200–G.299
+G.300–G.399
+G.400–G.449
+G.450–G.499
+G.600–G.699
+G.600–G.609
+G.610–G.619
+G.620–G.629
+G.630–G.639
+G.640–G.649
+G.650–G.659
+G.660–G.679
+G.680–G.699
+G.700–G.799
+G.800–G.899
+G.900–G.999
+G.1000–G.1999
+G.6000–G.6999
+G.7000–G.7999
+G.8000–G.8999
+G.9000–G.9999
+
+Recommendation ITU-T G.650.3
+Test methods for installed single-mode optical fibre cable links
+
+Summary
+Recommendation ITU-T G.650.3 outlines the tests normally carried out on installed single-mode
+optical fibre cable links. It includes a collection of references to the main measurement methods and
+gives an indication of which are most suitable for installed cable links, depending on the required
+inspection level. Optical fibre cable links are comprised of multiple cable sections, splices and other
+connections. This term is more completely defined in this Recommendation.
+This Recommendation uses a tiered approach. The first level indicates measurements that are normally
+carried out to commission new optical fibre cable links. The second level indicates measurements that
+may be carried out to satisfy service level agreements (e.g., when a dark fibre contract is signed) or to
+verify attributes of older links that may be used at higher bit rates or over extended wavelength ranges.
+Recommendation ITU-T G.650.3 (2017) introduces the provision of information of splice loss
+measurement based on the quasi-bidirectional technique in Appendix IV. The method for
+differentiating splice loss and macrobending loss in installed links, which was issued as Amendment 1
+to ITU-T G.650.3 (2008), is also included as Appendix III.
+
+History
+Edition
+
+Recommendation
+
+Approval
+
+Study Group
+
+Unique ID*
+
+11.1002/1000/9180
+11.1002/1000/9366
+11.1002/1000/11326
+11.1002/1000/13289
+
+1.0
+
+ITU-T G.650.3
+
+2007-07-29
+
+15
+
+2.0
+
+ITU-T G.650.3
+
+2008-03-29
+
+15
+
+ITU-T G.650.3 (2008) Amd. 1 2011-02-25
+
+15
+
+2.1
+3.0
+
+ITU-T G.650.3
+
+2017-08-13
+
+15
+
+Keywords
+Fibre characterization, optical fibre cable link.
+
+____________________
+*
+
+To access the Recommendation, type the URL http://handle.itu.int/ in the address field of your web
+browser, followed by the Recommendation's unique ID. For example, http://handle.itu.int/11.1002/1000/11
+830-en.
+Rec. ITU-T G.650.3 (08/2017)
+
+i
+
+FOREWORD
+The International Telecommunication Union (ITU) is the United Nations specialized agency in the field of
+telecommunications, information and communication technologies (ICTs). The ITU Telecommunication
+Standardization Sector (ITU-T) is a permanent organ of ITU. ITU-T is responsible for studying technical,
+operating and tariff questions and issuing Recommendations on them with a view to standardizing
+telecommunications on a worldwide basis.
+The World Telecommunication Standardization Assembly (WTSA), which meets every four years, establishes
+the topics for study by the ITU-T study groups which, in turn, produce Recommendations on these topics.
+The approval of ITU-T Recommendations is covered by the procedure laid down in WTSA Resolution 1.
+In some areas of information technology which fall within ITU-T's purview, the necessary standards are
+prepared on a collaborative basis with ISO and IEC.
+
+NOTE
+In this Recommendation, the expression "Administration" is used for conciseness to indicate both a
+telecommunication administration and a recognized operating agency.
+Compliance with this Recommendation is voluntary. However, the Recommendation may contain certain
+mandatory provisions (to ensure, e.g., interoperability or applicability) and compliance with the
+Recommendation is achieved when all of these mandatory provisions are met. The words "shall" or some other
+obligatory language such as "must" and the negative equivalents are used to express requirements. The use of
+such words does not suggest that compliance with the Recommendation is required of any party.
+
+INTELLECTUAL PROPERTY RIGHTS
+ITU draws attention to the possibility that the practice or implementation of this Recommendation may involve
+the use of a claimed Intellectual Property Right. ITU takes no position concerning the evidence, validity or
+applicability of claimed Intellectual Property Rights, whether asserted by ITU members or others outside of
+the Recommendation development process.
+As of the date of approval of this Recommendation, ITU had not received notice of intellectual property,
+protected by patents, which may be required to implement this Recommendation. However, implementers are
+cautioned that this may not represent the latest information and are therefore strongly urged to consult the TSB
+patent database at http://www.itu.int/ITU-T/ipr/.
+
+ ITU 2017
+All rights reserved. No part of this publication may be reproduced, by any means whatsoever, without the prior
+written permission of ITU.
+
+ii
+
+Rec. ITU-T G.650.3 (08/2017)
+
+Table of Contents
+Page
+1
+
+Scope.............................................................................................................................
+
+1
+
+2
+
+References.....................................................................................................................
+
+1
+
+3
+
+Definitions ....................................................................................................................
+3.1
+Terms defined elsewhere ................................................................................
+3.2
+Terms defined in this Recommendation .........................................................
+
+2
+2
+2
+
+4
+
+Abbreviations and acronyms ........................................................................................
+
+3
+
+5
+
+Conventions ..................................................................................................................
+
+3
+
+6
+
+Test methods .................................................................................................................
+6.1
+Test methods for characteristics of optical fibre cable links following
+installation ......................................................................................................
+6.2
+Test methods for verification of service contracts or transmission at
+particular bit rates ...........................................................................................
+
+3
+
+Appendix I – Optical time domain reflectometer trace analysis ..............................................
+I.1
+Optical time domain reflectometer trace example..........................................
+I.2
+Optical time domain reflectometer event table example ................................
+I.3
+Optical time domain reflectometer bidirectional trace analysis .....................
+
+9
+9
+9
+10
+
+Appendix II – Optical path parameters specified in ITU-T Recommendations ......................
+
+13
+
+Appendix III – Method for differentiating splice loss and macrobending loss in installed
+links...............................................................................................................................
+III.1
+General ...........................................................................................................
+III.2
+Theory.............................................................................................................
+III.3
+Considerations on practical applicability .......................................................
+III.4
+Measurement examples and influence of various conditions on
+measurement results .......................................................................................
+
+3
+6
+
+14
+14
+14
+17
+17
+
+Appendix IV – Splice loss measurement using quasi-bidirectional technique ........................
+IV.1
+Introduction ....................................................................................................
+IV.2
+Test method using quasi-bidirectional technique ...........................................
+
+20
+20
+20
+
+Bibliography.............................................................................................................................
+
+25
+
+Rec. ITU-T G.650.3 (08/2017)
+
+iii
+
+Recommendation ITU-T G.650.3
+Test methods for installed single-mode optical fibre cable links
+1
+
+Scope
+
+This Recommendation describes test methods that are particularly suited to the characterization of
+single-mode optical fibre cable links. The methods are not intended for application to links that
+contain optical network elements, amplifiers, dispersion compensators, passive splitters or combiners.
+Measurements associated with these devices in combination with optical fibre cable are defined in
+ITU-T G.66x or ITU-T G.67x series Recommendations. These measurements of the cable links
+between such devices and the calculation methods for combining the results of concatenated cable
+links are also presented.
+This Recommendation uses a tiered approach. The first level indicates measurements that are
+normally carried out to commission new optical fibre cable links. The second level indicates
+measurements that may be carried out to satisfy service level agreements (e.g., when a dark fibre
+contract is signed) or to verify attributes of older links that may be used at higher bit rates or over
+extended wavelength ranges.
+2
+
+References
+
+The following ITU-T Recommendations and other references contain provisions which, through
+reference in this text, constitute provisions of this Recommendation. At the time of publication, the
+editions indicated were valid. All Recommendations and other references are subject to revision;
+users of this Recommendation are therefore encouraged to investigate the possibility of applying the
+most recent edition of the Recommendations and other references listed below. A list of the currently
+valid ITU-T Recommendations is regularly published. The reference to a document within this
+Recommendation does not give it, as a stand-alone document, the status of a Recommendation.
+[ITU-T G.650.1]
+
+Recommendation ITU-T G.650.1 (2010), Definitions and test methods for
+linear, deterministic attributes of single-mode fibre and cable.
+
+[ITU-T G.650.2]
+
+Recommendation ITU-T G.650.2 (2015), Definitions and test methods for
+statistical and non-linear related attributes of single-mode fibre and cable.
+
+[ITU-T G.652]
+
+Recommendation ITU-T G.652 (2016), Characteristics of a single-mode
+optical fibre and cable.
+
+[ITU-T G.655]
+
+Recommendation ITU-T G.655 (2009), Characteristics of a non-zero
+dispersion-shifted single-mode optical fibre and cable.
+
+[ITU-T G.657]
+
+Recommendation ITU-T G.657 (2016), Characteristics of a bending-loss
+insensitive single-mode optical fibre and cable.
+
+[ITU-T G.671]
+
+Recommendation ITU-T G.671 (2012), Transmission characteristics of optical
+components and subsystems.
+
+[ITU-T G.957]
+
+Recommendation ITU-T G.957 (2006), Optical interfaces for equipments and
+systems relating to the synchronous digital hierarchy.
+
+[IEC 60793-1-40]
+
+IEC 60793-1-402001, Optical fibres – Part 1-40: Measurement methods and
+test procedures – Attenuation.
+
+[IEC 61280-4-2]
+
+IEC 61280-4-2:2014, Fibre-optic communication subsystem test procedures –
+Part 4-2: Installed cable plant – Single-mode attenuation and optical return
+loss measurement.
+
+Rec. ITU-T G.650.3 (08/2017)
+
+1
+
+[IEC 61280-4-4]
+
+IEC 61280-4-4:2017, Fibre optic communication subsystem test procedures –
+Part 4-4: Cable plants and links – Polarization mode dispersion measurement
+for installed links.
+
+[IEC 61281-1]
+
+IEC 61281-1 (1999), Fibre optic communication subsystems – Part 1: Generic
+specification.
+
+[IEC/TR 61282-7] IEC/TR 61282-7:2003, Fibre optic communication system design guides –
+Part 7: Statistical calculation of chromatic dispersion.
+[IEC/TR 61282-9] IEC/TR 61282-9:2016, Fibre optic communication system design guides –
+Part 9: Guidance on polarization mode dispersion measurements and theory.
+[IEC 61300-3-6]
+
+IEC 61300-3-6:2008, Fibre optic interconnecting devices and passive
+components – Basic test and measurement procedures – Part 3-6:
+Examinations and measurements – Return loss.
+
+[IEC 61300-3-35]
+
+IEC 61300-3-35:2015, Fibre optic interconnecting devices and passive
+components – Basic test and measurement procedures – Part 3-35:
+Examinations and measurements –Visual inspection of fibre optic connectors
+and fibre-stub transceivers.
+
+[IEC/TR 61931]
+
+IEC/TR 61931 (1998), Fibre optic – Terminology.
+
+3
+
+Definitions
+
+3.1
+
+Terms defined elsewhere
+
+This Recommendation uses the following terms defined elsewhere:
+3.1.1
+
+differential group delay (DGD): [ITU-T G.650.2]
+
+3.1.2
+
+fibre optic cable plant (FOCP): [IEC 61281-1]
+
+3.1.3
+
+fusion splice: [IEC/TR 61931]
+
+3.1.4
+
+mechanical splice: [IEC/TR 61931]
+
+3.1.5
+
+connector, fibre optic: [IEC 61281-1]
+
+3.1.6
+
+optical device: [IEC 61281-1]
+
+3.1.7
+
+optical return loss (ORL): [IEC 61281-1]
+
+3.1.8
+
+[optical (fibre)] splice: [IEC/TR 61931]
+
+3.1.9 polarization mode dispersion (PMD): [ITU-T G.650.2]
+3.1.10 reflectance: [ITU-T G.671]
+3.2
+
+Terms defined in this Recommendation
+
+This Recommendation defines the following terms:
+3.2.1 attenuation of an optical fibre cable link: The summation of the attenuations of fibre cable
+sections, splices between cable sections and connections between, and at the end of, cable sections.
+The definition of attenuation is given in [ITU-T G.650.1]. Some examples of link attenuation
+measurement results are found in [b-ITU-T G-Sup.39].
+3.2.2 chromatic dispersion of an optical fibre cable link: The summation of the chromatic
+dispersions of the individual cables that comprise the link at the wavelengths of interest. See [b-ITU-T
+G-Sup.39] for more information on how the dispersion from different cable sections is summed.
+
+2
+
+Rec. ITU-T G.650.3 (08/2017)
+
+3.2.3 fibre characterization: A comprehensive suite of measurements that is carried out on an
+optical fibre cable link to determine the key performance attributes of that link that may affect current
+or future applications that operate over the link. Fibre characterization also allows the quality of the
+optical fibre cable link to be assessed, including the identification of the type and grade of fibre
+installed. Full fibre characterization includes connector end face inspection, insertion loss
+measurements, return loss measurements, optical time domain reflectometer (OTDR) testing,
+chromatic dispersion testing, polarization mode dispersion measurement and spectral attenuation.
+3.2.4 single-mode optical fibre cable link: A collection of passive fibre optic components that
+together form a continuous optical fibre pathway between two end points. The end points will
+typically be patch panels or optical distribution frames where the fibres are terminated with
+connectors. The link will typically be comprised of many optical fibre cable sections, jointed end to
+end. A complex link may contain additional connectors at intermediate patch panels and therefore be
+made up of two or more concatenated simple links.
+3.2.5 uniformity of fibre link: The longitudinal variation in the attenuation coefficient or
+chromatic dispersion coefficient along that link.
+4
+
+Abbreviations and acronyms
+
+This Recommendation uses the following abbreviations and acronyms:
+BOTDA
+
+Brillouin Time Domain Analysis
+
+CD
+
+Chromatic Dispersion
+
+CWDM
+
+Coarse Wavelength Division Multiplexing
+
+DFB
+
+Distributed Feedback
+
+DGD
+
+Differential Group Delay
+
+DWDM
+
+Dense Wavelength Division Multiplexing
+
+LSPM
+
+Light Source and Power Meter
+
+MFD
+
+Mode Field Diameter
+
+OCWR
+
+Optical Continuous-Wave Reflectometer
+
+ORL
+
+Optical Return Loss
+
+OTDR
+
+Optical Time Domain Reflectometer
+
+PMD
+
+Polarization Mode Dispersion
+
+5
+
+Conventions
+
+None.
+6
+
+Test methods
+
+6.1
+
+Test methods for characteristics of optical fibre cable links following installation
+
+The purpose of testing an optical fibre cable link following installation is primarily concerned with
+proving that the components used (fibres, connectors, etc.) meet their specifications and that the
+installation has been carried out to a good standard of workmanship (e.g., splice losses meet their
+specification and the cable link is free from damage).
+Primarily, it is the attenuation characteristics of the optical fibre cable link that are commonly tested
+as part of commissioning a new installation, as these are the characteristics that may be most affected
+by the installation process and the quality of installation workmanship.
+Rec. ITU-T G.650.3 (08/2017)
+
+3
+
+The criteria for newly installed optical fibre links are defined by the operating company. As an
+example, for attenuation, these criteria may apply not only to the overall link attenuation, but also to
+the individual cable sections and fibres, the individual splice and connector losses, and other
+uniformity characteristics. One approach to defining the overall attenuation limit is to consider the
+attenuation coefficient and length of the individual cable sections, the number of splices or connectors
+and their maximum allowed losses, and combine the values according to the formulas of Appendix I
+of [ITU-T G.652].
+See clause 6.2 for additional testing that may be required for service contract requirements or for
+higher (10 Gbit/s per channel and above) transmission rates, or for transmission over extended
+wavelength ranges. [b-ITU-T G-Sup.40] is a guide on the relationship and definition of various
+attributes and measurement methods found in ITU-T documents and the mapping to IEC documents.
+6.1.1
+
+Connector end face inspection
+
+Before testing commences, it is recommended that the end face of the connectors at each end of the
+link be inspected to ensure that they are clean and free from any damage. If there is any dirt present,
+then the connector end face should be cleaned (according to the connector manufacturer's
+instructions) in order to obtain reliable test results and satisfactory long-term performance. Following
+cleaning procedures, the best practice is to re-inspect to ensure cleaning effectiveness.
+Video inspection probes may be used to carry out this inspection safely with no risk to eyesight from
+energized fibres. They also permit the inspection of the end faces of connectors installed behind patch
+panels without risk of damage or interruption of traffic on other fibres.
+End face images may be stored and analysed if required. [IEC 61300-3-35] provides acceptance
+criteria for levels of damage and defects that may be tolerated without adverse effect on optical
+performance.
+6.1.2
+
+Link attenuation
+
+The link attenuation is very important for all applications regardless of data rate. It is usual to measure
+the overall link attenuation at wavelengths that are representative of the wavelengths at which the link
+will be operated. Commonly, this measurement is carried out at 1 310 nm and 1 550 nm, although, if
+applications using the L-band (1 565 nm to 1 625 nm) are to be used, then testing at 1 625 nm is also
+recommended (see [b-ITU-T L.313/L.66] on wavelength allocation for maintenance). The
+recommended technique is to use a light source and power meter (LSPM) method as detailed in
+[IEC 61280-4-2] to compare the power level injected at one end of the link with the power level
+received at the other end of the link. The difference between these two power levels is the overall link
+attenuation measured in decibels. Since this technique operates in the same way as the system
+operates, it is the preferred technique for determining the total link attenuation. It may be a
+requirement for this measurement to be carried out in both directions on every fibre in the link, since
+it is not usually known at this stage which direction each fibre will operate in. Note, however, that
+the total link attenuation should be similar in both directions when measured using this technique.
+While insertion loss is the most fundamental attenuation measurement for links, the OTDR (see
+clause 6.1.3) is often used either as a bidirectional measurement or as a unidirectional measurement.
+The use of OTDR can shorten the measurement time, but also has risks. For either case, the OTDR
+can, for example, miss a broken fibre near the end of the link, unless tail cords are used. It can also
+allow crossed-over fibres to go undetected. It is well known that bidirectional OTDR measurement is
+more accurate than unidirectional measurement, but unidirectional measurements are often done as
+an initial check. When the results of such a check are marginal, follow-up with bidirectional
+measurement is recommended. See [b-IEC/TR 62316] for more information on the interpretation of
+backscattering traces.
+
+4
+
+Rec. ITU-T G.650.3 (08/2017)
+
+If a complex link is to be formed by patching together a number of simple links, then the total
+attenuation of the complex link is obtained by simply adding together the decibel attenuation figures
+for each simple link.
+6.1.3
+
+Splice loss, splice location, fibre uniformity and length of cable sections and links
+
+For these characteristics, the OTDR measurement method is recommended. Dependent upon the
+measurement configuration, this method may also be used to measure the overall link attenuation.
+This is described in [IEC 61280-4-2] for measuring the attenuation of installed links or in
+[ITU-T G.650.1] for fibres and cables. An OTDR is an instrument able to measure the optical power
+backscattered along a fibre as a function of distance. The detailed measurement technique, test
+apparatus and measurement procedure are described in [IEC 61280-4-2].
+Normally, for commissioning a new cable link, OTDR testing is carried out in both directions on
+every fibre using at least two wavelengths. These wavelengths should be representative of the
+wavelengths at which the fibre may operate, e.g., 1 310 nm and 1 550 nm for ITU-T G.652-type fibres
+and 1 550 nm and 1 625 nm for ITU-T G.655-type fibres.
+The OTDR testing should be carried out using a launch lead that is long enough (typically 1 km to
+2 km) to allow measurement of the first connector in the link, a similar length tail lead should also be
+connected at the far end of the fibre under test to allow the loss of the connector at the far end to be
+measured.
+Detailed analysis of these OTDR traces then allows accurate measurement of total link attenuation,
+total link optical return loss, as well as a full breakdown of component losses along the link including
+fibre section attenuation, splice losses, connector insertion and return loss. In addition, excessive
+mismatches between fibres in different cable sections along the route can be identified, as well as any
+problems, e.g., bends on the fibre. See Appendix I for examples of OTDR traces and their analysis.
+If the OTDR is only used for length measurements or for overall attenuation checking of the cable
+link using a launch lead and a tail lead, then unidirectional OTDR test results can be used. If more
+careful evaluation of non-uniformities must be investigated, bidirectional OTDR test results need to
+be considered as confirmation. See Appendix I for an example of bidirectional analysis.
+In practical engineering, unidirectional OTDR test results can be used to roughly judge the splice
+quality, but accurate splice loss measurement must be based on the bidirectional OTDR test. A
+formula for calculation of splice loss is:
+
+ A  B   B A
+2
+where
+αA–B
+αB–A
+
+is the shown (not real) splice loss test from the A-end to the B-end of cable sections;
+is the shown (not real) splice loss test from the B-end to the A-end of cable sections.
+
+NOTE – OTDRs can be used to test cable attenuation for all link lengths supported by ITU-T applications,
+dependent upon the performance of the OTDR used. Consult OTDR manufacturers' specifications for
+suitability of OTDR modules for testing particular links. For concatenated cable links, the total attenuation can
+be derived directly by summing the attenuations of individual cable links.
+
+If the bidirectional OTDR test cannot be employed, the quasi-bidirectional test method can be
+considered a candidate for measuring splice loss. It is noted that the quasi-bidirectional test is not
+recommended as a standard method since it is challenging to deploy on existing networks. See
+Appendix IV for an overview of the quasi-bidirectional test.
+6.1.4 Measurements of other parameters needed following installation
+The sheath isolation and the pneumatic resistance of the joint boxes are examples of tests that are
+sometimes performed. These characteristics are not directly related to the transmission performance
+Rec. ITU-T G.650.3 (08/2017)
+
+5
+
+of optical cable sections, but can affect the mechanical reliability. Standard tests for these attributes
+have not been developed, but continue to be under study.
+6.2
+
+Test methods for verification of service contracts or transmission at particular bit
+rates
+This second level of testing, defined as fibre characterization, indicates measurements that may be
+carried out to satisfy service level agreements (e.g., when a dark fibre contract is signed) or to verify
+attributes of older links that may be used at higher bit rates (10 Gbit/s or above) or over extended
+wavelength ranges [e.g., dense wavelength division multiplexing (DWDM) in the L-band or coarse
+wavelength division multiplexing (CWDM) over the O-, E-, S-, C- and L-bands].
+In addition to the testing detailed in clause 6.1, fibre characterization also includes chromatic
+dispersion (CD) and polarization mode dispersion (PMD) measurements, and may extend the
+wavelength ranges covered by the attenuation-related measurements of clause 6.1, e.g., by including
+1 625 nm OTDR testing or spectral attenuation measurements over the O-, E-, S-, C- and L-bands.
+Fibre characterization is defined in clause 3.2.3. Often it is important to carry out full fibre
+characterization, particularly on a dark fibre contract, because once the fibres are brought into service
+it may not be possible to access the fibres again to assess their suitability for further upgrades in the
+future.
+6.2.1
+
+Connector end face inspection
+
+This is required in accordance with clause 6.1.1.
+6.2.2
+
+Overall link attenuation
+
+This is required in accordance with clause 6.1.2. Measurements at additional wavelengths may also
+be required.
+6.2.3 Attenuation and related characteristics
+For higher bit-rate transmission, the attenuation, splice loss, attenuation uniformity and section length
+after cable installation also require verification. The test methods for these characteristics are the
+backscattering technique; as described in clause 6.1.3. Measurements at additional wavelengths may
+also be required.
+6.2.4 Spectral attenuation
+If the optical fibre cable link is to be used for CWDM applications, then there may be a wide variation
+in the attenuation of the link across the broad range of wavelengths used. In this case, it is
+recommended that the attenuation of the link be measured at all relevant wavelengths. This may be
+achieved as described in clause 5.4.3 of [ITU-T G.650.1] using a suitable broadband light source and
+an optical spectrum analyser to compare the input and output spectra of the link to determine the
+attenuation as a function of wavelength across the wavelength range of interest. It is only required to
+carry out this measurement in one direction on the link.
+6.2.5 Polarization mode dispersion
+For transmission rates lower than 10 Gbit/s or short distance transmission, measurement of the PMD
+of cable links may not be required. [IEC 61280-4-4] provides a detailed description of the PMD
+measurement of links, and further guidance on PMD measurements is given in [IEC/TR 61282-9].
+There are several test methods identified in [IEC 61280-4-4] and [IEC/TR 61282-9] as being suitable
+for measuring PMD of installed links. Particular care should be applied in selecting the method used,
+depending on aspects such as whether the cable can move during the measurement.
+It is sufficient to measure the PMD of the fibre in just one direction. The range of wavelengths used
+should be representative of the wavelengths at which the fibres are utilized.
+
+6
+
+Rec. ITU-T G.650.3 (08/2017)
+
+The above test methods can all be used to test individual cable links and some equipment may also
+be used to test through amplifiers. For a complex link made up of a number of concatenated simple
+links, the overall PMD can be calculated from the individual PMD values by adding them in
+quadrature. This means that the total PMD of the complex link is the square root of the sum of the
+squares of the PMD of the individual links. The detailed calculation method is described in
+[b-IEC/TR 61282-3]. For example, if there are three simple links making up a complex link, then the
+total PMD of the complex link can be calculated as follows:
+
+PMDTotal 
+6.2.6
+
+PMD  PMD  PMD 
+2
+1
+
+2
+2
+
+2
+3
+
+Chromatic dispersion
+
+CD measurement is not essential for a low bit-rate or short distance transmission, although it is useful
+for identifying the type of fibre installed, i.e., ITU-T G.652-type fibre or the other fibre types.
+NOTE – If the cable section is less than 40 km long to comprise an optical link used for 2.5 Gbit/s
+transmissions, CD does not need to be tested. This measurement is conditional with respect to the planned bit
+rate, transmission distance and fibre type.
+
+For CD, there are a number of test methods that can be used. These are detailed in clause 5.5 of
+[ITU-T G.650.1]. Field test equipment is available from a number of manufacturers for testing
+installed links that implement the following test methods:
+–
+phase shift technique and differential phase shift technique;
+–
+time of flight technique including single-ended (OTDR based) and dual-ended methods.
+It is not necessary for this measurement to be conducted from both ends of the link.
+The wavelength range of the measurement should include the anticipated wavelength range of any
+transmission systems that may operate over the link. For DWDM systems, it may be sufficient to
+measure just the C-band or the C- and L-bands, however for CWDM systems, the wavelength range
+should cover the full O-, E-, S-, C- and L-bands.
+The above test methods can all be used to test individual cable links; also, some equipment can be
+used to test through amplifiers as well as some types of dispersion-compensating modules. For a
+complex link made up of a number of concatenated simple links, the overall CD (in picoseconds per
+nanometre) at a particular wavelength can be calculated simply by adding the individual CD values
+together. Note that for typical dispersion-compensating modules and for standard fibres operating at
+wavelengths below their zero dispersion wavelength, the dispersion values will be negative. Further
+guidance on calculating overall CD is given in clause 10.3 of [b-ITU-T G-Sup.39] and
+[IEC/TR 61282-7].
+6.2.7
+
+Optical return loss
+
+Two measurement methods for reflections of the optical path (optical cable sections) are described in
+Appendix I of [ITU-T G.957]. One is with the optical continuous-wave reflectometer (OCWR) and
+the other is with the OTDR. The OCWR gives a measurement of the total optical return loss (ORL)
+of the entire link, whereas the OTDR provides reflectance measurements of discrete events, such as
+connectors, as well as a calculation of the total ORL of the link. Further details of ORL testing of
+fibre optic components may be found in [IEC 61300-3-6].
+
+Rec. ITU-T G.650.3 (08/2017)
+
+7
+
+Appendix I
+Optical time domain reflectometer trace analysis
+(This appendix does not form an integral part of this Recommendation.)
+I.1
+
+Optical time domain reflectometer trace example
+
+Figure I.1 shows an example of an OTDR trace taken at 1 550 nm of a link approximately 20 km
+long. This link has been measured using a launch lead and a tail lead, each about 3.8 km long. The
+cable sections in the link are generally about 2 km long, although there are a few shorter sections.
+Note that the markers A and B are positioned to display the total loss of the link including the losses
+associated with the connectors at both ends of the link.
+
+Figure I.1 – Sample optical time domain reflectometer trace
+I.2
+
+Optical time domain reflectometer event table example
+
+Table I.1 shows the complete analysis of the events on the trace shown in Figure I.1. Note that some
+splices (e.g., event 5) are shown as having a negative loss. This is due to slight variations in the
+backscattering characteristics of the fibre on either side of the splice. Where the fibre after the splice
+scatters more light than the fibre before the splice, the apparent loss is reduced and may even show
+up as an apparent gain. If the opposite is true (i.e., the fibre before the splice scatters more light than
+the fibre after the splice) then the apparent loss may be larger than the true loss. This is the case for
+the connector at the first patch panel (event 2) and for event 10 on Figure I.1 and Table I.1. This is
+why it is necessary to carry out OTDR testing from both ends of the fibre using a launch lead and a
+tail lead and to average the results bidirectionally. Some OTDRs allow this procedure to be carried
+out in real time using an OTDR at each end of the link, otherwise this bidirectional analysis may be
+carried out using PC-based software.
+
+8
+
+Rec. ITU-T G.650.3 (08/2017)
+
+Table I.1 – Optical time domain reflectometer event table from trace in Figure I.1
+Event
+(13)
+
+Distance
+(km)
+
+Attenuation
+(dB)
+
+Reflectance
+(dB)
+
+Slope
+(dB/km)
+
+Rel. dist.
+(km)
+
+1
+
+0.000 00
+
+0.534
+
+−52.39
+
+0.200
+
+3.682 82
+
+2
+
+2.072 58
+
+−0.038
+
+0.198
+
+2.072 58
+
+0.944
+
+3
+
+4.101 04
+
+0.076
+
+0.190
+
+2.028 46
+
+1.291
+
+4
+
+6.151 88
+
+0.007
+
+0.196
+
+2.050 84
+
+1.768
+
+5
+
+6.825 91
+
+−0.094
+
+0.203
+
+0.674 02
+
+1.912
+
+6
+
+8.832 62
+
+0.004
+
+0.191
+
+2.006 72
+
+2.202
+
+7
+
+10.964 04
+
+−0.034
+
+0.194
+
+2.131 42
+
+2.619
+
+8
+
+12.948 37
+
+0.029
+
+0.192
+
+1.984 33
+
+2.966
+
+9
+
+14.829 75
+
+0.025
+
+0.190
+
+1.881 38
+
+3.353
+
+10
+
+16.652 93
+
+0.362
+
+0.184
+
+1.823 18
+
+3.714
+
+11
+
+18.718 48
+
+−0.062
+
+0.190
+
+2.065 55
+
+4.468
+
+12
+
+19.611 85
+
+0.187
+
+0.893 37
+
+4.574
+
+13
+
+23.407 22
+
+0.193
+
+3.795 37
+
+5.484
+
+−53.69
+
+Link budget
+(dB)
+
+NOTE – In the event column, graphical symbols are used to denote particular types of event – the
+following icons are commonly used:
+denotes a connector interface at the start or end of a launch or tail lead
+denotes a fusion splice (non-reflective loss event) in the link under test
+denotes a connector (reflective loss event) in the link under test
+denotes the end of the fibre under test (when the tail lead has not been used)
+
+I.3
+
+Optical time domain reflectometer bidirectional trace analysis
+
+Figure I.2 shows a typical bidirectional OTDR display – the trace from Figure I.1 is shown reversed
+and superimposed on the trace from the opposite end of the same fibre, so that the position of all of
+the events correlates. Table I.2 shows the results bidirectionally averaged. Note for example that the
+high loss splice that was event 10 in Table I.1 is now event 3, and there is a "gainer" (apparent negative
+splice loss) when measured from the opposite end. Note also that the loss of the connector (now
+
+Rec. ITU-T G.650.3 (08/2017)
+
+9
+
+event 12) is much less when measured in this direction, significantly reducing the bidirectionally
+averaged connector loss.
+
+Figure I.2 – Bidirectional optical time domain reflectometer trace display
+
+10
+
+Rec. ITU-T G.650.3 (08/2017)
+
+Table I.2 – Bidirectional optical time domain reflectometer trace loss analysis
+Way OE
+(13)
+
+Way OE
+(13)
+
+Distance
+(km)
+
+Attenuation
+(dB)
+
+Attenuation
+(dB)
+
+Average
+(dB)
+
+Slope
+(dB/km)
+
+Slope
+(dB/km)
+
+Average
+(dB/km)
+
+0.193
+
+0.193
+
+0.193
+
+13
+1*
+
+12*
+
+0.000 00
+
+0.169
+
+2*
+
+11
+
+0.914 47
+
+0.136
+
+−0.062
+
+0.037
+
+0.195
+
+0.187
+
+0.191
+
+3*
+
+10
+
+2.973 62
+
+−0.062
+
+0.362
+
+0.150
+
+0.190
+
+0.190
+
+0.190
+
+4*
+
+9
+
+4.814 07
+
+0.009
+
+0.025
+
+0.017
+
+0.192
+
+0.184
+
+0.188
+
+5*
+
+8
+
+6.677 54
+
+−0.006
+
+0.029
+
+0.011
+
+0.190
+
+0.190
+
+0.190
+
+6*
+
+7
+
+8.676 59
+
+0.177
+
+−0.034
+
+0.071
+
+0.190
+
+0.192
+
+0.191
+
+7*
+
+6
+
+10.795 21
+
+0.014
+
+0.004
+
+0.009
+
+0.188
+
+0.194
+
+0.191
+
+8*
+
+5
+
+12.816 00
+
+0.110
+
+−0.094
+
+0.008
+
+0.191
+
+0.191
+
+0.191
+
+9*
+
+4
+
+13.476 59
+
+0.034
+
+0.007
+
+0.021
+
+0.186
+
+0.203
+
+0.195
+
+10*
+
+3
+
+15.531 91
+
+0.077
+
+0.076
+
+0.077
+
+0.187
+
+0.196
+
+0.191
+
+11*
+
+2
+
+17.527 76
+
+0.067
+
+−0.038
+
+0.014
+
+0.187
+
+0.190
+
+0.189
+
+12*
+
+1
+
+19.62 528
+
+0.136
+
+0.534
+
+0.335
+
+0.182
+
+0.198
+
+0.190
+
+0.197
+
+0.200
+
+0.199
+
+13*
+
+Rec. ITU-T G.650.3 (08/2017)
+
+11
+
+Appendix II
+Optical path parameters specified in ITU-T Recommendations
+(This appendix does not form an integral part of this Recommendation.)
+
+[b-ITU-T
+G.691]
+
+[b-ITU-T
+G.692]
+
+[b-ITUT G.693]
+
+[b-ITUT G.695]
+
+[b-ITU-T
+G.696.1]
+
+[b-ITU-T
+G.698.1]
+
+[b-ITU-T
+G.959.1]
+
+STM-64
+and other
+SDH
+
+Multichannel
+
+Intraoffice
+
+CWDM
+
+IntraDomain
+DWDM
+
+DWDM
+
+OTN
+
+Attenuation
+(max/min)
+
+S
+
+S
+
+S
+
+S
+
+S
+
+S
+
+S
+
+Chromatic
+dispersion
+(max/min)
+
+S
+
+S
+
+S
+
+S
+
+S
+
+S
+
+S
+
+Differential
+group delay
+(max)
+
+S
+
+NS
+
+S
+
+S
+
+S
+
+S
+
+S
+
+Reflections (min
+optical return
+loss, max
+discrete)
+
+S
+
+S
+
+S
+
+S
+
+S
+
+S
+
+S
+
+Specified
+parameters
+
+12
+
+Rec. ITU-T G.650.3 (08/2017)
+
+Appendix III
+Method for differentiating splice loss and macrobending loss in installed links
+(This appendix does not form an integral part of this Recommendation.)
+III.1
+
+General
+
+When large loss is observed at a fusion splice point after cable installation by OTDR measurement,
+it usually means that the loss is due to a low quality fusion splice or other causes, e.g., fibre
+macrobending in a closure. Fibre macrobending in a closure is caused by rough fibre handling
+following a fusion splice in a cable installation or by other causes, e.g., fibre axial strain.
+Optical system performance might be degraded at longer wavelengths for an optical fibre cable link
+with fibre macrobending. Hence, it is quite important to identify the location of fibre macrobending
+for a cable link.
+This appendix describes a simple method for differentiating splice loss and macrobending loss in
+installed links. The method is based on OTDR measurement at two wavelengths and it is
+recommended that a bidirectional OTDR method be used that can determine the exact loss at the
+splice point. This optional method can be used to identify the main loss factor when large loss is
+observed in an OTDR trace in the vicinity of a splice.
+The application of the method is limited to ITU-T G.652-type fibres. A general application of the
+method to ITU-T G.657-type fibres is difficult to implement, because of low bending loss, and is not
+recommended.
+Moreover, if the exact fibre types in the link are unknown, it is difficult to apply this method, since
+the method is only effective for ITU-T G.652-type fibres.
+III.2
+
+Theory
+
+III.2.1 Definition of macrobending indicator
+Measurement of the macrobending indicator is based on an OTDR measurement at two different
+wavelengths. The macrobending indicator, k, is defined as follows [b-Ryu]:
+
+k  ( A1  A2 ) /( 1   2 ) (dB/nm)
+
+(III-1)
+
+In Equation III-1, it is assumed that OTDR measurement is performed at wavelengths of λ1 and λ2 (in
+nanometres) and that the measured loss at a fibre splice point at each wavelength is A1 and A2 (in
+decibels), respectively. Wavelengths λ1 and λ2 should be set at values longer than the cable cut-off
+wavelength.
+Figure III.1 shows examples of the calculation results of the macrobending indicator using the theory
+of [b-Marcuse, 1976] and [b-Sharma] when a fibre is wound one turn with a radius of R (in
+millimetres). In the calculation, λ1 was fixed at 1 310 nm and λ2 was changed as shown on the
+horizontal axis.
+
+Rec. ITU-T G.650.3 (08/2017)
+
+13
+
+Figure III.1 – Macrobending indicator vs wavelength (λ2)
+for various bending radii (λ1 = 1 310 nm)
+From Figure III.1, it is clear that as λ2 increases, the macrobending indicator becomes larger, which
+means that the detection sensitivity of macrobending has improved.
+III.2.2 Features of macrobending indicator
+As described in Appendix I, in the OTDR measurement, accurate loss values can be derived by
+averaging bidirectional measurement results. The necessity for bidirectional measurement is due to
+different Rayleigh backscattering coefficients of the spliced fibres.
+Figure III.2 shows an OTDR set-up for measuring the macrobending indicator. In the set-up, Fibre A
+and Fibre B are spliced. Macrobending exists on the Fibre B side.
+
+Figure III.2 – Measurement set-up of macrobending indicator
+Here it is assumed that the OTDR measurement is carried out from side A and that PAi is optical
+power immediately before the splice point at a wavelength λi (i = 1, 2), and PBi is power right after
+the point with macrobending. It is also assumed that the splice loss for this case is negligibly small.
+Rayleigh backscattering coefficients for fibre A and fibre B at a wavelength λi are assumed to be αAi
+and αBi, respectively. It is well known that αAi and αBi are inversely proportional to 4i , so that they
+can be expressed as:
+ A i   A / 4i
+
+(III-2)
+
+ Bi   B / 4i
+
+(III-3)
+
+The loss Ai at a wavelength λi can be derived as:
+
+14
+
+Rec. ITU-T G.650.3 (08/2017)
+
+Ai  10 log10 Ai PAi  / Bi PBi   10 log10 A PAi  / B PBi 
+
+(III-4)
+
+From Equations III-1 and III-4, the macrobending indicator becomes:
+
+k  10 log10 ( PA1 / PB1 )  10 log10 ( PA2 / PB2 ) 1   2 
+
+(III-5)
+
+In Equation III-5, the influence of the Rayleigh backscattering coefficient has been cancelled due to
+the differential operation in the definition of k. Equation III-5 shows that k is only dependent on the
+exact power before and after the fibre macrobending point at each wavelength.
+The results above show that bidirectional measurement is not necessary for the determination of k.
+This feature is quite important, since it is not always easy to perform OTDR measurement from both
+sides of the cable because both end points are at different locations geographically.
+Then a case with the splice loss is taken into account. Regarding the splice loss, if the fibres with a
+different mode field diameter (MFD) are spliced, the loss due to MFD mismatch is observed. The
+influence of the loss-increase due to MFD mismatch is discussed in clause III.4.2. Figure III.3
+shows a measurement configuration for such a case.
+
+Figure III.3 – Macrobending indicator measurement set-up
+with both macrobending and splice loss
+The optical power PAi and PBi are assumed as in Figure III.2. ASi and AMi denote the loss due to the
+splice and macrobending, respectively. The macrobending indicator k becomes:
+
+k  ( AS1  AS2 ) / 1   2   ( AM1  AM2 ) / 1   2 
+
+(III-6)
+
+The macrobending indicator due to the splice loss is defined as:
+
+kS  ( AS1  AS2 ) / 1   2 
+
+(III-7)
+
+and that due to the macrobending is:
+
+kM  ( AM1  AM2 ) / 1   2 
+
+(III-8)
+
+From Equations III-6, III-7, and III-8:
+
+k  kS  kM
+
+(III-9)
+
+From Equation III-9, it can be said that the total macrobending indicator is the summation of both
+contributions.
+III.3
+
+Considerations on practical applicability
+
+This clause discusses a practical detection limit of the macrobending indicator. Regarding
+conventional OTDR systems, the detection limit of optical loss is δ (dB) considering the accuracy of
+the OTDR equipment.
+The detection limit of the macrobending indicator kmin can be expressed as:
+
+Rec. ITU-T G.650.3 (08/2017)
+
+15
+
+kmin    2  1  (dB/nm)
+
+(III-10)
+
+Figure III.4 shows applicable measurement conditions of the macrobending indicator with one turn
+for various bending radii when δ is assumed to be 0.1 (dB), considering the accuracy of the
+conventional OTDR measurement.
+
+Figure III.4 – Applicable measurement conditions
+It can be made clear from Figure III.4 that as λ2 becomes longer, the macrobending with a larger
+radius can be detected. In other words, the detection sensitivity becomes improved for longer λ2.
+From Figure III.4, an approximate detection limit of the maximum bending radius can be summarized
+as in Table III.1.
+Table III.1 – Detection limit of maximum bending radius
+
+III.4
+
+Wavelength λ2 (nm)
+
+1 550
+
+1 625
+
+Maximum detection limit of
+bending radius (mm)
+
+11
+
+13
+
+Measurement examples and influence of various conditions on measurement results
+
+In this clause, some measurement examples are shown in terms of the influence of various conditions
+on the measurements results.
+III.4.1 High splice loss
+Table III.2 shows splice loss of two ITU-T G.652-type fibres when they are spliced with the fibre
+core axis misalignment to emulate a large splice loss condition. It is known from Table III.2 that
+splice loss decreases as the wavelength becomes longer. This is because at longer wavelength the
+MFD becomes larger, thus the loss increase due to the core axis misalignment is alleviated.
+Figure III.5 shows the macrobending indicator calculated from Table III.2. It can be seen from
+Figure III.5 that the macrobending indicator becomes a negative value due to the reasons above. In
+this case, applicable measurement conditions in Figure III.4 may be degraded since the macrobending
+indicator is the summation of both splice and macrobending losses as shown in Equation III-9.
+
+16
+
+Rec. ITU-T G.650.3 (08/2017)
+
+Table III.2 – Splice loss in case of fibre core axis misalignment
+Wavelength
+(nm)
+
+Loss (from side A)
+(dB)
+
+Loss (from side B)
+(dB)
+
+Average
+(dB)
+
+1 310
+
+0.89
+
+1.29
+
+1.09
+
+1 450
+
+0.79
+
+1.18
+
+0.99
+
+1 550
+
+0.74
+
+1.13
+
+0.93
+
+1 625
+
+0.69
+
+1.10
+
+0.90
+
+Figure III.5 – Macrobending indicator with large splice loss
+III.4.2 Mode field diameter mismatch
+This clause discusses the influence of the MFD mismatch on the macrobending indicator, since the
+MFD of the commercial ITU-T G.652-type fibres is different from one fibre to another as long as the
+MFD is within the specified values in [ITU-T G.652].
+According to [ITU-T G.652], the MFD at 1 310 nm of G.652.B is specified as follows:
+–
+range of nominal values: 8.6 µm to 9.5 µm;
+–
+tolerance: ±0.6 µm.
+So, for the consideration of the influence of the MFD mismatch, it is sufficient to consider the MFD
+range 8.0 µm to 10.1 µm.
+Figure III.6 shows the calculation results of the macrobending indicator considering the splice loss
+theory of [b-Marcuse, 1977] when fibres with MFD of 8.0 µm and 10.1 µm are spliced.
+
+Figure III.6 – Macrobending indicator when different mode field diameter fibres are spliced
+Rec. ITU-T G.650.3 (08/2017)
+
+17
+
+From Figure III.6, it can be seen that the macrobending indicator becomes a negative value, and the
+minimum value is about −0.000 25 dB/nm. The absolute value of the macrobending indicator is fairly
+small as compared with the detection limit discussed in clause III.3. Hence, it can be concluded that
+the influence of the MFD mismatch on the macrobending indicator can be neglected in practical
+applications.
+
+18
+
+Rec. ITU-T G.650.3 (08/2017)
+
+Appendix IV
+Splice loss measurement using quasi-bidirectional technique
+(This appendix does not form an integral part of this Recommendation.)
+IV.1
+
+Introduction
+
+This appendix introduces test methods for measuring splice loss by the quasi-bidirectional technique.
+These test methods are considered when the bidirectional OTDR test cannot be employed in the field.
+There are two quasi-bidirectional methods that can be used for an accurate evaluation of splice loss,
+and they are based on OTDR of [b-Di Vita] and Brillouin time domain analysis (BOTDA) of
+[b-Takahashi, 2014a] and [b-Takahashi, 2014b] techniques. Both methods can obtain bidirectional
+information from measurement results assisted by the end-reflection of the fibre. The methods are not
+recommended as standard methods, since it is challenging to deploy them on existing networks. They
+often require a reflector at the fibre-end and more complicated test apparatus than a conventional
+OTDR test.
+IV.2
+
+Test method using quasi-bidirectional technique
+
+IV.2.1 End-reflection assisted optical time domain reflectometer
+IV.2.1.1 General
+In OTDR testing, Rayleigh backscattering generated by a probe pulse propagating in a fibre link is
+recognized as a unidirectional OTDR trace. When there is a strong reflection at the far end of the
+fibre, Rayleigh backscattering generated by the reflected probe pulse is also reflected at the far end,
+and then detected as a signal. This is called a second order backscatter trace (often called a ghost
+trace), and it appears after the unidirectional (namely first order) OTDR trace. It is emphasized that
+these traces contain information on opposite directions of the fibre link between first and second order
+traces.
+Figure IV.1 shows a schematic of the use of an end-reflection assisted OTDR.
+
+Figure IV.1 – Schematic of the use of an of end-reflection assisted
+optical time domain reflectometer
+
+IV.2.1.2 Test apparatus
+The test apparatus is shown in Figure C.1 of [IEC 60793-1-40].
+
+Rec. ITU-T G.650.3 (08/2017)
+
+19
+
+The method requires a high dynamic range as regards OTDR performance, because the OTDR probe
+pulse experiences round-trip propagation with twice the total attenuation of the fibre link and the
+return loss of the end-reflection. An end-reflection with higher reflectivity (~100%) is desirable in
+terms of obtaining the second backscatter trace more effectively. It is noted that the tail of the pulse
+recovery at the strong reflection does not allow the characterization of the splice loss near the
+reflective end. Otherwise, a specially designed OTDR with a short recovery time would be needed.
+IV.2.1.3 Measurement procedure
+Figure IV.2 shows an example of the result obtained with an end-reflection assisted OTDR. The true
+splice loss can be determined by taking the average of two events at symmetrical positions, based on
+the fibre-end reflection from the OTDR trace on a logarithmic scale.
+Further information about this method can be found, for example, in [b-Gold].
+
+Figure IV.2 – Example result with an end-reflection assisted optical
+time domain reflectometer
+IV.2.2 End-reflection assisted Brillouin time domain analysis
+IV.2.2.1 General
+It is known that Brillouin gain analysis can also be used for loss distribution measurement
+[b-Horiguchi]. If pump and probe pulses with an optical frequency difference of 10 GHz to 11 GHz
+collide in a fibre, the probe pulse is amplified by Brillouin gain. Conceptually, the loss distribution
+can be analysed from the gain distribution, since the Brillouin gain reflects the loss experienced by
+the pump pulse. The fundamental difference compared with OTDR approaches is that this method is
+not based on a backscattering technique, and uses the probe pulse reflected at the fibre-end.
+Figure IV.3 shows a schematic of end-reflection assisted BOTDA.
+
+20
+
+Rec. ITU-T G.650.3 (08/2017)
+
+Figure IV.3 – Schematic of end-reflection assisted Brillouin time domain analysis
+IV.2.2.2 Test apparatus
+Figure IV.4 shows the test apparatus used for end-reflection assisted BOTDA. It consists of a
+distributed feedback (DFB) laser, frequency and intensity modulators, a pulse generator and
+polarization controllers. The frequency modulator is used to control the frequency difference between
+the pump and the probe pulses. The intensity modulators and the pulse generator can change the time
+delay, t, with which the pump and probe pulses are launched into the fibre. The polarization
+scrambler changes the polarization state between the pump and probe pulses. The narrow-band optical
+filter eliminates the reflected pump pulse to be detected.
+The positive and negative values of t are for the probe-pump and pump-probe modes, respectively.
+The time delay, t, is changed from 2L/v to −2L/v, where L is the link length and v is the light velocity
+in the fibre. The spatial resolution of the loss distribution is given by vTp/2 (Tp is the pulse width of
+the pump pulse).
+Although this method is not affected by the problem of the pulse recovery as seen in OTDR
+approaches, since it acquires the Brillouin gain on the probe pulse, it requires more complicated test
+apparatus than the conventional OTDR test method. This method requires frequency shift averaging
+at 10 GHz to 11 GHz by changing the optical frequency of the probe or pump at the frequency
+modulator in order to avoid the influence of parameters such as the fibre type and temperature versus
+strain distribution in the fibre link.
+
+Rec. ITU-T G.650.3 (08/2017)
+
+21
+
+Figure IV.4 – Test apparatus in end-reflection assisted Brillouin time domain analysis
+IV.2.2.3 Measurement procedure
+The measurement procedure is as follows.
+a)
+Align the fibre under test with the optical coupling system.
+b)
+Measure the power of the reflected probe pulse without the pump pulse.
+c)
+Measure the power of the reflected probe pulse for N iterations, while changing the time
+delay for the scanning collision points between the pump and the probe pulses along the fibre
+under test. N is the averaging number.
+d)
+Analyse the gain distribution from the difference between the reflected probe powers in
+steps b) and c).
+e)
+Change the optical frequency of either the probe or pump, and repeat steps b) to e).
+f)
+Average the gain distributions of step e).
+g)
+Obtain the true splice loss from two averaged symmetrical events based on the fibre-end
+reflection (t = 0) from the trace on the logarithmic scale.
+Figure IV.5 shows an example of the results. The apparent gain or loss events on the trace are
+observed at the splices between ITU-T G.652- and ITU-T G.657-type fibres. The true splice losses
+are obtained as 0.21 dB for splice A and 0.41 dB for splice B.
+Figure IV.6 compares results for four splices obtained by OTDR and end-reflection assisted BOTDA.
+The horizontal and vertical axes show the results obtained by bidirectional OTDR and end-reflection
+assisted BOTDA, respectively. The solid line shows the agreement between both splice loss values.
+With unidirectional OTDR, there was a discrepancy of more than ±0.3 dB. The results obtained with
+the end-reflection assisted BOTDA were in good agreement with those obtained using bidirectional
+OTDR measurement with a discrepancy of less than ±0.1 dB.
+
+22
+
+Rec. ITU-T G.650.3 (08/2017)
+
+Figure IV.5 – Example results for end-reflection assisted BOTDA
+
+Figure IV.6 – Comparison of results
+
+Rec. ITU-T G.650.3 (08/2017)
+
+23
+
+Bibliography
+[b-ITU-T G.691]
+
+Recommendation ITU-T G.691 (2006), Optical interfaces for single channel
+STM-64 and other SDH systems with optical amplifiers.
+
+[b-ITU-T G.692]
+
+Recommendation ITU-T G.692 (1998), Optical interfaces for multichannel
+systems with optical amplifiers.
+
+[b-ITU-T G.693]
+
+Recommendation ITU-T G.693 (2009), Optical interfaces for intra-office
+systems.
+
+[b-ITU-T G.695]
+
+Recommendation ITU-T G.695 (2015), Optical interfaces for coarse
+wavelength division multiplexing applications.
+
+[b-ITU-T G.696.1]
+
+Recommendation ITU-T G.696.1 (2010), Longitudinally compatible intradomain DWDM applications.
+
+[b-ITU-T G.698.1]
+
+Recommendation ITU-T G.698.1 (2009), Multichannel DWDM applications
+with single-channel optical interfaces.
+
+[b-ITU-T G.959.1]
+
+Recommendation ITU-T G.959.1 (2016), Optical transport network physical
+layer interfaces.
+
+[b-ITU-T L.313/L.66] Recommendation ITU-T L.313/L.66 (2007), Optical fibre cable maintenance
+criteria for in-service fibre testing in access networks.
+[b-ITU-T G-Sup.39] ITU-T G-series Recommendations – Supplement 39 (2016), Optical system
+design and engineering considerations.
+[b-ITU-T G-Sup.40] ITU-T G-series Recommendations Supplement 40 (2010), Optical fibre and
+cable Recommendations and standards guideline.
+[b-IEC/TR 61282-3] IEC/TR 61282-3:2006, Fibre optic communication system design guides –
+Part 3: Calculation of link polarization mode dispersion.
+[b-IEC/TR 62316]
+
+IEC/TR 62316:2017, Guidance for the interpretation of OTDR
+backscattering traces for single-mode fibres.
+
+[b-Di Vita]
+
+Di Vita, P., Rossi, U. (1979). Backscattering measurements in optical fibers:
+Separation of power decay from imperfection contribution. Electron. Lett.,
+15, pp. 467–469.
+
+[b-Gold]
+
+Gold M., Hartog, A.H., Payne D.N. (1984). New approach to splice-loss
+monitoring using long-range OTDR. Electron. Lett., 20, pp. 338–340.
+
+[b-Horiguchi]
+
+Horiguchi, T., Tateda, M. (1989). BOTDA-Nondestructive measurement of
+single-mode optical fiber attenuation characteristics using Brillouin
+interaction: theory. J. Lightwave Technol., 7, pp. 1170-1176.
+
+[b-Marcuse, 1976]
+
+Marcuse, D. (1976). Curvature loss formula for optical fibers. J. Opt. Soc.
+Am., 66, pp. 216-220.
+
+[b-Marcuse, 1977]
+
+Marcuse, D. (1977). Loss analysis of single-mode fiber splices. Bell Syst.
+Tech. J., 56, pp. 703-718.
+
+[b-Ryu]
+
+Ryu S., Yagi, M., (2010). Macrobending indicator for evaluation of fibre
+macrobending and splice loss (7P-33). In: Tech Digest 15th OptoElectronics
+and Communications Conference (OECC), pp. 322-323. New York, NY:
+IEEE.
+
+24
+
+Rec. ITU-T G.650.3 (08/2017)
+
+[b-Sharma]
+
+Sharma, A. B., Al-Ani, A. H., Halme, S. J. (1984). Constant-curvature loss in
+monomode fibers: An experimental investigation. Appl. Opt., 23, pp. 32973301.
+
+[b-Takahashi, 2014a] Takahashi, H., C. Kito, C., Toge, K., Manabe, T. (2014a). Centralized
+measurement of actual splice loss for installed optical fiber cable networks
+using end-reflection-assisted Brillouin analysis (paper 3-6). In: Proceedings
+of the 63rd International Wtre and Cable Symposium, , pp. 87-91.
+Shrewsbury, PA: IWCS.
+[b-Takahashi, 2014b] Takahashi, H., Toge, K., Ito, F. (2014b). Connection loss measurement by
+bi-directional end-reflection assisted Brillouin analysis. J. Lightwave
+Technol., 32, pp. 4204-4208.
+
+Rec. ITU-T G.650.3 (08/2017)
+
+25
+
+SERIES OF ITU-T RECOMMENDATIONS
+Series A
+
+Organization of the work of ITU-T
+
+Series D
+
+Tariff and accounting principles and international telecommunication/ICT economic and
+policy issues
+
+Series E
+
+Overall network operation, telephone service, service operation and human factors
+
+Series F
+
+Non-telephone telecommunication services
+
+Series G
+
+Transmission systems and media, digital systems and networks
+
+Series H
+
+Audiovisual and multimedia systems
+
+Series I
+
+Integrated services digital network
+
+Series J
+
+Cable networks and transmission of television, sound programme and other multimedia
+signals
+
+Series K
+
+Protection against interference
+
+Series L
+
+Environment and ICTs, climate change, e-waste, energy efficiency; construction, installation
+and protection of cables and other elements of outside plant
+
+Series M
+
+Telecommunication management, including TMN and network maintenance
+
+Series N
+
+Maintenance: international sound programme and television transmission circuits
+
+Series O
+
+Specifications of measuring equipment
+
+Series P
+
+Telephone transmission quality, telephone installations, local line networks
+
+Series Q
+
+Switching and signalling, and associated measurements and tests
+
+Series R
+
+Telegraph transmission
+
+Series S
+
+Telegraph services terminal equipment
+
+Series T
+
+Terminals for telematic services
+
+Series U
+
+Telegraph switching
+
+Series V
+
+Data communication over the telephone network
+
+Series X
+
+Data networks, open system communications and security
+
+Series Y
+
+Global information infrastructure, Internet protocol aspects, next-generation networks,
+Internet of Things and smart cities
+
+Series Z
+
+Languages and general software aspects for telecommunication systems
+
+Printed in Switzerland
+Geneva, 2017
+
+
