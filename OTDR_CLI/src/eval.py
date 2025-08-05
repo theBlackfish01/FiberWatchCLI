@@ -30,6 +30,7 @@ from data_helper import load_raw_dataframe, make_splits, fit_scaler, tensorise_s
 from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import OTDR_TCN, predict as predict_tcn
 from model_functions.tst import TimeSeriesTransformer, predict as predict_tst
+from model_functions.tabnet import OTDR_TabNet
 import config.config as cfg
 from pathlib import Path
 from typing import List, Optional
@@ -72,8 +73,11 @@ def _load_classifier(kind: str, cls_path: Path, seq_len: int, n_classes: int, de
     elif kind == "tst":
         model = TimeSeriesTransformer(seq_len=seq_len, n_classes=n_classes)
         model.load_state_dict(torch.load(cls_path, map_location=device))
+    elif kind == "tab":
+        model = OTDR_TabNet(n_classes=n_classes)
+        model.load_state_dict(torch.load(cls_path, map_location=device))
     else:
-        raise ValueError("classifier kind must be 'tcn' or 'tst'")
+        raise ValueError("classifier kind must be 'tcn', 'tab' or 'tst'")
     return model.eval().to(device)
 
 
@@ -111,7 +115,7 @@ def _b64(path: Path) -> str:
 
 
 def _llm_explain(
-    img_paths: List[Path],
+    img_paths: List[Path], classifier_type: str = "tcn",
     openai_model: str = "gpt-4o-mini",
 ) -> tuple[str, bool] | None:
     """
@@ -132,8 +136,9 @@ def _llm_explain(
     query = "OTDR fault plots – " + ", ".join(p.stem for p in img_paths)
     try:
         retrieved = retrieve(query, k=5)          # ← may raise / be empty
+        raise ValueError
     except Exception as exc:
-        print(f"RAG retrieval failed: {exc}")
+        print(f"RAG retrieval failed. {exc}")
         retrieved = []
 
     ref_block = "\n\n".join(f"[{i+1}] {r['text']}" for i, r in enumerate(retrieved))
@@ -203,7 +208,7 @@ def _llm_explain(
 def main() -> None:  # noqa: C901
     ap = argparse.ArgumentParser(description="Evaluate OTDR models & visualise outputs")
     ap.add_argument("--mode", choices=["pipeline", "direct"], required=True)
-    ap.add_argument("--classifier", choices=["tcn", "tst"], default="tcn")
+    ap.add_argument("--classifier", choices=["tcn", "tst", "tab"], required=True, help="Classifier to use")
     ap.add_argument("--data", default="data/OTDR_data.csv")
     ap.add_argument("--detector", default="models/gru_ae.pt")
     ap.add_argument("--cls-path", default=None, help="Classifier weights path; defaults based on --classifier")
@@ -232,7 +237,8 @@ def main() -> None:  # noqa: C901
     )
 
     # ---------- load models ---------- #
-    cls_path = Path(args.cls_path) if args.cls_path else Path("models") / ("tcn.pt" if args.classifier == "tcn" else "tst.pt")
+    cls_default = "tabnet.pt" if args.classifier == "tab" else ("tcn.pt" if args.classifier == "tcn" else "tst.pt")
+    cls_path = Path(args.cls_path or Path("models") / cls_default)
 
     n_classes = int(df["Class"].max() + 1)
     classifier = _load_classifier(args.classifier, cls_path, seq_len=X_test.shape[1], n_classes=n_classes, device=device)
@@ -285,7 +291,9 @@ def main() -> None:  # noqa: C901
         img_paths.append(_visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, int(idx), out_dir))
 
     # ------------- LLM explanation ------------- #
-    explanation, rag_flag = _llm_explain(img_paths)
+
+    explanation, rag_flag = _llm_explain(img_paths, classifier_type=args.classifier)
+    classifier_name = args.classifier.upper()
     llm_dir = Path("llm_output")
     llm_dir.mkdir(parents=True, exist_ok=True)
     if explanation:
@@ -295,9 +303,9 @@ def main() -> None:  # noqa: C901
             explanation_file = llm_dir / f"llm_explanation_{i}.txt"
             i += 1
         if rag_flag:
-            explanation = f"LLM explanation for eval subset with RAG:\n\n{explanation}"
+            explanation = f"LLM explanation for eval subset with RAG for {classifier_name} in {args.mode} mode:\n\n{explanation}"
         else:
-            explanation = f"LLM explanation for eval subset without RAG:\n\n{explanation}"
+            explanation = f"LLM explanation for eval subset without RAG for {classifier_name} in {args.mode} mode:\n\n{explanation}"
         explanation_file.write_text(explanation)
         print(f"LLM explanation saved to {explanation_file.name}")  # noqa: T201
 

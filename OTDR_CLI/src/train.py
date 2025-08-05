@@ -45,6 +45,12 @@ from model_functions.gruae import (
     reconstruction_error,
 )
 from model_functions.tcn import OTDR_TCN, TrainConfig as TCNConfig, train_tcn, predict as predict_tcn
+from model_functions.tabnet import (
+    OTDR_TabNet,
+    TrainConfig as TabNetConfig,
+    train_tabnet,
+    predict as predict_tabnet,
+)
 from model_functions.tst import (
     TimeSeriesTransformer,
     TrainConfig as TSTConfig,
@@ -111,6 +117,20 @@ def _evaluate_tst(
     print(f"[TST]    Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
     return cls_acc, rmse
 
+# ----------------------------- TST eval -------------------------------------#
+
+def _evaluate_tabnet(
+    tabnet: OTDR_TabNet,
+    X_test: torch.Tensor,
+    y_test_cls: torch.Tensor,
+    y_test_pos: torch.Tensor,
+) -> Tuple[float, float]:
+    logits, pos_hat = predict_tabnet(tabnet, X_test)
+    cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
+    rmse = mean_squared_error(y_test_pos.numpy(), pos_hat.numpy())
+    print(f"[TabNet] Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
+    return cls_acc, rmse
+
 
 # ---------------------------------------------------------------------------
 # Main driver
@@ -120,7 +140,7 @@ def main() -> None:  # noqa: C901 – single‑entry script
     parser = argparse.ArgumentParser(description="Train OTDR ML models")
     parser.add_argument(
         "--mode",
-        choices=["gru_ae", "tcn", "tst", "all"],
+        choices=["gru_ae", "tcn", "tst", "tab", "all"],
         required=True,
         help="Which component(s) to train.",
     )
@@ -204,6 +224,23 @@ def main() -> None:  # noqa: C901 – single‑entry script
             cfg=tst_cfg,
         )
         _evaluate_tst(tst, splits["test"].X, splits["test"].y_class, splits["test"].y_pos)
+
+    if args.mode in {"tab", "all"}:
+        n_classes = int(df["Class"].max() + 1)
+        tabnet = OTDR_TabNet(n_classes=n_classes)
+        tabnet_cfg = TabNetConfig(save_path=out_dir / "tabnet.pt", device=device)
+        tabnet = train_tabnet(
+            tabnet,
+            splits["train"].X,
+            splits["train"].y_class,
+            splits["train"].y_pos,
+            splits["val"].X,
+            splits["val"].y_class,
+            splits["val"].y_pos,
+            cfg=tabnet_cfg,
+        )
+        _evaluate_tabnet(tabnet, splits["test"].X, splits["test"].y_class, splits["test"].y_pos)
+
 
 
 if __name__ == "__main__":
