@@ -1,4 +1,6 @@
+# OTDR_CLI/src/eval.py
 from __future__ import annotations
+
 
 import base64
 
@@ -14,11 +16,12 @@ overlays and asks an OpenAI LLM to provide a natural‑language explanation.
 """
 
 from pathlib import Path
-import argparse
+import click
 import json
 import re
 from typing import List, Tuple
 from contextlib import ExitStack
+from sklearn.preprocessing import StandardScaler
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,17 +33,19 @@ from data_helper import load_raw_dataframe, make_splits, fit_scaler, tensorise_s
 from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import OTDR_TCN, predict as predict_tcn
 from model_functions.tst import TimeSeriesTransformer, predict as predict_tst
-from model_functions.tabnet import OTDR_TabNet
+from model_functions.tabnet import OTDR_TabNet, predict as predict_tabnet
 import config.config as cfg
 from pathlib import Path
 from typing import List, Optional
 from rag import retrieve
 from openai import OpenAI
+
 client = OpenAI(api_key=cfg.OPENAI_API_KEY)
 
-
 import warnings
+
 warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
+
 
 # --------------------------------------------------
 # Utility helpers
@@ -82,14 +87,14 @@ def _load_classifier(kind: str, cls_path: Path, seq_len: int, n_classes: int, de
 
 
 def _visualise_sample(
-    amps: np.ndarray,
-    snr: float,
-    true_cls: int,
-    pred_cls: int,
-    true_pos: float,
-    pred_pos: float,
-    idx: int,
-    out_dir: Path,
+        amps: np.ndarray,
+        snr: float,
+        true_cls: int,
+        pred_cls: int,
+        true_pos: float,
+        pred_pos: float,
+        idx: int,
+        out_dir: Path,
 ):
     plt.figure(figsize=(10, 8))
     plt.plot(np.arange(amps.size), amps, label="Amplitude")
@@ -115,8 +120,8 @@ def _b64(path: Path) -> str:
 
 
 def _llm_explain(
-    img_paths: List[Path], classifier_type: str = "tcn",
-    openai_model: str = "gpt-4o-mini",
+        img_paths: List[Path], classifier_type: str = "tcn",
+        openai_model: str = "gpt-4o-mini",
 ) -> tuple[str, bool] | None:
     """
     Ask a vision‑capable chat model for a concise explanation of common
@@ -135,19 +140,18 @@ def _llm_explain(
     # ---------- RAG: retrieve reference snippets -------------------------
     query = "OTDR fault plots – " + ", ".join(p.stem for p in img_paths)
     try:
-        retrieved = retrieve(query, k=5)          # ← may raise / be empty
-        raise ValueError
+        retrieved = retrieve(query, k=5)  # ← may raise / be empty
     except Exception as exc:
         print(f"RAG retrieval failed. {exc}")
         retrieved = []
 
-    ref_block = "\n\n".join(f"[{i+1}] {r['text']}" for i, r in enumerate(retrieved))
+    ref_block = "\n\n".join(f"[{i + 1}] {r['text']}" for i, r in enumerate(retrieved))
 
     # ---------- build messages ------------------------------------------
     system_prompt = (
         "You are an optical‑fibre fault‑analysis expert. "
         "Given the following figures (each shows amplitude over P‑points with "
-        "predictions vs ground truth in the title), write a concise explanation "
+        f"predictions vs ground truth in the title predicted using a {classifier_type} machine learning model), write a concise explanation "
         "of common patterns you observe, including typical failure modes and "
         "any misclassifications. Explain the type of fault, position, possible causes "
         "and possible solutions. Provide brief answers.\n\n"
@@ -167,28 +171,28 @@ def _llm_explain(
 
     # first part: reference snippets (if any) + lead‑in text
     user_parts = [
-        {"type": "text",
-         "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
-        {"type": "text",
-         "text": "Here are the selected samples for inspection:"},
-    ] + [
-        {   # the images themselves
-            "type": "image_url",
-            "image_url": {"url": _b64(p)},
-        }
-        for p in img_paths
-    ]
+                     {"type": "text",
+                      "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
+                     {"type": "text",
+                      "text": "Here are the selected samples for inspection:"},
+                 ] + [
+                     {  # the images themselves
+                         "type": "image_url",
+                         "image_url": {"url": _b64(p)},
+                     }
+                     for p in img_paths
+                 ]
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user",   "content": user_parts},
+        {"role": "user", "content": user_parts},
     ]
 
     # ---------- chat completion -----------------------------------------
     resp = client.chat.completions.create(
         model=openai_model,
         messages=messages,
-        max_tokens=600,   # limit the response length
+        max_tokens=600,  # limit the response length
     )
 
     rag_flag = False
@@ -199,52 +203,103 @@ def _llm_explain(
     return resp.choices[0].message.content.strip(), rag_flag
 
 
-
-
 # --------------------------------------------------
 # Main eval flow
 # --------------------------------------------------
 
-def main() -> None:  # noqa: C901
-    ap = argparse.ArgumentParser(description="Evaluate OTDR models & visualise outputs")
-    ap.add_argument("--mode", choices=["pipeline", "direct"], required=True)
-    ap.add_argument("--classifier", choices=["tcn", "tst", "tab"], required=True, help="Classifier to use")
-    ap.add_argument("--data", default="data/OTDR_data.csv")
-    ap.add_argument("--detector", default="models/gru_ae.pt")
-    ap.add_argument("--cls-path", default=None, help="Classifier weights path; defaults based on --classifier")
-    ap.add_argument("--num-samples", type=int, default=2, help="Random samples to visualise & explain")
-    ap.add_argument("--out-dir", default="eval_outputs")
-    ap.add_argument("--device", default=None)
-    args = ap.parse_args()
-
-    out_dir = Path(args.out_dir)
+@click.command(context_settings=dict(help_option_names=["-h", "--help"]))
+@click.option(
+    "--mode",
+    type=click.Choice(["pipeline", "direct"], case_sensitive=False),
+    required=True,
+    help="Evaluation mode: pipeline (GRU-AE filter) or direct (full test set).",
+)
+@click.option(
+    "--classifier",
+    type=click.Choice(["tcn", "tst", "tab"], case_sensitive=False),
+    required=True,
+    help="Classifier to use.",
+)
+@click.option(
+    "--data", "data_path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path("data/OTDR_data.csv"),
+    show_default=True,
+    help="Path to the dataset CSV. Must have 'Class', 'SNR', 'Position', and P{N} columns.",
+)
+@click.option(
+    "--detector",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path("models/gru_ae.pt"),
+    show_default=True,
+    help="Path to GRU-AE weights.",
+)
+@click.option(
+    "--cls-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional path to classifier weights; defaults by --classifier.",
+)
+@click.option(
+    "--num-samples",
+    type=int,
+    default=2,
+    show_default=True,
+    help="Random samples to visualise & explain.",
+)
+@click.option(
+    "--out-dir",
+    type=str,
+    default="eval_outputs",
+    show_default=True,
+    help="Folder name under outputs/ for artifacts.",
+)
+@click.option(
+    "--device",
+    type=str,
+    default=None,
+    help="cuda | cpu | leave empty for auto-detect.",
+)
+def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, device):  # noqa: C901
+    out_dir = Path("outputs") / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # ---------- data ---------- #
-    df = load_raw_dataframe(args.data)
+    df = load_raw_dataframe(data_path)
     _, _, test_df = make_splits(df)
 
     meas_cols = [c for c in test_df.columns if re.fullmatch(r"P\d+", c)] + ["SNR"]
-    scaler = fit_scaler(test_df[meas_cols].values.astype(np.float32))  # fit on test for standardisation only here
-    splits = tensorise_splits(test_df, test_df, test_df, scaler)  # only need "test" key
-    X_test = splits["test"].X
-    y_cls_test = splits["test"].y_class
-    y_pos_test = splits["test"].y_pos
+
+    # scaler = fit_scaler(test_df[meas_cols].values.astype(np.float32))  # fit on test for standardisation only here
+
+    # TODO temporary patch
+    # Load training-time scaler stats saved by train.py (next to --detector)
+    meta_path = Path(detector).with_suffix(".json")
+    if not meta_path.exists():
+        raise FileNotFoundError(f"Missing scaler/threshold meta next to detector: {meta_path}")
+    meta = json.loads(meta_path.read_text())
+
+    scaler = StandardScaler()
+    scaler.mean_ = np.asarray(meta["scaler_mean"], dtype=np.float32)
+    scaler.scale_ = np.asarray(meta["scaler_scale"], dtype=np.float32)
+    scaler.var_ = scaler.scale_ ** 2
+    scaler.n_features_in_ = scaler.mean_.shape[0]
 
     device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        if args.device is None else torch.device(args.device)
+        if device is None else torch.device(device)
     )
+    print("[INFO] Using device:", device)
 
     # ---------- load models ---------- #
-    cls_default = "tabnet.pt" if args.classifier == "tab" else ("tcn.pt" if args.classifier == "tcn" else "tst.pt")
-    cls_path = Path(args.cls_path or Path("models") / cls_default)
+    cls_default = "tabnet.pt" if classifier == "tab" else ("tcn.pt" if classifier == "tcn" else "tst.pt")
+    cls_path = Path(cls_path or Path("models") / cls_default)
 
     n_classes = int(df["Class"].max() + 1)
-    classifier = _load_classifier(args.classifier, cls_path, seq_len=X_test.shape[1], n_classes=n_classes, device=device)
+    classifier_model = _load_classifier(classifier, cls_path, seq_len=X_test.shape[1], n_classes=n_classes, device=device)
 
-    if args.mode == "pipeline":
-        ae, threshold, _, _ = _load_gru_ae(Path(args.detector), device)
+    if mode == "pipeline":
+        ae, threshold, _, _ = _load_gru_ae(Path(detector), device)
         errs = reconstruction_error(ae, X_test, device=device)
         is_fault = errs > threshold
         # if all healthy, fallback to sample of test
@@ -255,11 +310,13 @@ def main() -> None:  # noqa: C901
         idx_to_eval = torch.arange(X_test.size(0))
 
     # ------------- inference ------------- #
-    logits, pos_hat = (
-        predict_tcn(classifier, X_test[idx_to_eval])
-        if args.classifier == "tcn"
-        else predict_tst(classifier, X_test[idx_to_eval])
-    )
+    if classifier == "tcn":
+        logits, pos_hat = predict_tcn(classifier_model, X_test[idx_to_eval])
+    elif classifier == "tst":
+        logits, pos_hat = predict_tst(classifier_model, X_test[idx_to_eval])
+    else:  # tab
+        logits, pos_hat = predict_tabnet(classifier_model, X_test[idx_to_eval])
+
     preds_cls = logits.argmax(1)
 
     # metrics
@@ -269,7 +326,7 @@ def main() -> None:  # noqa: C901
 
     # Confusion matrix plot
     cm = confusion_matrix(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
-    fig_cm = ConfusionMatrixDisplay(cm).plot(include_values=True, cmap="Blues", colorbar=False)
+    ConfusionMatrixDisplay(cm).plot(include_values=True, cmap="Blues", colorbar=False)
     plt.title("Confusion Matrix – Eval subset")
     plt.tight_layout()
     cm_path = out_dir / "confusion_matrix.png"
@@ -278,7 +335,7 @@ def main() -> None:  # noqa: C901
 
     # ------------- random visualisations ------------- #
     rng = np.random.default_rng(42)
-    chosen = rng.choice(idx_to_eval.numpy(), size=min(args.num_samples, idx_to_eval.size(0)), replace=False)
+    chosen = rng.choice(idx_to_eval.numpy(), size=min(num_samples, idx_to_eval.size(0)), replace=False)
     img_paths = []
     num_points = X_test.shape[1] - 1  # number of P-points in the traces
     for idx in chosen:
@@ -291,10 +348,9 @@ def main() -> None:  # noqa: C901
         img_paths.append(_visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, int(idx), out_dir))
 
     # ------------- LLM explanation ------------- #
-
-    explanation, rag_flag = _llm_explain(img_paths, classifier_type=args.classifier)
-    classifier_name = args.classifier.upper()
-    llm_dir = Path("llm_output")
+    explanation, rag_flag = _llm_explain(img_paths, classifier_type=classifier)
+    classifier_name = classifier.upper()
+    llm_dir = Path("outputs/llm_output")
     llm_dir.mkdir(parents=True, exist_ok=True)
     if explanation:
         explanation_file = llm_dir / "llm_explanation.txt"
@@ -303,23 +359,14 @@ def main() -> None:  # noqa: C901
             explanation_file = llm_dir / f"llm_explanation_{i}.txt"
             i += 1
         if rag_flag:
-            explanation = f"LLM explanation for eval subset with RAG for {classifier_name} in {args.mode} mode:\n\n{explanation}"
+            explanation = f"LLM explanation for eval subset with RAG for {classifier_name} in {mode} mode:\n\n{explanation}"
         else:
-            explanation = f"LLM explanation for eval subset without RAG for {classifier_name} in {args.mode} mode:\n\n{explanation}"
-        explanation_file.write_text(explanation)
+            explanation = f"LLM explanation for eval subset without RAG for {classifier_name} in {mode} mode:\n\n{explanation}"
+        explanation_file.write_text(explanation, encoding='utf-8')
         print(f"LLM explanation saved to {explanation_file.name}")  # noqa: T201
+
 
 if __name__ == "__main__":
     main()
 
-# eval input arguments
 
-# if pipeline, use pipeline
-
-# if model, then pass to model
-
-# grab output
-
-# results
-
-# LLM explanation
