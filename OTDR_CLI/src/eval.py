@@ -284,6 +284,10 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     scaler.scale_ = np.asarray(meta["scaler_scale"], dtype=np.float32)
     scaler.var_ = scaler.scale_ ** 2
     scaler.n_features_in_ = scaler.mean_.shape[0]
+    splits = tensorise_splits(test_df, test_df, test_df, scaler)  # only need "test" key
+    X_test = splits["test"].X
+    y_cls_test = splits["test"].y_class
+    y_pos_test = splits["test"].y_pos
 
     device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
