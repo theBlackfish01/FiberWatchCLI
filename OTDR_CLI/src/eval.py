@@ -270,20 +270,22 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
 
     meas_cols = [c for c in test_df.columns if re.fullmatch(r"P\d+", c)] + ["SNR"]
 
-    # scaler = fit_scaler(test_df[meas_cols].values.astype(np.float32))  # fit on test for standardisation only here
-
-    # TODO temporary patch
-    # Load training-time scaler stats saved by train.py (next to --detector)
-    meta_path = Path(detector).with_suffix(".json")
-    if not meta_path.exists():
-        raise FileNotFoundError(f"Missing scaler/threshold meta next to detector: {meta_path}")
-    meta = json.loads(meta_path.read_text())
-
-    scaler = StandardScaler()
-    scaler.mean_ = np.asarray(meta["scaler_mean"], dtype=np.float32)
-    scaler.scale_ = np.asarray(meta["scaler_scale"], dtype=np.float32)
-    scaler.var_ = scaler.scale_ ** 2
-    scaler.n_features_in_ = scaler.mean_.shape[0]
+    # test scaling only using training dataset info
+    scaler_path = Path(detector).parent / "scaler.json"
+    if scaler_path.exists():
+        meta = json.loads(scaler_path.read_text())
+        scaler = StandardScaler()
+        scaler.mean_ = np.asarray(meta["mean"], dtype=np.float32)
+        scaler.scale_ = np.asarray(meta["scale"], dtype=np.float32)
+        scaler.var_ = scaler.scale_ ** 2
+        scaler.n_features_in_ = scaler.mean_.shape[0]
+    else:
+        meta = json.loads(Path(detector).with_suffix(".json").read_text())
+        scaler = StandardScaler()
+        scaler.mean_ = np.asarray(meta["scaler_mean"], dtype=np.float32)
+        scaler.scale_ = np.asarray(meta["scaler_scale"], dtype=np.float32)
+        scaler.var_ = scaler.scale_ ** 2
+        scaler.n_features_in_ = scaler.mean_.shape[0]
     splits = tensorise_splits(test_df, test_df, test_df, scaler)  # only need "test" key
     X_test = splits["test"].X
     y_cls_test = splits["test"].y_class

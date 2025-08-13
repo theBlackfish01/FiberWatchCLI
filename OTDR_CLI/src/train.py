@@ -23,7 +23,7 @@ python -m src.train --mode all
 from pathlib import Path
 import json
 import re
-from typing import Tuple
+from typing import Tuple, Optional
 
 import click
 import numpy as np
@@ -70,6 +70,53 @@ warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
 
 def _ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
+
+
+def _resolve_device(requested: Optional[str]) -> torch.device:
+    """
+    Choose an appropriate torch.device.
+    Priority: requested (if available) -> CUDA -> MPS -> CPU.
+    """
+    # Normalize
+    if requested:
+        req = requested.lower()
+        if req.startswith("cuda"):
+            if torch.cuda.is_available():
+                return torch.device(req if ":" in req else "cuda:0")
+            else:
+                print("[WARN] Requested CUDA, but CUDA is not available. Falling back to auto.")
+        elif req == "mps":
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return torch.device("mps")
+            else:
+                print("[WARN] Requested MPS, but MPS is not available. Falling back to auto.")
+        elif req == "cpu":
+            return torch.device("cpu")
+        else:
+            # Try to construct and hope for the best
+            try:
+                dev = torch.device(req)
+                return dev
+            except Exception:
+                print(f"[WARN] Unrecognized device '{requested}'. Falling back to auto.")
+
+    # Auto
+    if torch.cuda.is_available():
+        return torch.device("cuda:0")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def _print_device_info(device: torch.device) -> None:
+    if device.type == "cuda":
+        idx = torch.cuda.current_device()
+        name = torch.cuda.get_device_name(idx)
+        print(f"[INFO] Using device: cuda:{idx} ({name})")
+    elif device.type == "mps":
+        print("[INFO] Using device: mps (Apple Silicon)")
+    else:
+        print("[INFO] Using device: cpu")
 
 
 # ----------------------------- GRU-AE eval ----------------------------------#
@@ -119,6 +166,7 @@ def _evaluate_tst(
     print(f"[TST]    Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
     return cls_acc, rmse
 
+
 # ----------------------------- TabNet eval ----------------------------------#
 
 def _evaluate_tabnet(
@@ -163,7 +211,7 @@ def _evaluate_tabnet(
     "--device",
     type=str,
     default=None,
-    help="cuda | cpu | leave empty for auto-detect.",
+    help="cuda | cuda:0 | mps | cpu | leave empty for auto-detect.",
 )
 def main(mode, data_path, out_dir, device) -> None:  # noqa: C901 – single-entry script
     out_dir = Path(out_dir)
@@ -178,11 +226,20 @@ def main(mode, data_path, out_dir, device) -> None:  # noqa: C901 – single-ent
     scaler = fit_scaler(train_df[measurements].values.astype(np.float32))
     splits = tensorise_splits(train_df, val_df, test_df, scaler)
 
-    device = (
-        torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        if device is None else torch.device(device)
-    )
-    print(f"[INFO] Using device: {device}")
+    # ----------------------------- Device ---------------------------------#
+    device = _resolve_device(device)
+    _print_device_info(device)
+
+    # Persist the training scaler separately for evaluation / future runs
+    scaler_meta = {
+        "mean": scaler.mean_.tolist(),
+        "scale": scaler.scale_.tolist(),
+        "n_features_in": int(scaler.mean_.shape[0]),
+        "feature_names": measurements,
+        "source_data": str(data_path),
+    }
+    with open(out_dir / "scaler.json", "w") as fp:
+        json.dump(scaler_meta, fp, indent=2)
 
     # ----------------------------- GRU-AE ----------------------------------#
     if mode in {"gru_ae", "all"}:
@@ -196,14 +253,9 @@ def main(mode, data_path, out_dir, device) -> None:  # noqa: C901 – single-ent
         print(f"[GRU-AE] Threshold={thresh:.5f}")
         _evaluate_gru_ae(ae, thresh, splits["test"].X, splits["test"].y_class)
 
-        # Save scaler stats + threshold for inference
-        meta = {
-            "threshold": thresh,
-            "scaler_mean": scaler.mean_.tolist(),
-            "scaler_scale": scaler.scale_.tolist(),
-        }
+        # Save AE metadata (threshold only; scaler is now separate)
         with open(out_dir / "gru_ae.json", "w") as fp:
-            json.dump(meta, fp, indent=2)
+            json.dump({"threshold": thresh}, fp, indent=2)
 
     # ----------------------------- TCN -------------------------------------#
     if mode in {"tcn", "all"}:
