@@ -185,7 +185,7 @@ def main():
     except Exception as e:
         print(f"[WARN] LLM explanation step skipped due to error: {e}")
 
-    # Report skipped counts (from your data_handler)
+    # Report skipped counts (from data_handler)
     te = test_loader.dataset
     total_skipped = getattr(te, "skipped_missing", 0) + getattr(te, "skipped_broken", 0)
     print(f"Skipped files — test: missing={getattr(te, 'skipped_missing', 0)}, "
