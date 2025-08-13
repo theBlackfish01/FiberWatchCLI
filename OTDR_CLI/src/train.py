@@ -13,10 +13,10 @@ python -m src.train --mode tcn
 # Train *only* the Transformer multitask classifier
 python -m src.train --mode tst
 
-# Train *only* the TabNet multitask classifier
+# Train *only* the TabNet multitask classifier (dependency issue right now)
 python -m src.train --mode tab
 
-# Train all sequentially (GRU-AE ➜ TCN ➜ TST ➜ TabNet)
+# Train all sequentially (GRU-AE ➜ TCN ➜ TST) (Not TabNet)
 python -m src.train --mode all
 """
 
@@ -292,7 +292,7 @@ def main(mode, data_path, out_dir, device) -> None:  # noqa: C901 – single-ent
         _evaluate_tst(tst, splits["test"].X, splits["test"].y_class, splits["test"].y_pos)
 
     # ----------------------------- TabNet ----------------------------------#
-    if mode in {"tab", "all"}:
+    if mode in {"tab"}:
         n_classes = int(df["Class"].max() + 1)
         tabnet = OTDR_TabNet(n_classes=n_classes)
         tabnet_cfg = TabNetConfig(save_path=out_dir / "tabnet.pt", device=device)
