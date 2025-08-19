@@ -1,5 +1,5 @@
 import json, pathlib, numpy as np, tqdm, openai, faiss
-from OTDR_CLI.src.config import config as cfg
+from OTDR_CLI.OTDR.src.config import config as cfg
 
 EMB_MODEL = "text-embedding-3-small"   # 3k ctx, cheapest v3 model
 ROOT_DIR = pathlib.Path(__file__).parent.parent.parent

@@ -196,7 +196,7 @@ def _evaluate_tabnet(
 @click.option(
     "--data", "data_path",
     type=click.Path(dir_okay=False, path_type=Path),
-    default=Path("data/OTDR_data.csv"),
+    default=Path("data/OTDR_DATA.csv"),
     show_default=True,
     help="Path to cleaned OTDR dataset (CSV or Parquet).",
 )

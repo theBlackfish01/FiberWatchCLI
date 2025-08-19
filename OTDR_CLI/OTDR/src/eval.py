@@ -223,7 +223,7 @@ def _llm_explain(
 @click.option(
     "--data", "data_path",
     type=click.Path(dir_okay=False, path_type=Path),
-    default=Path("data/OTDR_data.csv"),
+    default=Path("data/OTDR_DATA.csv"),
     show_default=True,
     help="Path to the dataset CSV. Must have 'Class', 'SNR', 'Position', and P{N} columns.",
 )
@@ -328,7 +328,7 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     # metrics
     acc = accuracy_score(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
     rmse = mean_squared_error(y_pos_test[idx_to_eval].numpy(), pos_hat.numpy())
-    print(f"Eval subset size = {idx_to_eval.size(0)} | Acc = {acc:.3f} | RMSE = {rmse:.3f}")  # noqa: T201
+    print(f"Eval subset size = {idx_to_eval.size(0)} | Acc = {acc:.3f} | MSE = {rmse:.3f}")  # noqa: T201
 
     # Confusion matrix plot
     cm = confusion_matrix(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
