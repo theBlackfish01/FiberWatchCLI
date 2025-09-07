@@ -3,4 +3,4 @@ data/
 # Project exclude paths
 /models/
 .env
-OTDR_CLI/src/config/
+OTDR_CLI/OTDR/src/config/

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 Phi-OTDR training CLI (CNN/TCN) with quick test evaluation + confusion matrix.
 
@@ -49,6 +50,7 @@ def _plot_cm(cm, out_path: Path, title: str) -> None:
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
+
 def _infer_in_channels(dl) -> Optional[int]:
     """Peek a few samples to infer channel count C from tensors shaped (T, C)."""
     for i in range(len(dl.dataset)):
@@ -57,14 +59,15 @@ def _infer_in_channels(dl) -> Optional[int]:
             return int(sample["data"].shape[1])
     return None
 
+
 @torch.no_grad()
 def _quick_test_eval(
-    model,
-    predict_fn,
-    test_loader,
-    device: torch.device,
-    cm_path: Path,
-    title: str,
+        model,
+        predict_fn,
+        test_loader,
+        device: torch.device,
+        cm_path: Path,
+        title: str,
 ) -> None:
     model.eval().to(device)
     y_true, y_pred = [], []
@@ -94,6 +97,7 @@ def cli():
     """Phi-OTDR training CLI (CNN/TCN)."""
     pass
 
+
 @cli.command("train")
 @click.option("--model", type=click.Choice(["cnn", "tcn"]), required=True, help="Model to train.")
 @click.option("--train-root", type=click.Path(path_type=Path),
@@ -121,19 +125,19 @@ def cli():
 @click.option("--in-channels", type=int, default=None,
               help="Override channel count for TCN (otherwise inferred from data).")
 def train_cmd(
-    model: str,
-    train_root: Path,
-    test_root: Path,
-    train_list: Path,
-    test_list: Path,
-    out_dir: Path,
-    epochs: int,
-    batch_size: int,
-    lr: float,
-    weight_decay: float,
-    device: str | None,
-    viz_samples: int,
-    in_channels: int | None,
+        model: str,
+        train_root: Path,
+        test_root: Path,
+        train_list: Path,
+        test_list: Path,
+        out_dir: Path,
+        epochs: int,
+        batch_size: int,
+        lr: float,
+        weight_decay: float,
+        device: str | None,
+        viz_samples: int,
+        in_channels: int | None,
 ):
     """Train a CNN or TCN on Φ-OTDR data and run a quick test-set evaluation."""
     here = Path(__file__).resolve().parent

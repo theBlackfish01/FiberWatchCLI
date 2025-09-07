@@ -1,22 +1,17 @@
 from __future__ import annotations
 
-"""End-to-end training script for OTDR models.
+"""
+Training script for OTDR models.
 
 Run examples
 ------------
-# Train *only* the GRU Auto-Encoder
+# Train GRUAE
 python -m src.train --mode gru_ae
 
-# Train *only* the TCN multitask classifier
+# Train TCN 
 python -m src.train --mode tcn
 
-# Train *only* the Transformer multitask classifier
-python -m src.train --mode tst
-
-# Train *only* the TabNet multitask classifier (dependency issue right now)
-python -m src.train --mode tab
-
-# Train all sequentially (GRU-AE ➜ TCN ➜ TST) (Not TabNet)
+# Train all 
 python -m src.train --mode all
 """
 
@@ -47,7 +42,12 @@ from model_functions.gruae import (
     train_gru_ae,
     reconstruction_error,
 )
-from model_functions.tcn import OTDR_TCN, TrainConfig as TCNConfig, train_tcn, predict as predict_tcn
+from model_functions.tcn import (
+    OTDR_TCN,
+    TrainConfig as TCNConfig,
+    train_tcn,
+    predict as predict_tcn
+)
 from model_functions.tabnet import (
     OTDR_TabNet,
     TrainConfig as TabNetConfig,
@@ -62,7 +62,9 @@ from model_functions.tst import (
 )
 
 import warnings
+
 warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
+
 
 # ---------------------------------------------------------------------------
 # Utility helpers
@@ -122,10 +124,10 @@ def _print_device_info(device: torch.device) -> None:
 # ----------------------------- GRU-AE eval ----------------------------------#
 
 def _evaluate_gru_ae(
-    ae: VectorGRUAE,
-    threshold: float,
-    X_test: torch.Tensor,
-    y_test_cls: torch.Tensor,
+        ae: VectorGRUAE,
+        threshold: float,
+        X_test: torch.Tensor,
+        y_test_cls: torch.Tensor,
 ) -> Tuple[float, float]:
     errs = reconstruction_error(ae, X_test)
     y_true = (y_test_cls != 0).numpy().astype(int)
@@ -140,10 +142,10 @@ def _evaluate_gru_ae(
 # ----------------------------- TCN eval -------------------------------------#
 
 def _evaluate_tcn(
-    tcn: OTDR_TCN,
-    X_test: torch.Tensor,
-    y_test_cls: torch.Tensor,
-    y_test_pos: torch.Tensor,
+        tcn: OTDR_TCN,
+        X_test: torch.Tensor,
+        y_test_cls: torch.Tensor,
+        y_test_pos: torch.Tensor,
 ) -> Tuple[float, float]:
     logits, pos_hat = predict_tcn(tcn, X_test)
     cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
@@ -155,10 +157,10 @@ def _evaluate_tcn(
 # ----------------------------- TST eval -------------------------------------#
 
 def _evaluate_tst(
-    tst: TimeSeriesTransformer,
-    X_test: torch.Tensor,
-    y_test_cls: torch.Tensor,
-    y_test_pos: torch.Tensor,
+        tst: TimeSeriesTransformer,
+        X_test: torch.Tensor,
+        y_test_cls: torch.Tensor,
+        y_test_pos: torch.Tensor,
 ) -> Tuple[float, float]:
     logits, pos_hat = predict_tst(tst, X_test)
     cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
@@ -170,10 +172,10 @@ def _evaluate_tst(
 # ----------------------------- TabNet eval ----------------------------------#
 
 def _evaluate_tabnet(
-    tabnet: OTDR_TabNet,
-    X_test: torch.Tensor,
-    y_test_cls: torch.Tensor,
-    y_test_pos: torch.Tensor,
+        tabnet: OTDR_TabNet,
+        X_test: torch.Tensor,
+        y_test_cls: torch.Tensor,
+        y_test_pos: torch.Tensor,
 ) -> Tuple[float, float]:
     logits, pos_hat = predict_tabnet(tabnet, X_test)
     cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
@@ -183,10 +185,12 @@ def _evaluate_tabnet(
 
 
 # ---------------------------------------------------------------------------
-# Main driver (Click CLI)
+# Click CLI
 # ---------------------------------------------------------------------------
 
-@click.command(context_settings=dict(help_option_names=["-h", "--help"]))
+@click.command(
+    context_settings=dict(help_option_names=["-h", "--help"])
+)
 @click.option(
     "--mode",
     type=click.Choice(["gru_ae", "tcn", "tst", "tab", "all"], case_sensitive=False),
@@ -213,7 +217,7 @@ def _evaluate_tabnet(
     default=None,
     help="cuda | cuda:0 | mps | cpu | leave empty for auto-detect.",
 )
-def main(mode, data_path, out_dir, device) -> None:  # noqa: C901 – single-entry script
+def main(mode, data_path, out_dir, device) -> None:
     out_dir = Path(out_dir)
     _ensure_dir(out_dir)
 

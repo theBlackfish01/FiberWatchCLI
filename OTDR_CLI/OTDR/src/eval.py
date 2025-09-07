@@ -1,56 +1,46 @@
-# OTDR_CLI/src/eval.py
-from __future__ import annotations
+# OTDR/src/eval.py
 
-
-import base64
-
-"""Evaluation + visual explanation script for OTDR pipeline.
+"""
+Evaluation script
 
 Two modes:
 
-1. **pipeline** – GRU‑AE anomaly detection ➜ selected samples → classifier (TCN/TST)
-2. **direct**  – classifier directly on the full test set
+1. Pipeline – GRU‑AE anomaly detection ➜ selected samples → classifier (TCN/TST)
+2. Direct – classifier directly on the full test set
 
-For a handful of random traces this script draws amplitude + prediction
-overlays and asks an OpenAI LLM to provide a natural‑language explanation.
+LLM explanation of random samples using vision‑capable GPT‑4o‑mini with RAG
 """
 
-from pathlib import Path
+from __future__ import annotations
+import base64
 import click
 import json
 import re
-from typing import List, Tuple
-from contextlib import ExitStack
+from typing import Tuple
 from sklearn.preprocessing import StandardScaler
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from sklearn.metrics import accuracy_score, mean_squared_error, confusion_matrix, ConfusionMatrixDisplay
-
-# Local imports
-from data_helper import load_raw_dataframe, make_splits, fit_scaler, tensorise_splits
+from data_helper import load_raw_dataframe, make_splits, tensorise_splits
 from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import OTDR_TCN, predict as predict_tcn
 from model_functions.tst import TimeSeriesTransformer, predict as predict_tst
 from model_functions.tabnet import OTDR_TabNet, predict as predict_tabnet
 import config.config as cfg
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 from rag import retrieve
 from openai import OpenAI
-
-client = OpenAI(api_key=cfg.OPENAI_API_KEY)
-
 import warnings
 
-warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
 
+warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
+client = OpenAI(api_key=cfg.OPENAI_API_KEY)
 
 # --------------------------------------------------
 # Utility helpers
 # --------------------------------------------------
-
 def _load_gru_ae(det_path: Path, device: torch.device) -> Tuple[VectorGRUAE, float, np.ndarray, np.ndarray]:
     """Return (model, threshold, scaler_mean, scaler_scale)."""
     meta_path = det_path.with_suffix(".json")
@@ -206,7 +196,6 @@ def _llm_explain(
 # --------------------------------------------------
 # Main eval flow
 # --------------------------------------------------
-
 @click.command(context_settings=dict(help_option_names=["-h", "--help"]))
 @click.option(
     "--mode",
@@ -302,7 +291,8 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     cls_path = Path(cls_path or Path("models") / cls_default)
 
     n_classes = int(df["Class"].max() + 1)
-    classifier_model = _load_classifier(classifier, cls_path, seq_len=X_test.shape[1], n_classes=n_classes, device=device)
+    classifier_model = _load_classifier(classifier, cls_path, seq_len=X_test.shape[1], n_classes=n_classes,
+                                        device=device)
 
     if mode == "pipeline":
         ae, threshold, _, _ = _load_gru_ae(Path(detector), device)
@@ -374,5 +364,3 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
 
 if __name__ == "__main__":
     main()
-
-
