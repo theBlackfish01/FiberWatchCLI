@@ -195,7 +195,7 @@ Outputs:
 If you save features to a CSV (features + last column = label), you can plot a 2-D LDA projection:
 
 ```bash
-python PHI-OTDR/src/feature_visualisation.py lda \
+python PHI-OTDR/src/data_visualisation.py lda \
   --features PHI-OTDR/src/outputs/cnn_features.csv \
   --out PHI-OTDR/src/outputs/lda_features.png \
   --components 2

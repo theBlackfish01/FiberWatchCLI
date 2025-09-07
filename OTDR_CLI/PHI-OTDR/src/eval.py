@@ -1,17 +1,27 @@
 from __future__ import annotations
-"""
-Phi-OTDR evaluation & visualization (CNN/TCN) with optional LLM explanation.
 
-Usage (examples):
+"""
+Phi-OTDR evaluation & visualization (CNN/TCN) with LLM explanation + FAISS RAG (auto).
+
+Usage examples:
   python eval.py eval --model cnn --weights models/cnn.pt
   python eval.py eval --model tcn --weights models/tcn.pt --num-samples 8 --skip-llm
   python eval.py eval --model cnn --llm-model gpt-4o-mini
+
+Notes:
+- RAG is automatically enabled if a FAISS index exists at:
+    PHI-OTDR/src/corpus/index.faiss          (default)
+    PHI-OTDR/src/corpus/chunks.jsonl         (sidecar store)
+    PHI-OTDR/src/corpus/chunks.meta.json     (auto-detected embed model)
+  Build these once via:
+    python PHI-OTDR/src/rag.py build --corpus PHI-OTDR/src/corpus
 """
 
 import base64
+import json
 import os
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import click
 import numpy as np
@@ -23,6 +33,7 @@ from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDis
 from data_handler import make_dataloaders, LoaderConfig, CLASS_NAMES, save_sample_images
 from model_functions.cnn import CNN, predict as predict_cnn
 from model_functions.tcn import TCN, predict as predict_tcn
+from rag import retrieve  # FAISS-backed retriever
 
 # ---------- Optional API key via project config; falls back to env ----------
 try:
@@ -30,6 +41,66 @@ try:
     _OPENAI_KEY = getattr(cfg, "OPENAI_API_KEY", None)
 except Exception:
     _OPENAI_KEY = None
+
+
+# ============================== RAG defaults ============================== #
+
+def _default_rag_paths() -> tuple[Path, Path, Path]:
+    """Return (index.faiss, chunks.jsonl, chunks.meta.json) under src/corpus/."""
+    here = Path(__file__).resolve().parent
+    corpus = here / "corpus"
+    index_path = corpus / "index.faiss"
+    store_path = corpus / "chunks.jsonl"
+    meta_path = corpus / "chunks.meta.json"  # written by rag.build()
+    return index_path, store_path, meta_path
+
+
+def _load_embed_model_from_meta(meta_path: Path) -> Optional[str]:
+    """Read the embedding model name used at index build time."""
+    try:
+        meta = json.loads(Path(meta_path).read_text(encoding="utf-8"))
+        return meta.get("embed_model", None)
+    except Exception:
+        return None
+
+
+def _auto_retrieve_snippets(k: int = 5) -> tuple[List[str], bool]:
+    """
+    If the FAISS index+store exist, run a simple task-specific query and
+    return top-k snippet texts. Returns (snippets, used_rag_flag).
+    """
+    index_path, store_path, meta_path = _default_rag_paths()
+    if not (index_path.is_file() and store_path.is_file()):
+        return [], False
+
+    embed_model = _load_embed_model_from_meta(meta_path)
+    if embed_model is None:
+        # Fall back to default used in rag.py; may still work if matching build-time model
+        embed_model = "text-embedding-3-large"
+
+    class_list = ", ".join(CLASS_NAMES)
+    query = (
+        "Phi-OTDR / Distributed Acoustic Sensing (DAS) event signatures, "
+        "typical time–channel heatmap patterns, confusion cases and diagnostics for classes: "
+        f"{class_list}. Include tips on distinguishing similar temporal envelopes and channel energy distributions."
+    )
+    try:
+        hits = retrieve(
+            query=query,
+            k=k,
+            index_path=index_path,
+            store_path=store_path,
+            embed_model=embed_model,
+        )
+        # Limit each chunk length to keep prompt size reasonable
+        snippets = [h["text"][:900] for h in hits if "text" in h and h["text"].strip()]
+        if snippets:
+            print(f"[RAG] Retrieved {len(snippets)} snippets from {index_path.name}")
+            return snippets, True
+    except Exception as e:
+        print(f"[RAG] Retrieval failed: {e}")
+
+    return [], False
 
 
 # ============================== LLM helpers =============================== #
@@ -40,6 +111,7 @@ def _b64(path: Path) -> str:
     enc = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime};base64,{enc}"
 
+
 def _get_openai_client():
     key = _OPENAI_KEY or os.getenv("OPENAI_API_KEY")
     if not key:
@@ -48,10 +120,15 @@ def _get_openai_client():
     from openai import OpenAI
     return OpenAI(api_key=key)
 
-def _llm_explain_phi(img_paths: List[Path], model_name: str = "gpt-4o-mini") -> str | None:
+
+def _llm_explain_phi(
+    img_paths: List[Path],
+    model_name: str = "gpt-4o-mini",
+    rag_snippets: List[str] | None = None,
+) -> str | None:
     """
-    Ask a vision-capable LLM to describe patterns and misclassifications
-    across Phi-OTDR visualizations (no RAG). Returns text or None.
+    Ask a vision-capable LLM to describe patterns and misclassifications.
+    If rag_snippets are provided, prepend a numbered reference block and ask the model to cite [1], [2], …
     """
     client = _get_openai_client()
     if client is None:
@@ -61,12 +138,21 @@ def _llm_explain_phi(img_paths: List[Path], model_name: str = "gpt-4o-mini") -> 
         "You are an expert in distributed acoustic sensing (Φ-OTDR). "
         "Each image shows a time–channel heatmap with overlaid text and probability bars. "
         "Explain typical signatures for the classes "
-        "(background, digging, knocking, watering, shaking, walking), "
-        "note any misclassifications and plausible causes (e.g., similar temporal envelopes "
-        "or channel energy distributions), and provide practical diagnostic tips."
+        "(background, digging, knocking, watering, shaking, walking). "
+        "Note any misclassifications and plausible causes (e.g., similar temporal envelopes "
+        "or channel energy distributions), and provide practical diagnostic tips. "
+        "When helpful, cite the provided reference snippets like [1], [2]…"
     )
 
-    user_parts = [{"type": "text", "text": "Here are the selected samples:"}]
+    ref_block = ""
+    if rag_snippets:
+        joined = "\n\n".join(f"[{i + 1}] {s}" for i, s in enumerate(rag_snippets))
+        ref_block = "Reference snippets:\n" + joined
+
+    user_parts = []
+    if ref_block:
+        user_parts.append({"type": "text", "text": ref_block})
+    user_parts.append({"type": "text", "text": "Here are the selected samples:"})
     user_parts += [{"type": "image_url", "image_url": {"url": _b64(p)}} for p in img_paths]
 
     resp = client.chat.completions.create(
@@ -75,7 +161,7 @@ def _llm_explain_phi(img_paths: List[Path], model_name: str = "gpt-4o-mini") -> 
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_parts},
         ],
-        max_tokens=600,
+        max_tokens=700,
     )
     return resp.choices[0].message.content.strip()
 
@@ -91,6 +177,7 @@ def _plot_cm(cm: np.ndarray, out_path: Path, title: str) -> None:
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
+
 def _heatmap_basic(arr: np.ndarray, true_idx: int, pred_idx: int, idx: int, out_dir: Path) -> Path:
     """Standard heatmap with True/Pred in title."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -105,6 +192,7 @@ def _heatmap_basic(arr: np.ndarray, true_idx: int, pred_idx: int, idx: int, out_
     fig.savefig(path, dpi=150)
     plt.close(fig)
     return path
+
 
 def _heatmap_llm_sheet(
     arr: np.ndarray,
@@ -188,6 +276,7 @@ def _infer_in_channels(dl) -> int | None:
             return int(sample["data"].shape[1])
     return None
 
+
 def _load_model(model_name: str, in_channels: int, n_classes: int, weights: Path, device: torch.device):
     """Construct model by name and load weights (with safe fallback)."""
     if model_name == "cnn":
@@ -206,6 +295,7 @@ def _load_model(model_name: str, in_channels: int, n_classes: int, weights: Path
     model.eval().to(device)
     return model, predict_fn
 
+
 def _evaluate_and_visualize(
     model_name: str,
     weights: Path,
@@ -223,7 +313,7 @@ def _evaluate_and_visualize(
     # Loader
     _, test_loader = make_dataloaders(
         train_root=test_root, train_list=test_list,
-        test_root=test_root,  test_list=test_list,
+        test_root=test_root, test_list=test_list,
         cfg=LoaderConfig(batch_size=batch_size)
     )
 
@@ -286,10 +376,16 @@ def _evaluate_and_visualize(
         llm_path = _heatmap_llm_sheet(arr, logits1, t_lab, int(idx), llm_img_dir)
         all_llm_imgs.append(llm_path)
 
+    # ---- Auto RAG (if index present) ----
+    rag_snippets: List[str] = []
+    used_rag = False
+    if not skip_llm and all_llm_imgs:
+        rag_snippets, used_rag = _auto_retrieve_snippets(k=5)
+
     # LLM explanation (optional)
     if not skip_llm and all_llm_imgs:
         try:
-            explanation = _llm_explain_phi(all_llm_imgs, model_name=llm_model)
+            explanation = _llm_explain_phi(all_llm_imgs, model_name=llm_model, rag_snippets=rag_snippets or None)
             if explanation:
                 llm_dir = out_dir.parent / "llm_output"
                 llm_dir.mkdir(parents=True, exist_ok=True)
@@ -298,7 +394,10 @@ def _evaluate_and_visualize(
                 while out_file.exists():
                     out_file = llm_dir / f"phi_otdr_{model_name}_llm_explanation_{k}.txt"
                     k += 1
-                header = f"LLM explanation for Φ-OTDR eval subset ({model_name.upper()}, no RAG):\n\n"
+                header = (
+                    f"LLM explanation for Φ-OTDR eval subset "
+                    f"({model_name.upper()}, {'with RAG' if used_rag else 'no RAG'}):\n\n"
+                )
                 out_file.write_text(header + explanation, encoding="utf-8")
                 print(f"LLM explanation saved to {out_file.name}")
         except Exception as e:
@@ -314,8 +413,9 @@ def _evaluate_and_visualize(
 
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
 def cli():
-    """Phi-OTDR evaluation CLI (CNN/TCN) with visualization and LLM explanations."""
+    """Phi-OTDR evaluation CLI (CNN/TCN) with visualization and LLM explanations (+ auto RAG)."""
     pass
+
 
 @cli.command("eval")
 @click.option("--model", type=click.Choice(["cnn", "tcn"]), required=True, help="Model type to evaluate.")
@@ -349,7 +449,7 @@ def eval_cmd(
     llm_model: str,
     skip_llm: bool,
 ):
-    """Run evaluation, render plots, and (optionally) generate an LLM explanation."""
+    """Run evaluation, render plots, and (optionally) generate an LLM explanation (auto RAG if available)."""
     here = Path(__file__).resolve().parent
     # Default weights by model if not provided
     if weights is None:

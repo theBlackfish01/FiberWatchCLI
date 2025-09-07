@@ -1,0 +1,13 @@
+Rayleigh Backscatter and Phase Sensitivity in Φ-OTDR
+Φ-OTDR uses coherent Rayleigh backscatter as a distributed interferometer, converting tiny phase shifts from vibrations into detectable intensity changes. A highly coherent laser pulse (narrow linewidth <100 kHz) is launched into the fiber, yielding Rayleigh backscattered light from each microscopic scatter site
+pmc.ncbi.nlm.nih.gov
+. When an external disturbance (sound, vibration) stretches or compresses a fiber segment, it modulates the phase of backscatter from that segment. Because adjacent scatter contributions interfere, these phase shifts manifest as intensity fluctuations in the returned trace
+pmc.ncbi.nlm.nih.gov
+pmc.ncbi.nlm.nih.gov
+. In essence, the fiber itself acts like thousands of interferometers in series, each sensing strain. Unlike classical OTDR which only measures static loss, phase-OTDR’s coherent detection can capture dynamic perturbations. The concept of phase-sensitive OTDR was first demonstrated in the 1990s, enabling distributed acoustic sensing (DAS) of vibrations over tens of kilometers
+pmc.ncbi.nlm.nih.gov
+. Modern φ-OTDR systems often employ heterodyne detection (mixing backscatter with a local oscillator laser) to retrieve both amplitude and phase information digitally
+mdpi.com
+. This allows quantitative vibration measurements rather than just qualitative “event” detection. Overall, φ-OTDR provides real-time, distributed monitoring of environmental vibrations with high sensitivity by translating fiber strain into measurable optical interference patterns along the fiber’s length
+pmc.ncbi.nlm.nih.gov
+. References: [1] Z. Wang et al. (2020), Sensors, 20(22):6594 (DOI: 10.3390/s20226594); [2] L. Healy et al. (1982), Electron. Lett. 18(11): 444–445 (early COTDR); [3] J. C. Juarez et al. (2005), J. Lightwave Technol. 23: 2081–2087 (DOI: 10.1109/JLT.2005.849918)؛ [4] D. J. Rogers et al. (1993), Opt. Fiber Technol., 2(3): 178–188 (first φ-OTDR demo)

@@ -1,0 +1,16 @@
+Shaking — Quasi-Periodic, Stationary Carrier
+
+Shaking produces a sustained, quasi-sinusoidal vibration at a fixed location with stable phase across neighboring channels.
+Signature summary. Temporal envelope: continuous for 5–60 s (or longer). Recurrence: narrowband carrier ≈2–10 Hz (hand shaking) with harmonics; mechanical shakers can extend higher. Spectral bands: strong line(s) over low frequencies; sidebands if hand-modulated. Spatial spread: 2–6 channels with coherent phase. Amplitude stats: moderate RMS; kurtosis near 3 (quasi-Gaussian around a tone).
+Canonical heatmap pattern.
+
+time →
+│ ~~~~~~~ ~~~~~~~ ~~~~~~~   (wavy tone, stationary)
+ch │ ~~~~~~~ ~~~~~~~ ~~~~~~~
+↓  │  (same columns over time; no lateral drift)
+
+
+Differentiators. Vs. watering: watering is broadband/noisy (no single carrier) and often hiss-like; shaking shows a clear spectral line with high spectral concentration. Vs. walking: no diagonal motion; stable carrier vs. step-rate bursts. Vs. digging/knocking: lacks impulsive spikes and heavy tails.
+Operational context & false positives. PZT/rotary tools on structures; cable/fence shake tests. False positives: pumps/motor hum coupling into fiber. Confirm with narrowband SNR (peak/median PSD > X, e.g., > 6–10 dB) and coherence across adjacent channels.
+
+References: [1] Kayan et al., 2023, Appl. Opt. 62:1753 (doi:10.1364/AO.486077); [2] Liu et al., 2022, Opto-Electronic Adv. (doi:10.29026/oea.2022.200078); [3] Chen et al., 2023, Electronics 12:3757 (doi:10.3390/electronics12183757).

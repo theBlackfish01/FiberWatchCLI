@@ -1,0 +1,18 @@
+Watering — Sustained Broadband “Hiss” at a Fixed Point
+
+Watering generates continuous broadband energy localized at one position, often resembling leak- or spray-induced vibrational noise.
+Signature summary. Temporal envelope: steady (≥ 5 s, often tens of seconds). Recurrence: none; amplitude may flutter with flow. Spectral bands: broadband low-to-mid frequencies; site-specific peaks from structure resonances; expect energy mainly < 200–500 Hz for soil/pipe-coupled cases. Spatial spread: tight (1–4 channels) unless water spreads along a surface. Amplitude stats: elevated mean/RMS; low-to-moderate kurtosis (< 3.5) vs. impulsive classes.
+Canonical heatmap pattern.
+
+time →
+│ ███████████████████       (solid block at one location)
+ch │ ███████████████████
+↓  │
+
+
+Differentiators. Vs. shaking: lacks a narrow spectral line; PSD is flatter (high band-entropy). Vs. knocking/digging: no discrete spikes or regular cadence. Vs. rain: watering is highly localized; rain shows many weak spots over distance.
+Operational context & false positives. Hose/sprinkler near fiber; leaks/spew on pipelines; nearby air bleed or gas vent. Use band-energy ratios (broadband/low-band), spectral flatness, and spatial compactness to distinguish from tonal machinery and from distributed precipitation.
+
+References: [1] Cao et al., 2023, dataset (https://github.com/BJTUSensor/Phi-OTDR_dataset_and_codes
+); [2] Stajanca et al., 2018, Sensors 18:2841 (doi:10.3390/s18092841); [3] Tan et al., 2025, Nat. Commun. Eng. (monitoring flow states) (https://www.nature.com/articles/s44172-025-00483-6
+); [4] Benabid et al., 2025, Sensors 25:4937 (doi:10.3390/s25164937).

@@ -1,0 +1,17 @@
+Background — Low-RMS, Low-Kurtosis Noise Floor
+
+Background in Φ-OTDR/DAS is dominated by low-level, mostly stationary noise with weak spatial coherence and near-Gaussian amplitude statistics.
+Signature summary. Temporal envelope: steady or slowly drifting; bursts possible under wind/rain. Typical duration: persistent; evaluate in 5–20 s windows. Recurrence: none. Spectral bands: energy often <100 Hz; traffic may add tones/harmonics up to a few hundred Hz. Spatial spread: speckled across many channels without a moving front. Amplitude stats: low mean and RMS; kurtosis ≈3 (Gaussian) except during gusts/showers.
+Canonical heatmap pattern.
+
+time →
+│  .  .   . . . .  .  .   . .
+ch │ .  . .  . .  .  . .  . .
+an │. . .  .  .  .  .  . .  .
+↓  │  .  .   .  .   .  .   .
+
+
+Differentiators. No clear lateral motion (vs. walking); no periodic carrier (vs. shaking); no impulsive, high-kurtosis spikes (vs. knocking/digging); no sustained broadband hiss at one location (vs. watering/leaks).
+Operational context & false positives. Wind and rain increase low-frequency content and inter-channel correlation; nearby traffic and pumps introduce semi-tonal lines. Poor coupling/loose slack sections can mimic low-RMS “quiet” lanes. Treat background as a diverse negative class; include varied weather/traffic snapshots when curating negatives to control NAR.
+
+References: [1] Liu et al., 2022, Opto-Electronic Adv. (doi:10.29026/oea.2022.200078); [2] Gorshkov et al., 2022, Sensors 22:1033 (doi:10.3390/s22031033); [3] An et al., 2023, Sensors 23:3091 (PMCID: PMC10303358); [4] Tomasov et al., 2025, Sensors 25:4053 (PMCID: PMC12078700).

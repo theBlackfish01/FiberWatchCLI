@@ -1,0 +1,16 @@
+Walking — Moving Low-Rate Impacts with Harmonics
+
+Walking appears as a diagonal track of quasi-periodic footfalls that traverse channels with a 1–3 Hz step rate and low-frequency dominance.
+Signature summary. Temporal envelope: pulse train; typical pass 3–20 s depending on speed. Recurrence: cadence ≈1–3 Hz (adult gait); visible harmonics up to tens of Hz. Spectral bands: strongest < 30–60 Hz; site-dependent. Spatial spread: coherent motion across adjacent channels; velocity proxy from slope (m/s ≈ channel spacing / time between channel maxima). Amplitude stats: moderate RMS; kurtosis moderate (impacts weaker than digging).
+Canonical heatmap pattern.
+
+time →
+│   \   \   \   \            (diagonal streaks = motion)
+ch │    \   \   \
+↓  │     \   \
+
+
+Differentiators. Vs. digging/knocking: shows lateral movement and regular cadence; impacts are weaker. Vs. vehicles: much higher group velocity and broader spatial footprint for vehicles; richer low-frequency content.
+Operational context & false positives. Jogging/running increases cadence (2–4 Hz) and amplitude; groups produce multiple parallel tracks. Use step-rate detection (autocorrelation/zero-crossing), inter-channel coherence, and slope-based velocity to confirm.
+
+References: [1] Peng et al., 2020, Sci. Rep. 10:20175 (doi:10.1038/s41598-020-77147-2); [2] Zhou et al., 2024, Build. Environ. 247:111145 (doi:10.1016/j.buildenv.2024.111145); [3] Luckie et al., 2025, Seismol. Res. Lett. 96:2463

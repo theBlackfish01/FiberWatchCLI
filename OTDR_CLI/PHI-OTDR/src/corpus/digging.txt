@@ -1,0 +1,18 @@
+Digging — Stationary Repeated Impacts with Sand “Backflow” Tail
+
+Digging appears as repeated impulsive transients at a fixed location, often with a long, noisy tail from soil backfill.
+Signature summary. Temporal envelope: burst trains; typical duration 10–60 s. Recurrence: 0.5–3 Hz impact rate. Spectral bands: strong 5–60 Hz with harmonics; site-dependent peaks reported around 30–50 Hz. Spatial spread: localized (≈1–5 channels depending on coupling) with weak lateral drift. Amplitude stats: high RMS relative to background; high kurtosis (> 4) from impacts; rising mean during active periods.
+Canonical heatmap pattern.
+
+time →
+│   |  |  |  |  |         (vertical impact “needles”)
+ch │   |  |  |  |~~       (noisy tail “~~” after each hit)
+↓  │   |  |  |  |
+
+
+Differentiators. Vs. walking: no consistent diagonal motion; impacts are stronger, more periodic. Vs. knocking: longer sequences and visible post-impact tail (soil settling). Vs. shaking: lacks a stable carrier; energy concentrated in impulses.
+Operational context & false positives. Picks/shovels near buried fiber; small tool work on fences/posts. False positives: hammering on structures; repeated door slams; tracked vehicle idling producing low-rate transients. Include stationarity tests (location variance < 1 channel over window) and impact-rate constraints to separate from walkers.
+
+References: [1] Cao et al., 2023, Results in Optics 10:100372 (dataset) (https://ui.adsabs.harvard.edu/abs/2023ResOp..1000372C
+); [2] BJTUSensor GitHub (dataset readme) (https://github.com/BJTUSensor/Phi-OTDR_dataset_and_codes
+); [3] Stepanov et al., 2021, Sensors 21:7077 (doi:10.3390/s21217077); [4] Wang et al., 2021, Process Safety Environ. Prot. (doi:10.1016/j.psep.2021.01.002).

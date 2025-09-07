@@ -1,0 +1,16 @@
+Knocking — Short, Sparse, High-Kurtosis Transients
+
+Knocking manifests as a small cluster of sharp impulses at one spot, with little or no tail and high spectral bandwidth.
+Signature summary. Temporal envelope: 1–10 short hits in < 5–15 s. Recurrence: irregular (0.5–2 Hz typical). Spectral bands: broad, often 20–200 Hz (site-dependent). Spatial spread: 1–3 adjacent channels. Amplitude stats: very high kurtosis; elevated RMS only during hits; mean returns quickly to baseline.
+Canonical heatmap pattern.
+
+time →
+│   |     |   |               (few tall spikes)
+ch │   |         |
+↓  │
+
+
+Differentiators. Vs. digging: fewer repetitions, no soil backflow “hiss” tail; shorter total duration. Vs. walking: no diagonal propagation; footsteps show quasi-periodic pacing and move across channels. Vs. shaking: lacks continuous carrier.
+Operational context & false positives. Hand taps on fence posts/cable trays; tool knocks for testing. False positives: hail/large raindrops on surface-laid fiber; loose clamps rattling once or twice. Use burst-count (≤ 10), inter-hit interval variance, and kurtosis thresholds to separate from extended excavation sequences.
+
+References: [1] Yao et al., 2023, Sensors 23:7228 (PMCID: PMC10648657); [2] Chen et al., 2023, Electronics 12:3757 (doi:10.3390/electronics12183757); [3] Cao et al., 2023, dataset

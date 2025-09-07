@@ -1,0 +1,121 @@
+Shaking vs. Watering vs. Background — Quick Spectral Heuristics
+
+A simple PSD triage often separates these: tonal (shaking) vs. broadband localized (watering) vs. broadband diffuse (background).
+Signature summary. Compute (per channel/window) peak-to-median PSD ratio (PMR), spectral flatness (SF), and spatial compactness (SC = fraction of energy within ±2 channels). Shaking: high PMR (≥ 6–10 dB), low SF, high SC; Watering: low PMR, higher SF, high SC; Background: low PMR, moderate SF, low SC.
+Canonical heatmap cues. Shaking: stationary wavy bands; Watering: solid block at one location; Background: speckle.
+Operational differentiators. Require stationarity (position variance ≤ 1 channel) to rule out walking. For borderline cases, examine band-entropy between 0–20 Hz vs. 20–200 Hz: watering tends to fill both; shaking concentrates.
+
+References: [1] Liu et al., 2022, Opto-Electronic Adv. (doi:10.29026/oea.2022.200078); [2] Stajanca et al., 2018, Sensors 18:2841 (doi:10.3390/s18092841); [3] Chen et al., 2023, Electronics 12:3757.
+oejournal.org
+MDPI
++1
+
+Digging vs. Knocking vs. Walking — Impact Train Logic
+
+Use impact count, cadence regularity, and spatial drift to resolve the most common confusion trio.
+Heuristics. Count discrete peaks above an adaptive threshold (e.g., median + k·MAD). If count ≤ 5 and duration < 10 s at one location → knocking. If count ≥ 10, inter-hit CV < 0.3, and stationarity (drift < 1 channel) → digging. If monotonic channel index slope with step-rate 1–3 Hz → walking. Add kurtosis gate (> 4 favors digging/knocking).
+Why it works. Soil “backflow” and tool handling extend digging sequences and produce semi-periodicity; footsteps move spatially; taps are sparse and irregular.
+
+References: [1] Cao et al., 2023, Results in Optics 10:100372; [2] Chen et al., 2023, Electronics 12:3757; [3] Luckie et al., 2025, SRL 96:2463.
+ADS UI
+MDPI
+Geoscience World
+
+Walking vs. Vehicle Traffic — Velocity & Band-Energy Ratios
+
+Differentiate by apparent velocity and low-frequency dominance width.
+Heuristics. Estimate apparent speed
+𝑣
+v from diagonal slope; pedestrian: ~0.5–2 m/s; vehicles typically > 5 m/s and activate many more channels. Compute low-band energy
+𝐸
+0
+–
+20
+E
+0–20
+	​
+
+ and very-low ratio
+𝐸
+0
+–
+5
+/
+𝐸
+0
+–
+20
+E
+0–5
+	​
+
+/E
+0–20
+	​
+
+: footsteps have pronounced impulses (ratio higher) while vehicles spread energy broadly with resonant lines.
+
+References: [1] An et al., 2023, Sensors 23:3091; [2] Peng et al., 2020, Sci. Rep.; [3] Tomasov et al., 2025, Sensors 25:4053.
+PMC
++1
+Nature
+
+Per-Class Feature Cheats (Summary Table & Threshold Ideas)
+
+Apply simple, explainable thresholds first; let ML refine margins.
+
+Background: RMS < μ+2σ; kurtosis ~2.5–3.5; SC < 0.2.
+
+Digging: impact rate 0.5–3 Hz; ≥ 10 impacts/10 s; kurtosis > 4; stationarity drift < 1 ch.
+
+Knocking: 1–10 impacts/10 s; inter-hit CV > 0.3; kurtosis > 5; stationarity drift < 1 ch.
+
+Shaking: PMR ≥ 6–10 dB at 2–10 Hz; SF low; SC ≥ 0.5; zero-crossing regularity high.
+
+Watering: PMR < 3 dB; SF high; SC ≥ 0.5; broadband energy present 0–200 Hz.
+
+Walking: step rate 1–3 Hz; monotonic spatial slope; inter-channel coherence peak at lag matching pace.
+
+References: [1] Liu et al., 2022, Opto-Electronic Adv.; [2] Stajanca et al., 2018, Sensors; [3] Peng et al., 2020, Sci. Rep.; [4] BJTUSensor GitHub (dataset).
+oejournal.org
+MDPI
+Nature
+GitHub
+
+Mini ASCII Pattern Guide (for Label QA)
+
+A quick visual lexicon helps speed up RAG lookups and annotator QA.
+
+Background: fine speckle with no structure.
+
+Digging: |||| vertical impact lines at one location with noisy tails.
+
+Knocking: a few | spikes, then silence.
+
+Shaking: stationary ~~~~ sinusoid bands.
+
+Watering: solid ████ block at one spot.
+
+Walking: diagonal \\\\ streak(s) moving across channels.
+
+References: [1] Cao et al., 2023, dataset; [2] Chen et al., 2023, Electronics 12:3757.
+GitHub
+MDPI
+
+Class-Specific Operational Notes (Field Examples & Pitfalls)
+
+Tie lab patterns to field reality to reduce NAR.
+
+Background: include windy/rainy days, pump cycles, and quiet nights in negatives.
+
+Digging: genuine excavation persists; verify with stationarity + impact cadence; beware hammering on nearby structures.
+
+Knocking: often tests/curiosity; set alert debounce so 1–2 taps don’t alarm.
+
+Shaking: can be maintenance checks or machinery; confirm narrowband peak & coherence before alarming.
+
+Watering: hose/sprinkler; leaks show similar but may introduce structural resonances; check for persistent recurrence over hours/days.
+
+Walking: benign; use geo-fences to suppress alarms in known footpaths.
+
+References: [1] Stajanca et al., 2018, Sensors 18:2841; [2] Liu et al., 2022, Opto-Electronic Adv.; [3] OptaSense pipeline monitoring note (2018 PDF).
