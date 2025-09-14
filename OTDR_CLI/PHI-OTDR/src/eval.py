@@ -28,11 +28,25 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import ConfusionMatrixDisplay
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    precision_recall_fscore_support,
+    classification_report,
+    matthews_corrcoef,
+    cohen_kappa_score,
+    top_k_accuracy_score,
+    confusion_matrix,
+    log_loss,
+    roc_auc_score,
+)
+
 
 from data_handler import make_dataloaders, LoaderConfig, CLASS_NAMES, save_sample_images
 from model_functions.cnn import CNN, predict as predict_cnn
 from model_functions.tcn import TCN, predict as predict_tcn
+from model_functions.tft import TemporalFusionTransformer as TFT, predict as predict_tft
 from rag import retrieve  # FAISS-backed retriever
 
 # ---------- Optional API key via project config; falls back to env ----------
@@ -278,15 +292,16 @@ def _infer_in_channels(dl) -> int | None:
 
 
 def _load_model(model_name: str, in_channels: int, n_classes: int, weights: Path, device: torch.device):
-    """Construct model by name and load weights (with safe fallback)."""
     if model_name == "cnn":
         model = CNN(n_classes=n_classes)
         predict_fn = predict_cnn
-    else:  # "tcn"
+    elif model_name == "tcn":
         model = TCN(in_channels=in_channels, n_classes=n_classes)
         predict_fn = predict_tcn
+    else:  # "tft"
+        model = TFT(in_channels=in_channels, n_classes=n_classes)
+        predict_fn = predict_tft
 
-    # Older torch may not support weights_only=True
     try:
         state = torch.load(weights, map_location=device, weights_only=True)
     except TypeError:
@@ -294,6 +309,7 @@ def _load_model(model_name: str, in_channels: int, n_classes: int, weights: Path
     model.load_state_dict(state)
     model.eval().to(device)
     return model, predict_fn
+
 
 
 def _evaluate_and_visualize(
@@ -329,31 +345,155 @@ def _evaluate_and_visualize(
     n_classes = len(CLASS_NAMES)
     model, predict_fn = _load_model(model_name, in_channels, n_classes, weights, device)
 
-    # Inference
+    # ---------- Inference ----------
     y_true, y_pred = [], []
+    y_logits_list = []  # keep raw logits for prob-based metrics
     with torch.no_grad():
         for batch in test_loader:
             if batch is None:
                 continue
             x = batch["data"].unsqueeze(1).to(device, dtype=torch.float32)  # (B,1,T,C) for both models
             y = batch["label"].to(device, dtype=torch.long)
-            logits = predict_fn(model, x)
+            logits = predict_fn(model, x)  # (B, n_classes)
             y_true.extend(y.cpu().tolist())
             y_pred.extend(logits.argmax(1).cpu().tolist())
+            y_logits_list.extend(logits.cpu().tolist())
 
-    # Metrics & confusion matrix
+    # ---------- Small helper: pretty-print confusion matrix ----------
+    def _print_cm_console(cm: np.ndarray, class_names: list[str], title: str = "Confusion Matrix") -> None:
+        print(f"\n{title}")
+        # Column widths
+        col_names = ["true\\pred"] + list(class_names)
+        col_widths = []
+        for j in range(len(col_names)):
+            if j == 0:
+                w = max(len(col_names[0]), max(len(str(cn)) for cn in class_names))
+            else:
+                w = max(len(str(col_names[j])), max(len(str(cm[i, j-1])) for i in range(cm.shape[0])))
+            col_widths.append(w)
+        # Header
+        header = " | ".join(str(n).ljust(col_widths[i]) for i, n in enumerate(col_names))
+        print(header)
+        print("-" * len(header))
+        # Rows
+        for i, row in enumerate(cm):
+            cells = [str(class_names[i]).ljust(col_widths[0])] + [str(v).ljust(col_widths[j+1]) for j, v in enumerate(row)]
+            print(" | ".join(cells))
+
+    # ---------- Metrics & confusion matrix ----------
     if y_true:
-        acc = accuracy_score(y_true, y_pred)
-        cm = confusion_matrix(y_true, y_pred, labels=list(range(n_classes)))
-        print(f"Eval size = {len(y_true)} | Acc = {acc:.3f}")
+        y_true_np = np.asarray(y_true)
+        y_pred_np = np.asarray(y_pred)
+        logits_np = np.asarray(y_logits_list) if len(y_logits_list) else None
+
+        # Base metrics
+        acc = accuracy_score(y_true_np, y_pred_np)
+        bal_acc = balanced_accuracy_score(y_true_np, y_pred_np)
+        mcc = matthews_corrcoef(y_true_np, y_pred_np)
+        kappa = cohen_kappa_score(y_true_np, y_pred_np)
+
+        # Per-class & aggregate P/R/F1
+        per_prec, per_rec, per_f1, per_sup = precision_recall_fscore_support(
+            y_true_np, y_pred_np, labels=list(range(n_classes)), zero_division=0
+        )
+        p_macro, r_macro, f1_macro, _ = precision_recall_fscore_support(
+            y_true_np, y_pred_np, average="macro", zero_division=0
+        )
+        p_micro, r_micro, f1_micro, _ = precision_recall_fscore_support(
+            y_true_np, y_pred_np, average="micro", zero_division=0
+        )
+        p_weighted, r_weighted, f1_weighted, _ = precision_recall_fscore_support(
+            y_true_np, y_pred_np, average="weighted", zero_division=0
+        )
+
+        # Confusion matrices
+        cm = confusion_matrix(y_true_np, y_pred_np, labels=list(range(n_classes)))
+        _print_cm_console(cm, CLASS_NAMES, title="Confusion Matrix (counts)")
+        # Row-normalized (recall per true class)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+            cm_norm = np.nan_to_num(cm_norm)
+        _print_cm_console(
+            (cm_norm * 100).round(2),  # show as %
+            CLASS_NAMES,
+            title="Confusion Matrix (row-normalized, %)"
+        )
+
+        # Prob-based metrics if logits are available
+        top3 = top5 = auc_macro_ovr = np.nan
+        ll = np.nan
+        if logits_np is not None and logits_np.size:
+            # top-k on raw scores is fine
+            if n_classes >= 3:
+                try:
+                    top3 = top_k_accuracy_score(y_true_np, logits_np, k=3, labels=list(range(n_classes)))
+                except Exception:
+                    top3 = np.nan
+            if n_classes >= 5:
+                try:
+                    top5 = top_k_accuracy_score(y_true_np, logits_np, k=5, labels=list(range(n_classes)))
+                except Exception:
+                    top5 = np.nan
+            # log loss & ROC-AUC need probabilities
+            try:
+                probs = torch.softmax(torch.tensor(logits_np), dim=1).numpy()
+                ll = log_loss(y_true_np, probs, labels=list(range(n_classes)))
+            except Exception:
+                ll = np.nan
+            try:
+                # Macro OVR ROC-AUC; may fail if a class is missing in y_true
+                auc_macro_ovr = roc_auc_score(y_true_np, probs, multi_class="ovr", average="macro")
+            except Exception:
+                auc_macro_ovr = np.nan
+
+        # Console summary
+        print(f"\nEval size = {len(y_true_np)}")
+        print(
+            f"Acc = {acc:.4f} | Balanced Acc = {bal_acc:.4f} | MCC = {mcc:.4f} | Cohen's κ = {kappa:.4f}"
+        )
+        print(
+            f"P/R/F1 (macro) = {p_macro:.4f}/{r_macro:.4f}/{f1_macro:.4f} | "
+            f"(micro) = {p_micro:.4f}/{r_micro:.4f}/{f1_micro:.4f} | "
+            f"(weighted) = {p_weighted:.4f}/{r_weighted:.4f}/{f1_weighted:.4f}"
+        )
+        if not np.isnan(ll):
+            extras = [f"LogLoss = {ll:.4f}"]
+            if not np.isnan(auc_macro_ovr):
+                extras.append(f"ROC-AUC macro(OVR) = {auc_macro_ovr:.4f}")
+            if not np.isnan(top3):
+                extras.append(f"Top-3 Acc = {top3:.4f}")
+            if not np.isnan(top5):
+                extras.append(f"Top-5 Acc = {top5:.4f}")
+            print(" | ".join(extras))
+
+        # Optional: detailed per-class lines
+        print("\nPer-class metrics:")
+        for i, name in enumerate(CLASS_NAMES):
+            print(
+                f"[{i}] {name}: Prec={per_prec[i]:.3f}  Rec={per_rec[i]:.3f}  F1={per_f1[i]:.3f}  Support={int(per_sup[i])}"
+            )
+
+        # Optional: sklearn's text report (nice summary)
+        print("\nClassification report:")
+        print(
+            classification_report(
+                y_true_np, y_pred_np,
+                labels=list(range(n_classes)),
+                target_names=CLASS_NAMES,
+                zero_division=0,
+                digits=3
+            )
+        )
+
+        # Keep your existing PNG export
         _plot_cm(cm, out_dir / "confusion_matrix.png",
                  f"{model_name.upper()} – Confusion Matrix (test set)")
         # Save raw sample heatmaps for quick inspection
         save_sample_images(test_loader.dataset, out_dir / "samples_raw", num=num_samples)
     else:
-        print("[WARN] No valid test samples after filtering.")
+        print("[WARN] No valid test samples after filtering.]")
 
-    # LLM-friendly sheets + basic pred heatmaps
+    # ---------- LLM-friendly sheets + basic pred heatmaps ----------
     rng = np.random.default_rng(42)
     chosen = rng.choice(len(test_loader.dataset), size=min(num_samples, len(test_loader.dataset)), replace=False)
     basic_img_dir = out_dir / "samples_pred"
@@ -409,6 +549,7 @@ def _evaluate_and_visualize(
     print(f"Skipped files — test: missing={te.skipped_missing}, broken={te.skipped_broken}; total={total_skipped}")
 
 
+
 # ================================ CLI ================================= #
 
 @click.group(context_settings=dict(help_option_names=["-h", "--help"]))
@@ -418,7 +559,7 @@ def cli():
 
 
 @cli.command("eval")
-@click.option("--model", type=click.Choice(["cnn", "tcn"]), required=True, help="Model type to evaluate.")
+@click.option("--model", type=click.Choice(["cnn", "tcn", "tft"]), required=True, help="Model type to evaluate.")
 @click.option("--weights", type=click.Path(path_type=Path), default=None,
               help="Path to model weights. Defaults to models/<model>.pt.")
 @click.option("--test-root", type=click.Path(path_type=Path),

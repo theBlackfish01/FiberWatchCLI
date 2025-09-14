@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+# TODO implement same ish model for both types of data
 """
 Phi-OTDR training CLI (CNN/TCN) with quick test evaluation + confusion matrix.
 
@@ -37,6 +37,9 @@ from model_functions.cnn import (
 from model_functions.tcn import (
     TCN, TrainConfig as TCNConfig, train_tcn, predict as predict_tcn
 )
+# add near top
+from model_functions.tft import TemporalFusionTransformer as TFT, TrainConfig as TFTConfig, train_tft, predict as predict_tft
+
 
 
 # ------------------------------ Helpers ------------------------------ #
@@ -99,7 +102,7 @@ def cli():
 
 
 @cli.command("train")
-@click.option("--model", type=click.Choice(["cnn", "tcn"]), required=True, help="Model to train.")
+@click.option("--model", type=click.Choice(["cnn", "tcn", "tft"]), required=True, help="Model to train.")
 @click.option("--train-root", type=click.Path(path_type=Path),
               default=lambda: Path(__file__).resolve().parent / "data" / "das_data" / "train",
               show_default=True, help="Root folder with training .mat files.")
@@ -176,6 +179,33 @@ def train_cmd(
             model=net, predict_fn=predict_cnn, test_loader=test_loader,
             device=dev, cm_path=here / "outputs" / "confusion_matrix_train_cnn.png",
             title="CNN"
+        )
+    elif model == "tft":
+        C = in_channels or _infer_in_channels(train_loader)
+        if C is None:
+            raise click.ClickException("Unable to infer in_channels; pass --in-channels.")
+        net = TFT(in_channels=C, n_classes=len(CLASS_NAMES))
+        cfg = TFTConfig(
+            save_path=models_dir / "tft.pt",
+            device=dev,
+            epochs=epochs,
+            lr=lr,
+            weight_decay=weight_decay,
+            in_channels=C,
+        )
+        train_tft(net, train_loader, test_loader, cfg)
+
+        # Load best weights if saved (compat for torch versions)
+        try:
+            state = torch.load(cfg.save_path, map_location=dev, weights_only=True)
+        except TypeError:
+            state = torch.load(cfg.save_path, map_location=dev)
+        net.load_state_dict(state)
+
+        _quick_test_eval(
+            model=net, predict_fn=predict_tft, test_loader=test_loader,
+            device=dev, cm_path=here / "outputs" / "confusion_matrix_train_tft.png",
+            title="TFT"
         )
 
     # ---------------------------- TCN path ---------------------------- #
