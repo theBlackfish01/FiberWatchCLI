@@ -2,16 +2,35 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import Tuple
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from contextlib import nullcontext
 
+
+# ---- AMP compatibility (torch.amp vs torch.cuda.amp) ----
+try:
+    # New API (PyTorch ≥ 2.0)
+    from torch.amp import autocast as _autocast_new, GradScaler as _GradScalerNew
+
+    def _autocast(device: torch.device):
+        return _autocast_new('cuda') if device.type == 'cuda' else nullcontext()
+
+    def _make_scaler(device: torch.device):
+        return _GradScalerNew('cuda') if device.type == 'cuda' else None
+
+except Exception:
+    # Old API (PyTorch ≤ 1.x)
+    from torch.cuda.amp import autocast as _autocast_old, GradScaler as _GradScalerOld
+
+    def _autocast(device: torch.device):
+        return _autocast_old(enabled=(device.type == 'cuda'))
+
+    def _make_scaler(device: torch.device):
+        return _GradScalerOld(enabled=(device.type == 'cuda'))
 
 
 # ------------------------------ utils ------------------------------ #
@@ -140,18 +159,18 @@ class TemporalFusionTransformer(nn.Module):
         self,
         in_channels: int,
         n_classes: int,
-        d_model: int = 96,        # ↓ a bit lighter than 128
-        n_heads: int = 3,         # keep d_model % n_heads == 0
+        d_model: int = 96,        # lighter than 128
+        n_heads: int = 3,         # d_model % n_heads == 0
         num_layers: int = 2,      # fewer layers
         d_ff: int = 192,
         dropout: float = 0.1,
         max_len: int = 20000,
-        max_tokens: int = 1024,   # NEW: cap seq length seen by attention
+        max_tokens: int = 1024,   # cap seq length seen by attention
     ):
         super().__init__()
         self.in_channels = in_channels
         self.d_model = d_model
-        self.max_tokens = max_tokens      # NEW
+        self.max_tokens = max_tokens
 
         self.var_sel = VariableSelection(in_channels, d_model)
         self.pos_enc = SinusoidalPositionalEncoding(d_model, max_len=max_len)
@@ -174,14 +193,13 @@ class TemporalFusionTransformer(nn.Module):
         # Convert to (B,T,C)
         x = _to_btc(x, self.in_channels)  # (B,T,C)
 
-        # --- NEW: downsample long sequences along time (avg pool) ---
+        # --- downsample long sequences along time (avg pool) ---
         B, T, C = x.shape
         if T > self.max_tokens:
             k = math.ceil(T / self.max_tokens)  # pooling stride/kernel
-            # pool over time dimension
             x = F.avg_pool1d(x.transpose(1, 2), kernel_size=k, stride=k, ceil_mode=True).transpose(1, 2)
             T = x.size(1)
-        # ------------------------------------------------------------
+        # -------------------------------------------------------
 
         # 1) variable selection
         z, _weights = self.var_sel(x)
@@ -221,16 +239,14 @@ class TrainConfig:
     num_layers: int = 2
     d_ff: int = 192
     dropout: float = 0.1
-    max_tokens: int = 1024   # NEW
+    max_tokens: int = 1024
 
-
-from torch.cuda.amp import autocast, GradScaler
 
 def train_tft(model: TemporalFusionTransformer, train_loader, val_loader, cfg: TrainConfig) -> TemporalFusionTransformer:
     model = model.to(cfg.device)
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     criterion = nn.CrossEntropyLoss()
-    scaler = GradScaler(enabled=(cfg.device.type == "cuda"))
+    scaler = _make_scaler(cfg.device)
 
     # propagate max_tokens to model if provided via cfg
     if hasattr(cfg, "max_tokens") and hasattr(model, "max_tokens"):
@@ -241,7 +257,8 @@ def train_tft(model: TemporalFusionTransformer, train_loader, val_loader, cfg: T
         # ---------------------- Train ---------------------- #
         model.train()
         tr_correct = tr_total = 0
-        tr_loss = 0.0; tr_batches = 0
+        tr_loss = 0.0
+        tr_batches = 0
         for batch in train_loader:
             if batch is None:
                 continue
@@ -249,12 +266,17 @@ def train_tft(model: TemporalFusionTransformer, train_loader, val_loader, cfg: T
             y = batch["label"].to(cfg.device, dtype=torch.long)
 
             opt.zero_grad(set_to_none=True)
-            with autocast(device_type="cuda", enabled=(cfg.device.type == "cuda")):
+            with _autocast(cfg.device):
                 _, logits = model(x)
                 loss = criterion(logits, y)
-            scaler.scale(loss).backward()
-            scaler.step(opt)
-            scaler.update()
+
+            if scaler is not None:
+                scaler.scale(loss).backward()
+                scaler.step(opt)
+                scaler.update()
+            else:
+                loss.backward()
+                opt.step()
 
             tr_loss += float(loss.detach())
             tr_correct += (logits.argmax(1) == y).sum().item()
@@ -264,14 +286,15 @@ def train_tft(model: TemporalFusionTransformer, train_loader, val_loader, cfg: T
         # ----------------------- Val ----------------------- #
         model.eval()
         va_correct = va_total = 0
-        va_loss = 0.0; va_batches = 0
+        va_loss = 0.0
+        va_batches = 0
         with torch.no_grad():
             for batch in val_loader:
                 if batch is None:
                     continue
                 x = batch["data"].unsqueeze(1).to(cfg.device, dtype=torch.float32)
                 y = batch["label"].to(cfg.device, dtype=torch.long)
-                with autocast(device_type="cuda", enabled=(cfg.device.type == "cuda")):
+                with _autocast(cfg.device):
                     _, logits = model(x)
                     loss = criterion(logits, y)
                 va_loss += float(loss)

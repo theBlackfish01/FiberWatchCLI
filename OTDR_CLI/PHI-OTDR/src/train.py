@@ -1,5 +1,4 @@
 from __future__ import annotations
-# TODO implement same ish model for both types of data
 """
 Phi-OTDR training CLI (CNN/TCN) with quick test evaluation + confusion matrix.
 
