@@ -7,6 +7,11 @@ from typing import Iterable, List, Sequence, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 
 
 # ------------------------------ utils ------------------------------ #
@@ -135,16 +140,18 @@ class TemporalFusionTransformer(nn.Module):
         self,
         in_channels: int,
         n_classes: int,
-        d_model: int = 128,
-        n_heads: int = 4,
-        num_layers: int = 3,
-        d_ff: int = 256,
+        d_model: int = 96,        # ↓ a bit lighter than 128
+        n_heads: int = 3,         # keep d_model % n_heads == 0
+        num_layers: int = 2,      # fewer layers
+        d_ff: int = 192,
         dropout: float = 0.1,
         max_len: int = 20000,
+        max_tokens: int = 1024,   # NEW: cap seq length seen by attention
     ):
         super().__init__()
         self.in_channels = in_channels
         self.d_model = d_model
+        self.max_tokens = max_tokens      # NEW
 
         self.var_sel = VariableSelection(in_channels, d_model)
         self.pos_enc = SinusoidalPositionalEncoding(d_model, max_len=max_len)
@@ -167,18 +174,23 @@ class TemporalFusionTransformer(nn.Module):
         # Convert to (B,T,C)
         x = _to_btc(x, self.in_channels)  # (B,T,C)
 
-        # 1) variable selection -> (B,T,d_model)
+        # --- NEW: downsample long sequences along time (avg pool) ---
+        B, T, C = x.shape
+        if T > self.max_tokens:
+            k = math.ceil(T / self.max_tokens)  # pooling stride/kernel
+            # pool over time dimension
+            x = F.avg_pool1d(x.transpose(1, 2), kernel_size=k, stride=k, ceil_mode=True).transpose(1, 2)
+            T = x.size(1)
+        # ------------------------------------------------------------
+
+        # 1) variable selection
         z, _weights = self.var_sel(x)
-
-        # 2) positional encoding
+        # 2) positional encodings
         z = self.pos_enc(z)
-
-        # 3) transformer encoder over time
-        z = self.encoder(z)  # (B,T,d_model)
-
+        # 3) transformer encoder
+        z = self.encoder(z)
         # 4) attention pooling
-        feats = self.pool(z)  # (B,d_model)
-
+        feats = self.pool(z)
         # 5) classifier
         logits = self.classifier(feats)
         return feats, logits
@@ -204,55 +216,65 @@ class TrainConfig:
     lr: float = 1e-3
     weight_decay: float = 1e-5
     in_channels: int = 12
-    d_model: int = 128
-    n_heads: int = 4
-    num_layers: int = 3
-    d_ff: int = 256
+    d_model: int = 96
+    n_heads: int = 3
+    num_layers: int = 2
+    d_ff: int = 192
     dropout: float = 0.1
+    max_tokens: int = 1024   # NEW
 
+
+from torch.cuda.amp import autocast, GradScaler
 
 def train_tft(model: TemporalFusionTransformer, train_loader, val_loader, cfg: TrainConfig) -> TemporalFusionTransformer:
-    """
-    Training loop mirrors your CNN/TCN trainers.
-    """
     model = model.to(cfg.device)
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
     criterion = nn.CrossEntropyLoss()
+    scaler = GradScaler(enabled=(cfg.device.type == "cuda"))
+
+    # propagate max_tokens to model if provided via cfg
+    if hasattr(cfg, "max_tokens") and hasattr(model, "max_tokens"):
+        model.max_tokens = cfg.max_tokens
 
     best_acc = -1.0
     for epoch in range(1, cfg.epochs + 1):
         # ---------------------- Train ---------------------- #
         model.train()
-        tr_correct, tr_total, tr_loss, tr_batches = 0, 0, 0.0, 0
+        tr_correct = tr_total = 0
+        tr_loss = 0.0; tr_batches = 0
         for batch in train_loader:
             if batch is None:
                 continue
-            x = batch["data"].unsqueeze(1).to(cfg.device, dtype=torch.float32)  # (B,1,T,C)
+            x = batch["data"].unsqueeze(1).to(cfg.device, dtype=torch.float32)
             y = batch["label"].to(cfg.device, dtype=torch.long)
 
             opt.zero_grad(set_to_none=True)
-            _, logits = model(x)
-            loss = criterion(logits, y)
-            loss.backward()
-            opt.step()
+            with autocast(device_type="cuda", enabled=(cfg.device.type == "cuda")):
+                _, logits = model(x)
+                loss = criterion(logits, y)
+            scaler.scale(loss).backward()
+            scaler.step(opt)
+            scaler.update()
 
-            tr_loss += loss.item()
+            tr_loss += float(loss.detach())
             tr_correct += (logits.argmax(1) == y).sum().item()
             tr_total += y.numel()
             tr_batches += 1
 
         # ----------------------- Val ----------------------- #
         model.eval()
-        va_correct, va_total, va_loss, va_batches = 0, 0, 0.0, 0
+        va_correct = va_total = 0
+        va_loss = 0.0; va_batches = 0
         with torch.no_grad():
             for batch in val_loader:
                 if batch is None:
                     continue
                 x = batch["data"].unsqueeze(1).to(cfg.device, dtype=torch.float32)
                 y = batch["label"].to(cfg.device, dtype=torch.long)
-                _, logits = model(x)
-                loss = criterion(logits, y)
-                va_loss += loss.item()
+                with autocast(device_type="cuda", enabled=(cfg.device.type == "cuda")):
+                    _, logits = model(x)
+                    loss = criterion(logits, y)
+                va_loss += float(loss)
                 va_correct += (logits.argmax(1) == y).sum().item()
                 va_total += y.numel()
                 va_batches += 1
