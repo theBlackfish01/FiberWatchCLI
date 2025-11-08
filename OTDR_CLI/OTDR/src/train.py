@@ -23,7 +23,7 @@ from typing import Tuple, Optional
 import click
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, mean_squared_error, roc_auc_score, roc_curve
+from sklearn.metrics import accuracy_score, root_mean_squared_error, roc_auc_score, roc_curve
 
 # ---------------------------------------------------------------------------
 # Local project imports
@@ -149,8 +149,8 @@ def _evaluate_tcn(
 ) -> Tuple[float, float]:
     logits, pos_hat = predict_tcn(tcn, X_test)
     cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
-    rmse = mean_squared_error(
-        y_test_pos.numpy().ravel(), pos_hat.numpy(), squared=False
+    rmse = root_mean_squared_error(
+        y_test_pos.numpy().ravel(), pos_hat.numpy()
     )
     print(f"[TCN]    Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
     return cls_acc, rmse
@@ -166,8 +166,8 @@ def _evaluate_tst(
 ) -> Tuple[float, float]:
     logits, pos_hat = predict_tst(tst, X_test)
     cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
-    rmse = mean_squared_error(
-        y_test_pos.numpy().ravel(), pos_hat.numpy(), squared=False
+    rmse = root_mean_squared_error(
+        y_test_pos.numpy().ravel(), pos_hat.numpy()
     )
     print(f"[TST]    Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
     return cls_acc, rmse
@@ -183,8 +183,8 @@ def _evaluate_tabnet(
 ) -> Tuple[float, float]:
     logits, pos_hat = predict_tabnet(tabnet, X_test)
     cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
-    rmse = mean_squared_error(
-        y_test_pos.numpy().ravel(), pos_hat.numpy(), squared=False
+    rmse = root_mean_squared_error(
+        y_test_pos.numpy().ravel(), pos_hat.numpy()
     )
     print(f"[TabNet] Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
     return cls_acc, rmse
