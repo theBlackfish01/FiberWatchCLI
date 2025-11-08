@@ -19,7 +19,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple
 
+import numpy as np
 import torch
+from sklearn.metrics import root_mean_squared_error
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -50,16 +52,20 @@ class Chomp1d(nn.Module):
 class TemporalBlock(nn.Module):
     """Residual dilated causal convolutional block (à la WaveNet)."""
 
-    def __init__(self, in_ch: int, out_ch: int, k: int, d: int):
+    def __init__(self, in_ch: int, out_ch: int, k: int, d: int, dropout: float = 0.0):
         super().__init__()
         pad = (k - 1) * d
+        drop1 = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+        drop2 = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
         self.net = nn.Sequential(
             nn.Conv1d(in_ch, out_ch, k, padding=pad, dilation=d),
             Chomp1d(pad),
             nn.ReLU(),
+            drop1,
             nn.Conv1d(out_ch, out_ch, k, padding=pad, dilation=d),
             Chomp1d(pad),
             nn.ReLU(),
+            drop2,
         )
         self.down = nn.Conv1d(in_ch, out_ch, 1) if in_ch != out_ch else nn.Identity()
         self.act = nn.ReLU()
@@ -98,12 +104,13 @@ class OTDR_TCN(nn.Module):
         n_blocks: int = 6,
         k: int = 3,
         n_classes: int = 8,
+        dropout: float = 0.1,
     ) -> None:
         super().__init__()
         layers: list[nn.Module] = []
         ch = in_ch
         for b in range(n_blocks):
-            layers.append(TemporalBlock(ch, mid_ch, k, 2 ** b))
+            layers.append(TemporalBlock(ch, mid_ch, k, 2 ** b, dropout=dropout))
             ch = mid_ch
         self.tcn = nn.Sequential(*layers)
         self.gap = nn.AdaptiveAvgPool1d(1)  # (B, C, 1)
@@ -111,6 +118,7 @@ class OTDR_TCN(nn.Module):
         # heads
         self.class_head = nn.Linear(mid_ch, n_classes)
         self.loc_head = nn.Linear(mid_ch, 1)
+        self._init_weights()
 
     # -------------------------------------------- #
 
@@ -118,6 +126,17 @@ class OTDR_TCN(nn.Module):
         h = self.tcn(x)
         h = self.gap(h).squeeze(-1)  # (B, mid_ch)
         return self.class_head(h), self.loc_head(h).squeeze(-1)
+
+    def _init_weights(self) -> None:
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                nn.init.kaiming_normal_(m.weight, nonlinearity="relu")
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +172,8 @@ def _val_metrics(
     v_loss = 0.0
     v_correct = 0
     v_samples = 0
-    mse_sum = 0.0
+    y_true: list[np.ndarray] = []
+    y_pred: list[np.ndarray] = []
     with torch.no_grad():
         for xb, y_cls, y_loc in loader:
             xb = xb.unsqueeze(1).to(device)  # (B, 1, L)
@@ -163,12 +183,15 @@ def _val_metrics(
             loss = loss_fn_cls(logits, y_cls) + lambda_loc * loss_fn_loc(pos_hat, y_loc)
             v_loss += loss.item() * xb.size(0)
             v_correct += (logits.argmax(1) == y_cls).sum().item()
-            mse_sum += loss_fn_loc(pos_hat, y_loc).item() * xb.size(0)
+            y_true.append(y_loc.detach().cpu().numpy())
+            y_pred.append(pos_hat.detach().cpu().numpy())
             v_samples += xb.size(0)
 
     v_loss /= v_samples
     acc = v_correct / v_samples
-    rmse = (mse_sum / v_samples) ** 0.5
+    rmse = float("nan")
+    if y_true:
+        rmse = root_mean_squared_error(np.concatenate(y_true), np.concatenate(y_pred))
     return v_loss, acc, rmse
 
 

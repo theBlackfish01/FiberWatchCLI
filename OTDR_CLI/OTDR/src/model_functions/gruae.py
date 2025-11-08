@@ -78,6 +78,7 @@ class VectorGRUAE(nn.Module):
             batch_first=True,
         )
         self.out = nn.Linear(hidden, feat_dim)
+        self._init_weights()
 
     # --------------------------------------------------------------------- #
     # Forward                                                               #
@@ -112,6 +113,21 @@ class VectorGRUAE(nn.Module):
         dec_out, _ = self.decoder(x, h0)
         return self.out(dec_out)  # (B, 1, feat_dim)
 
+    # ------------------------------------------------------------------ #
+    # Weight initialisation                                              #
+    # ------------------------------------------------------------------ #
+
+    def _init_weights(self) -> None:
+        for name, param in self.named_parameters():
+            if "weight_ih" in name:
+                nn.init.xavier_uniform_(param)
+            elif "weight_hh" in name:
+                nn.init.orthogonal_(param)
+            elif "bias" in name:
+                nn.init.zeros_(param)
+            elif name.endswith("weight"):
+                nn.init.xavier_uniform_(param)
+
 
 # ---------------------------------------------------------------------------
 # Training                                                                    |
@@ -132,9 +148,21 @@ class TrainConfig:
 
 
 @torch.no_grad()
-def _quick_val_loss(model: "VectorGRUAE", val_tensor: torch.Tensor, loss_fn: nn.Module) -> float:
-    sample = val_tensor[:5000].unsqueeze(1)
-    return loss_fn(model(sample), sample).item()
+def _quick_val_loss(
+    model: "VectorGRUAE",
+    val_tensor: torch.Tensor,
+    loss_fn: nn.Module,
+    device: torch.device,
+    batch_size: int,
+) -> float:
+    total = 0.0
+    count = 0
+    for i in range(0, val_tensor.size(0), batch_size):
+        xb = val_tensor[i : i + batch_size].unsqueeze(1).to(device)
+        loss = loss_fn(model(xb), xb)
+        total += loss.item() * xb.size(0)
+        count += xb.size(0)
+    return total / count if count else float("nan")
 
 
 def train_gru_ae(
@@ -150,8 +178,6 @@ def train_gru_ae(
         else torch.device(cfg.device)
     )
     model = model.to(device)
-    val_tensor = val_tensor.to(device)
-
     loader = DataLoader(TensorDataset(train_tensor), batch_size=cfg.batch_size, shuffle=True, drop_last=True)
     optim = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=cfg.step_size, gamma=cfg.gamma)
@@ -168,11 +194,12 @@ def train_gru_ae(
             loss = loss_fn(model(xb), xb)
             optim.zero_grad()
             loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optim.step()
             epoch_loss += loss.item() * xb.size(0)
 
         avg_train_loss = epoch_loss / len(loader.dataset)
-        val_loss = _quick_val_loss(model, val_tensor, loss_fn)
+        val_loss = _quick_val_loss(model, val_tensor, loss_fn, device, cfg.batch_size)
         print(f"E{epoch:02d}  trainMSE={avg_train_loss:.5f}  valMSE={val_loss:.5f}")  # noqa: T201
         scheduler.step()
 
