@@ -150,6 +150,7 @@ def train_gru_ae(
         else torch.device(cfg.device)
     )
     model = model.to(device)
+    val_tensor = val_tensor.to(device)
 
     loader = DataLoader(TensorDataset(train_tensor), batch_size=cfg.batch_size, shuffle=True, drop_last=True)
     optim = torch.optim.Adam(model.parameters(), lr=cfg.lr)
@@ -171,7 +172,7 @@ def train_gru_ae(
             epoch_loss += loss.item() * xb.size(0)
 
         avg_train_loss = epoch_loss / len(loader.dataset)
-        val_loss = _quick_val_loss(model, val_tensor.to(device), loss_fn)
+        val_loss = _quick_val_loss(model, val_tensor, loss_fn)
         print(f"E{epoch:02d}  trainMSE={avg_train_loss:.5f}  valMSE={val_loss:.5f}")  # noqa: T201
         scheduler.step()
 

@@ -160,12 +160,12 @@ def train_tabnet(
     model = model.to(device)
 
     train_loader = DataLoader(
-        TensorDataset(train_X, train_y_cls, train_y_pos.squeeze(-1)),
+        TensorDataset(train_X, train_y_cls, train_y_pos.view(-1)),
         batch_size=cfg.batch_size,
         shuffle=True,
     )
     val_loader = DataLoader(
-        TensorDataset(val_X, val_y_cls, val_y_pos.squeeze(-1)),
+        TensorDataset(val_X, val_y_cls, val_y_pos.view(-1)),
         batch_size=cfg.batch_size,
     )
 
