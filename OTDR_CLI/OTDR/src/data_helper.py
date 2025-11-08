@@ -103,7 +103,13 @@ def _prepare_arrays(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     X = df[measurement_cols].values.astype(np.float32)
     y_class = df["Class"].astype(np.int64).values
-    y_pos = df["Position"].astype(np.float32).values.reshape(-1, 1)
+    # ``Position`` is a scalar target – keep it 1-D so that downstream
+    # PyTorch datasets always yield tensors of shape ``(batch,)``.  Using a
+    # column vector here would later require aggressive ``squeeze`` calls which
+    # collapse to 0-D tensors when ``batch == 1`` and subsequently break loss
+    # computations.  Flattening up-front avoids those edge cases and removes the
+    # need for defensive squeezing elsewhere.
+    y_pos = df["Position"].astype(np.float32).values.reshape(-1)
     return X, y_class, y_pos
 
 

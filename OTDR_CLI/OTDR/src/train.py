@@ -149,7 +149,9 @@ def _evaluate_tcn(
 ) -> Tuple[float, float]:
     logits, pos_hat = predict_tcn(tcn, X_test)
     cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
-    rmse = mean_squared_error(y_test_pos.numpy(), pos_hat.numpy())
+    rmse = mean_squared_error(
+        y_test_pos.numpy().ravel(), pos_hat.numpy(), squared=False
+    )
     print(f"[TCN]    Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
     return cls_acc, rmse
 
@@ -164,7 +166,9 @@ def _evaluate_tst(
 ) -> Tuple[float, float]:
     logits, pos_hat = predict_tst(tst, X_test)
     cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
-    rmse = mean_squared_error(y_test_pos.numpy(), pos_hat.numpy())
+    rmse = mean_squared_error(
+        y_test_pos.numpy().ravel(), pos_hat.numpy(), squared=False
+    )
     print(f"[TST]    Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
     return cls_acc, rmse
 
@@ -179,7 +183,9 @@ def _evaluate_tabnet(
 ) -> Tuple[float, float]:
     logits, pos_hat = predict_tabnet(tabnet, X_test)
     cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
-    rmse = mean_squared_error(y_test_pos.numpy(), pos_hat.numpy())
+    rmse = mean_squared_error(
+        y_test_pos.numpy().ravel(), pos_hat.numpy(), squared=False
+    )
     print(f"[TabNet] Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
     return cls_acc, rmse
 

@@ -169,12 +169,12 @@ def train_tst(
     model = model.to(device)
 
     train_loader = DataLoader(
-        TensorDataset(train_tensor, train_y_cls, train_y_pos.squeeze(-1)),
+        TensorDataset(train_tensor, train_y_cls, train_y_pos.view(-1)),
         batch_size=cfg.batch_size,
         shuffle=True,
     )
     val_loader = DataLoader(
-        TensorDataset(val_tensor, val_y_cls, val_y_pos.squeeze(-1)),
+        TensorDataset(val_tensor, val_y_cls, val_y_pos.view(-1)),
         batch_size=cfg.batch_size,
     )
 
