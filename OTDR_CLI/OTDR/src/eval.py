@@ -21,7 +21,7 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, mean_squared_error, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import accuracy_score, mean_squared_error, confusion_matrix, ConfusionMatrixDisplay, classification_report
 from data_helper import load_raw_dataframe, make_splits, tensorise_splits
 from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import OTDR_TCN, predict as predict_tcn
@@ -319,6 +319,10 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     acc = accuracy_score(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
     rmse = mean_squared_error(y_pos_test[idx_to_eval].numpy(), pos_hat.numpy())
     print(f"Eval subset size = {idx_to_eval.size(0)} | Acc = {acc:.3f} | MSE = {rmse:.3f}")  # noqa: T201
+    y_true = y_cls_test[idx_to_eval].numpy()
+    y_pred = preds_cls.numpy()
+    print("\nClassification report:")
+    print(classification_report(y_true, y_pred, digits=3))
 
     # Confusion matrix plot
     cm = confusion_matrix(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
