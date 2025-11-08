@@ -25,7 +25,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple
 
+import numpy as np
 import torch
+from sklearn.metrics import root_mean_squared_error
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -81,6 +83,7 @@ class OTDR_TabNet(nn.Module):
         )
         self.class_head = nn.Linear(n_d, n_classes)
         self.loc_head = nn.Linear(n_d, 1)
+        self._init_heads()
 
     # -------------------------------------------- #
 
@@ -90,6 +93,12 @@ class OTDR_TabNet(nn.Module):
             x = x.squeeze(1)
         features, _ = self.backbone(x)  # features: (B, n_d)
         return self.class_head(features), self.loc_head(features).squeeze(-1)
+
+    def _init_heads(self) -> None:
+        for head in (self.class_head, self.loc_head):
+            nn.init.xavier_uniform_(head.weight)
+            if head.bias is not None:
+                nn.init.zeros_(head.bias)
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +133,8 @@ def _val_metrics(
     v_loss = 0.0
     v_correct = 0
     v_samples = 0
-    mse_sum = 0.0
+    y_true: list[np.ndarray] = []
+    y_pred: list[np.ndarray] = []
     with torch.no_grad():
         for xb, y_cls, y_pos in loader:
             xb = xb.to(device)
@@ -134,11 +144,14 @@ def _val_metrics(
             loss = loss_cls(logits, y_cls) + lambda_loc * loss_loc(pos_hat, y_pos)
             v_loss += loss.item() * xb.size(0)
             v_correct += (logits.argmax(1) == y_cls).sum().item()
-            mse_sum += loss_loc(pos_hat, y_pos).item() * xb.size(0)
+            y_true.append(y_pos.detach().cpu().numpy())
+            y_pred.append(pos_hat.detach().cpu().numpy())
             v_samples += xb.size(0)
     v_loss /= v_samples
     acc = v_correct / v_samples
-    rmse = (mse_sum / v_samples) ** 0.5
+    rmse = float("nan")
+    if y_true:
+        rmse = root_mean_squared_error(np.concatenate(y_true), np.concatenate(y_pred))
     return v_loss, acc, rmse
 
 

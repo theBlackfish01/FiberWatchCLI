@@ -14,7 +14,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple
 
+import numpy as np
 import torch
+from sklearn.metrics import root_mean_squared_error
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -66,6 +68,7 @@ class TimeSeriesTransformer(nn.Module):
         # multitask heads (classification & localisation)
         self.cls_head = nn.Linear(d_model, n_classes)
         self.loc_head = nn.Linear(d_model, 1)
+        self.norm = nn.LayerNorm(d_model)
 
         self._init_weights()
 
@@ -79,6 +82,9 @@ class TimeSeriesTransformer(nn.Module):
                 nn.init.xavier_uniform_(m.weight)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
+            elif isinstance(m, nn.LayerNorm):
+                nn.init.ones_(m.weight)
+                nn.init.zeros_(m.bias)
 
     # -------------------------------------------- #
 
@@ -95,6 +101,7 @@ class TimeSeriesTransformer(nn.Module):
 
         h = self.encoder(h)  # (B, L, d_model)
         h = h.mean(dim=1)  # (B, d_model) – global pooling
+        h = self.norm(h)
 
         return self.cls_head(h), self.loc_head(h).squeeze(-1)
 
@@ -131,7 +138,8 @@ def _val_metrics(
     v_loss = 0.0
     v_correct = 0
     v_samples = 0
-    mse_sum = 0.0
+    y_true: list[np.ndarray] = []
+    y_pred: list[np.ndarray] = []
     with torch.no_grad():
         for xb, y_cls, y_loc in loader:
             xb = xb.to(device)
@@ -141,12 +149,15 @@ def _val_metrics(
             loss = loss_cls(logits, y_cls) + lambda_loc * loss_loc(pos_hat, y_loc)
             v_loss += loss.item() * xb.size(0)
             v_correct += (logits.argmax(1) == y_cls).sum().item()
-            mse_sum += loss_loc(pos_hat, y_loc).item() * xb.size(0)
+            y_true.append(y_loc.detach().cpu().numpy())
+            y_pred.append(pos_hat.detach().cpu().numpy())
             v_samples += xb.size(0)
 
     v_loss /= v_samples
     acc = v_correct / v_samples
-    rmse = (mse_sum / v_samples) ** 0.5
+    rmse = float("nan")
+    if y_true:
+        rmse = root_mean_squared_error(np.concatenate(y_true), np.concatenate(y_pred))
     return v_loss, acc, rmse
 
 
