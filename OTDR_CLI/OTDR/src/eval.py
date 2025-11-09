@@ -16,10 +16,11 @@ import base64
 import click
 import json
 import re
-from typing import Tuple
+from typing import List, Tuple
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import numpy as np
+import shap
 import torch
 from sklearn.metrics import accuracy_score, root_mean_squared_error, confusion_matrix, ConfusionMatrixDisplay, classification_report
 from data_helper import load_raw_dataframe, make_splits, tensorise_splits
@@ -29,7 +30,6 @@ from model_functions.tst import TimeSeriesTransformer, predict as predict_tst
 from model_functions.tabnet import OTDR_TabNet, predict as predict_tabnet
 import config.config as cfg
 from pathlib import Path
-from typing import List
 from rag import retrieve
 from openai import OpenAI
 import warnings
@@ -109,9 +109,106 @@ def _b64(path: Path) -> str:
     return f"data:{mime};base64,{enc}"
 
 
+def _make_predict_fn(model, classifier: str, device: torch.device):
+    """Wrap the classifier into a numpy → probability function for SHAP."""
+
+    def _predict(x: np.ndarray) -> np.ndarray:
+        arr = np.asarray(x, dtype=np.float32)
+        if arr.ndim == 1:
+            arr = arr.reshape(1, -1)
+        data = torch.from_numpy(arr)
+        if classifier == "tcn":
+            logits, _ = predict_tcn(model, data, device=device)
+        elif classifier == "tst":
+            logits, _ = predict_tst(model, data, device=device)
+        else:
+            logits, _ = predict_tabnet(model, data, device=device)
+        probs = torch.softmax(logits, dim=1)
+        return probs.numpy()
+
+    return _predict
+
+
+def _extract_shap_vector(shap_exp: shap.Explanation, sample_idx: int, class_idx: int) -> np.ndarray:
+    """Return the SHAP vector for the given sample/class regardless of layout."""
+
+    values = shap_exp.values
+    if values.ndim == 1:
+        return np.asarray(values)
+    if values.ndim == 2:
+        return np.asarray(values[sample_idx])
+    if values.ndim == 3:
+        return np.asarray(values[sample_idx, :, class_idx])
+    raise ValueError("Unexpected SHAP values shape")
+
+
+def _extract_base_value(shap_exp: shap.Explanation, sample_idx: int, class_idx: int) -> float:
+    base_vals = np.asarray(shap_exp.base_values)
+    if base_vals.ndim == 0:
+        return float(base_vals)
+    if base_vals.ndim == 1:
+        return float(base_vals[sample_idx])
+    if base_vals.ndim == 2:
+        return float(base_vals[sample_idx, class_idx])
+    raise ValueError("Unexpected SHAP base_values shape")
+
+
+def _compute_shap_summaries(
+        model,
+        classifier: str,
+        device: torch.device,
+        background: np.ndarray,
+        samples: np.ndarray,
+        sample_indices: List[int],
+        pred_lookup: dict[int, int],
+        feature_names: List[str],
+) -> List[str]:
+    """Compute SHAP attributions and return formatted summaries per sample."""
+
+    if samples.size == 0:
+        return []
+
+    bg = np.asarray(background, dtype=np.float32)
+    if bg.ndim == 1:
+        bg = bg.reshape(1, -1)
+    sample_arr = np.asarray(samples, dtype=np.float32)
+
+    masker = shap.maskers.Independent(bg)
+    predict_fn = _make_predict_fn(model, classifier, device)
+    explainer = shap.Explainer(predict_fn, masker, algorithm="permutation")
+    max_evals = 2 * sample_arr.shape[1] + 2048
+    shap_exp = explainer(sample_arr, max_evals=max_evals)
+
+    summaries: List[str] = []
+    for local_idx, global_idx in enumerate(sample_indices):
+        pred_cls = int(pred_lookup[int(global_idx)])
+        shap_vec = _extract_shap_vector(shap_exp, local_idx, pred_cls)
+        base_val = _extract_base_value(shap_exp, local_idx, pred_cls)
+
+        # Print the raw SHAP vector for transparency
+        shap_str = np.array2string(shap_vec, precision=4, suppress_small=True)
+        print(
+            f"SHAP values for sample {global_idx} (predicted class {pred_cls}): {shap_str}"
+        )
+
+        # Compose a short textual summary for the LLM (top 5 contributors)
+        top_idx = np.argsort(np.abs(shap_vec))[-5:][::-1]
+        top_features = ", ".join(
+            f"{feature_names[j]} ({shap_vec[j]:+.3f})" for j in top_idx
+        )
+        summary = (
+            f"Sample {global_idx} → class {pred_cls}, base prob {base_val:.3f}. "
+            f"Top SHAP features: {top_features}."
+        )
+        summaries.append(summary)
+
+    return summaries
+
+
 def _llm_explain(
         img_paths: List[Path], classifier_type: str = "tcn",
         openai_model: str = "gpt-4o-mini",
+        shap_summaries: List[str] | None = None,
 ) -> tuple[str, bool] | None:
     """
     Ask a vision‑capable chat model for a concise explanation of common
@@ -145,8 +242,8 @@ def _llm_explain(
         "of common patterns you observe, including typical failure modes and "
         "any misclassifications. Explain the type of fault, position, possible causes "
         "and possible solutions. Provide brief answers.\n\n"
-        "Use the reference snippets and image when required, "
-        "citing snippets like [1], [2] where appropriate.\n\n"
+        "Use the reference snippets, the SHAP feature attributions, and each image when required, "
+        "citing snippets like [1], [2] where appropriate. When SHAP highlights features, incorporate that evidence in your reasoning.\n\n"
         "Fault Classes are labelled as follows:\n"
         "id\tfault type \ttypical signs\n"
         "0\tnormal / no fault\tloss = 0, Position = 0\n"
@@ -160,12 +257,15 @@ def _llm_explain(
     )
 
     # first part: reference snippets (if any) + lead‑in text
-    user_parts = [
-                     {"type": "text",
-                      "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
-                     {"type": "text",
-                      "text": "Here are the selected samples for inspection:"},
-                 ] + [
+    user_parts: List[dict] = [
+        {"type": "text",
+         "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
+    ]
+    if shap_summaries:
+        shap_text = "\n".join(shap_summaries)
+        user_parts.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
+    user_parts.append({"type": "text", "text": "Here are the selected samples for inspection:"})
+    user_parts += [
                      {  # the images themselves
                          "type": "image_url",
                          "image_url": {"url": _b64(p)},
@@ -336,6 +436,32 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     # ------------- random visualisations ------------- #
     rng = np.random.default_rng(42)
     chosen = rng.choice(idx_to_eval.numpy(), size=min(num_samples, idx_to_eval.size(0)), replace=False)
+
+    # ------------- SHAP explainability ------------- #
+    shap_summaries: List[str] = []
+    try:
+        idx_eval_cpu = idx_to_eval.detach().cpu()
+        preds_cpu = preds_cls.detach().cpu()
+        pred_lookup = {int(idx_eval_cpu[i].item()): int(preds_cpu[i].item()) for i in range(idx_eval_cpu.size(0))}
+        bg_size = min(50, idx_eval_cpu.size(0))
+        if bg_size > 0 and chosen.size > 0:
+            background = X_test[idx_eval_cpu[:bg_size]].numpy()
+            sample_tensor = torch.as_tensor(chosen, dtype=torch.long)
+            shap_samples = X_test[sample_tensor].numpy()
+            shap_summaries = _compute_shap_summaries(
+                classifier_model,
+                classifier,
+                device,
+                background,
+                shap_samples,
+                chosen.tolist(),
+                pred_lookup,
+                meas_cols,
+            )
+    except Exception as exc:  # pragma: no cover - fallback path
+        print(f"[WARN] SHAP computation failed: {exc}")
+        shap_summaries = []
+
     img_paths = []
     num_points = X_test.shape[1] - 1  # number of P-points in the traces
     for idx in chosen:
@@ -348,7 +474,7 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         img_paths.append(_visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, int(idx), out_dir))
 
     # ------------- LLM explanation ------------- #
-    explanation, rag_flag = _llm_explain(img_paths, classifier_type=classifier)
+    explanation, rag_flag = _llm_explain(img_paths, classifier_type=classifier, shap_summaries=shap_summaries)
     classifier_name = classifier.upper()
     llm_dir = Path("outputs/llm_output")
     llm_dir.mkdir(parents=True, exist_ok=True)
