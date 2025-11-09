@@ -179,26 +179,43 @@ def _compute_shap_summaries(
     max_evals = 2 * sample_arr.shape[1] + 2048
     shap_exp = explainer(sample_arr, max_evals=max_evals)
 
-    summaries: List[str] = []
+    feature_list = ", ".join(feature_names)
+    dataset_context = (
+        "Model input is a numpy.ndarray[float32] shaped "
+        f"({sample_arr.shape[0]}, {sample_arr.shape[1]}) with ordered features: "
+        f"{feature_list}. Columns 'Reflectance' and 'loss' are intentionally excluded to avoid data leakage."
+    )
+    print(f"[SHAP] {dataset_context}")
+
+    summaries: List[str] = [dataset_context]
     for local_idx, global_idx in enumerate(sample_indices):
         pred_cls = int(pred_lookup[int(global_idx)])
         shap_vec = _extract_shap_vector(shap_exp, local_idx, pred_cls)
         base_val = _extract_base_value(shap_exp, local_idx, pred_cls)
 
-        # Print the raw SHAP vector for transparency
-        shap_str = np.array2string(shap_vec, precision=4, suppress_small=True)
-        print(
-            f"SHAP values for sample {global_idx} (predicted class {pred_cls}): {shap_str}"
-        )
+        predicted_prob = float(np.clip(base_val + shap_vec.sum(), 0.0, 1.0))
+        top_idx = np.argsort(np.abs(shap_vec))[::-1]
+        top_k = top_idx[:5]
 
-        # Compose a short textual summary for the LLM (top 5 contributors)
-        top_idx = np.argsort(np.abs(shap_vec))[-5:][::-1]
-        top_features = ", ".join(
-            f"{feature_names[j]} ({shap_vec[j]:+.3f})" for j in top_idx
+        print(
+            f"[SHAP] Sample {global_idx} → class {pred_cls}: base prob {base_val:.3f}, "
+            f"pred prob {predicted_prob:.3f}."
         )
+        print("        Top feature contributions (Δprobability):")
+        for rank, j in enumerate(top_k, start=1):
+            direction = "raises" if shap_vec[j] >= 0 else "lowers"
+            print(
+                f"          #{rank}: {feature_names[j]} {shap_vec[j]:+.4f} ({direction} class {pred_cls} probability)"
+            )
+
+        shap_contribs = ", ".join(
+            f"#{idx + 1} {feature_names[j]} ({shap_vec[j]:+.3f})" for idx, j in enumerate(top_k)
+        )
+        pos_total = float(np.sum(shap_vec[shap_vec > 0]))
+        neg_total = float(np.sum(shap_vec[shap_vec < 0]))
         summary = (
-            f"Sample {global_idx} → class {pred_cls}, base prob {base_val:.3f}. "
-            f"Top SHAP features: {top_features}."
+            f"Sample {global_idx} → class {pred_cls} | base prob {base_val:.3f} → predicted {predicted_prob:.3f}. "
+            f"Top drivers: {shap_contribs}. Σpositive={pos_total:+.3f}, Σnegative={neg_total:+.3f}."
         )
         summaries.append(summary)
 
@@ -358,6 +375,18 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     _, _, test_df = make_splits(df)
 
     meas_cols = [c for c in test_df.columns if re.fullmatch(r"P\d+", c)] + ["SNR"]
+    leakage_cols = {"Reflectance", "loss", "Loss"}
+    leaked = [c for c in meas_cols if c in leakage_cols]
+    if leaked:
+        raise ValueError(
+            "Measurement column selection must not include leakage features, found: "
+            + ", ".join(leaked)
+        )
+    print(
+        "[INFO] Using measurement columns (ordered): "
+        + ", ".join(meas_cols)
+        + ". 'Reflectance' and 'loss' are excluded from model inputs."
+    )
 
     # test scaling only using training dataset info
     scaler_path = Path(detector).parent / "scaler.json"
