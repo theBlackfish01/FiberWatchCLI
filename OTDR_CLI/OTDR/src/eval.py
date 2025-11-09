@@ -255,12 +255,14 @@ def _llm_explain(
     system_prompt = (
         "You are an optical‑fibre fault‑analysis expert. "
         "Given the following figures (each shows amplitude over P‑points with "
-        f"predictions vs ground truth in the title predicted using a {classifier_type} machine learning model), write a concise explanation "
+        f"predictions vs ground truth in the title predicted using a {classifier_type} machine learning model), "
+        f"write a concise explanation for each figure"
         "of common patterns you observe, including typical failure modes and "
         "any misclassifications. Explain the type of fault, position, possible causes "
         "and possible solutions. Provide brief answers.\n\n"
         "Use the reference snippets, the SHAP feature attributions, and each image when required, "
-        "citing snippets like [1], [2] where appropriate. When SHAP highlights features, incorporate that evidence in your reasoning.\n\n"
+        "citing snippets like [1], [2] where appropriate. When SHAP highlights features, incorporate that evidence in your reasoning. "
+        "Specify the information provided by the SHAP values.\n\n"
         "Fault Classes are labelled as follows:\n"
         "id\tfault type \ttypical signs\n"
         "0\tnormal / no fault\tloss = 0, Position = 0\n"
@@ -299,7 +301,7 @@ def _llm_explain(
     resp = client.chat.completions.create(
         model=openai_model,
         messages=messages,
-        max_tokens=600,  # limit the response length
+        # max_completion_tokens=1000,  # limit the response length
     )
 
     rag_flag = False
@@ -349,7 +351,7 @@ def _llm_explain(
 @click.option(
     "--num-samples",
     type=int,
-    default=2,
+    default=4,
     show_default=True,
     help="Random samples to visualise & explain.",
 )
@@ -503,15 +505,15 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         img_paths.append(_visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, int(idx), out_dir))
 
     # ------------- LLM explanation ------------- #
-    explanation, rag_flag = _llm_explain(img_paths, classifier_type=classifier, shap_summaries=shap_summaries)
+    explanation, rag_flag = _llm_explain(img_paths, openai_model= "gpt-5", classifier_type=classifier, shap_summaries=shap_summaries)
     classifier_name = classifier.upper()
     llm_dir = Path("outputs/llm_output")
     llm_dir.mkdir(parents=True, exist_ok=True)
     if explanation:
-        explanation_file = llm_dir / "llm_explanation.txt"
+        explanation_file = llm_dir / "llm_explanation_shap.txt"
         i = 1
         while explanation_file.exists():
-            explanation_file = llm_dir / f"llm_explanation_{i}.txt"
+            explanation_file = llm_dir / f"llm_explanation_shap_{i}.txt"
             i += 1
         if rag_flag:
             explanation = f"LLM explanation for eval subset with RAG for {classifier_name} in {mode} mode:\n\n{explanation}"
@@ -519,7 +521,6 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
             explanation = f"LLM explanation for eval subset without RAG for {classifier_name} in {mode} mode:\n\n{explanation}"
         explanation_file.write_text(explanation, encoding='utf-8')
         print(f"LLM explanation saved to {explanation_file.name}")  # noqa: T201
-
 
 if __name__ == "__main__":
     main()
