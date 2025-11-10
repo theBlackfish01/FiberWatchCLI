@@ -34,8 +34,6 @@ __all__ = [
 
 
 class TimeSeriesTransformer(nn.Module):
-    """Transformer encoder with learnable positional encodings + global pooling."""
-
     def __init__(
         self,
         *,
@@ -46,15 +44,12 @@ class TimeSeriesTransformer(nn.Module):
         dim_feedforward: int = 256,
         dropout: float = 0.1,
         n_classes: int = 8,
-    ) -> None:
+    ):
         super().__init__()
         self.seq_len = seq_len
-
-        # project scalar amplitude → d_model
         self.input_proj = nn.Linear(1, d_model)
-
-        # learnable [L, d_model] positional embeddings
         self.pos_embed = nn.Parameter(torch.randn(seq_len, d_model))
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, d_model))
 
         enc_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
@@ -65,17 +60,33 @@ class TimeSeriesTransformer(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(enc_layer, num_layers=n_layers)
 
-        # multitask heads (classification & localisation)
         self.cls_head = nn.Linear(d_model, n_classes)
-        self.loc_head = nn.Linear(d_model, 1)
+        self.loc_head = nn.Sequential(
+            nn.Linear(d_model, d_model // 2),
+            nn.ReLU(),
+            nn.Linear(d_model // 2, 1),
+        )
         self.norm = nn.LayerNorm(d_model)
-
         self._init_weights()
 
-    # -------------------------------------------- #
-    # Weight init                                  #
-    # -------------------------------------------- #
+    def forward(self, x: torch.Tensor):
+        if x.dim() == 3:
+            x = x.squeeze(1)
+        B, L = x.shape
+        assert L == self.seq_len
+        x = x.unsqueeze(-1)                  # (B, L, 1)
+        h = self.input_proj(x)               # (B, L, d_model)
+        h = h + self.pos_embed[None, :, :]   # (B, L, d_model)
 
+        cls = self.cls_token.expand(B, -1, -1)   # (B, 1, d_model)
+        h = torch.cat([cls, h], dim=1)           # (B, 1+L, d_model)
+
+        h = self.encoder(h)                      # (B, 1+L, d_model)
+        h_cls = self.norm(h[:, 0])               # (B, d_model)
+
+        return self.cls_head(h_cls), self.loc_head(h_cls).squeeze(-1)
+
+    # Weight init
     def _init_weights(self) -> None:
         for m in self.modules():
             if isinstance(m, (nn.Linear, nn.Conv1d)):
@@ -86,41 +97,21 @@ class TimeSeriesTransformer(nn.Module):
                 nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
 
-    # -------------------------------------------- #
-
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Input ``x`` can be (B, L) or (B, 1, L). Returns (logits, pos_pred)."""
-        if x.dim() == 3:  # (B, 1, L)
-            x = x.squeeze(1)
-        assert x.dim() == 2 and x.size(1) == self.seq_len, "Unexpected input shape"
-
-        B, L = x.shape
-        x = x.unsqueeze(-1)  # (B, L, 1)
-        h = self.input_proj(x)  # (B, L, d_model)
-        h = h + self.pos_embed[None, :, :]  # broadcast add positional encodings
-
-        h = self.encoder(h)  # (B, L, d_model)
-        h = h.mean(dim=1)  # (B, d_model) – global pooling
-        h = self.norm(h)
-
-        return self.cls_head(h), self.loc_head(h).squeeze(-1)
-
 
 # ---------------------------------------------------------------------------
 # Training                                                                    |
 # ---------------------------------------------------------------------------
 
-
 @dataclass
 class TrainConfig:
-    epochs: int = 60
+    epochs: int = 150
     batch_size: int = 256
     lr: float = 2e-4
     weight_decay: float = 1e-2
     step_size: int = 15
     gamma: float = 0.5
     patience: int = 10
-    lambda_loc: float = 0.5
+    lambda_loc: float = 0.2
     device: torch.device | str | None = None
     save_path: str | Path | None = None
 

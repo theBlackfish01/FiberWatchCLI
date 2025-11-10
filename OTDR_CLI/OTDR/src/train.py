@@ -232,7 +232,7 @@ def main(mode, data_path, out_dir, device) -> None:
     train_df, val_df, test_df = make_splits(df)
 
     # measurement columns: P1..Pn + SNR
-    measurements = [c for c in train_df.columns if re.fullmatch(r"P\d+", c)] + ["SNR"]
+    measurements = ["SNR"] + [c for c in train_df.columns if re.fullmatch(r"P\d+", c)]
     scaler = fit_scaler(train_df[measurements].values.astype(np.float32))
     splits = tensorise_splits(train_df, val_df, test_df, scaler)
 
@@ -259,7 +259,10 @@ def main(mode, data_path, out_dir, device) -> None:
 
         ae = VectorGRUAE(feat_dim=X_norm.shape[1])
         ae_cfg = AEConfig(save_path=out_dir / "gru_ae.pt", device=device)
-        ae, thresh = train_gru_ae(ae, X_norm, splits["val"].X, cfg=ae_cfg)
+        val_norm_idx = (splits["val"].y_class == NORMAL).nonzero(as_tuple=True)[0]
+        X_val_norm = splits["val"].X[val_norm_idx]
+        ae, thresh = train_gru_ae(ae, X_norm, X_val_norm, cfg=ae_cfg)
+
         print(f"[GRU-AE] Threshold={thresh:.5f}")
         _evaluate_gru_ae(ae, thresh, splits["test"].X, splits["test"].y_class)
 

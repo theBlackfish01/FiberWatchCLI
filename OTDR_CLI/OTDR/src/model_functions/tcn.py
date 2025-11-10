@@ -2,17 +2,23 @@ from __future__ import annotations
 
 """Temporal Convolutional Network (TCN) multitask classifier for OTDR traces.
 
-Implements the lightweight dilated‑TCN you trained in the notebook.  It predicts
+Implements the lightweight dilated-TCN you trained in the notebook. It predicts
 both **fault class** (categorical) and **fault position** (regression).
+
+This version treats the first feature (SNR) as a **global scalar** and injects it
+as a **second channel** by broadcasting it across the 30 positional steps:
+
+    raw row:  [SNR, P1, P2, ... , P30]  ->  (B, 31)
+    model in: (B, 2, 30)
+        chan 0 = positions (P1..P30)
+        chan 1 = SNR repeated 30 times
 
 Public API
 ----------
 * ``OTDR_TCN`` – the model definition.
-* ``TrainConfig`` – hyper‑parameters for supervised multitask training.
-* ``train_tcn`` – full training loop with early‑stopping & best‑weights save.
+* ``TrainConfig`` – hyper-parameters for supervised multitask training.
+* ``train_tcn`` – full training loop with early-stopping & best-weights save.
 * ``predict`` – batched inference that returns *(cls_logits, pos_pred)*.
-
-All helpers mirror the GRU‑AE module’s style for consistency.
 """
 
 from dataclasses import dataclass
@@ -94,7 +100,7 @@ class AttentionPooling(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # (B, C, L)
         attn = self.score(x)  # (B, 1, L)
         weights = torch.softmax(attn, dim=-1)
-        return torch.sum(x * weights, dim=-1)
+        return torch.sum(x * weights, dim=-1)  # (B, C)
 
 
 class OTDR_TCN(nn.Module):
@@ -103,7 +109,7 @@ class OTDR_TCN(nn.Module):
     Parameters
     ----------
     in_ch : int
-        Number of input channels (= 1 for plain feature vector interpreted as length‑31 sequence).
+        Number of input channels (= 2 here: positions + broadcast SNR).
     mid_ch : int
         Channel width for hidden layers.
     n_blocks : int
@@ -117,9 +123,9 @@ class OTDR_TCN(nn.Module):
     def __init__(
         self,
         *,
-        in_ch: int = 1,
+        in_ch: int = 2,  # <-- 2 channels: positions + SNR
         mid_ch: int = 64,
-        n_blocks: int = 6,
+        n_blocks: int = 4,
         k: int = 3,
         n_classes: int = 8,
         dropout: float = 0.1,
@@ -140,9 +146,10 @@ class OTDR_TCN(nn.Module):
 
     # -------------------------------------------- #
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:  # (B, 1, L)
-        h = self.tcn(x)
-        h = self.attn_pool(h)  # (B, mid_ch)
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """x is expected to be (B, 2, L) already."""
+        h = self.tcn(x)              # (B, mid_ch, L)
+        h = self.attn_pool(h)        # (B, mid_ch)
         return self.class_head(h), self.loc_head(h).squeeze(-1)
 
     def _init_weights(self) -> None:
@@ -164,14 +171,26 @@ class OTDR_TCN(nn.Module):
 @dataclass
 class TrainConfig:
     epochs: int = 150
-    batch_size: int = 256
+    batch_size: int = 128
     lr: float = 1e-3
     patience: int = 25
-    lambda_loc: float = 0.2  # weight of localisation MSE
+    lambda_loc: float = 0.1  # weight of localisation MSE
     step_size: int = 15
     gamma: float = 0.5
     device: torch.device | str | None = None
     save_path: str | Path | None = None
+
+
+def _to_two_channel(xb: torch.Tensor) -> torch.Tensor:
+    """Convert (B, 31) = [snr, p1..p30] to (B, 2, 30)."""
+    # xb: (B, 31)
+    snr = xb[:, 0]                 # (B,)
+    pos = xb[:, 1:]                # (B, 30)
+    # broadcast SNR across sequence length
+    snr_seq = snr.unsqueeze(1).repeat(1, pos.size(1))  # (B, 30)
+    # stack as channels
+    x2 = torch.stack([pos, snr_seq], dim=1)            # (B, 2, 30)
+    return x2
 
 
 def _val_metrics(
@@ -193,7 +212,8 @@ def _val_metrics(
     y_pred: list[np.ndarray] = []
     with torch.no_grad():
         for xb, y_cls, y_loc in loader:
-            xb = xb.unsqueeze(1).to(device)  # (B, 1, L)
+            # xb: (B, 31) -> (B, 2, 30)
+            xb = _to_two_channel(xb).to(device)
             y_cls = y_cls.to(device)
             y_loc = y_loc.to(device)
             logits, pos_hat = model(xb)
@@ -214,7 +234,7 @@ def _val_metrics(
 
 def train_tcn(
     model: OTDR_TCN,
-    train_tensor: torch.Tensor,
+    train_tensor: torch.Tensor,  # (N, 31) = [snr, p1..p30]
     train_y_cls: torch.Tensor,
     train_y_pos: torch.Tensor,
     val_tensor: torch.Tensor,
@@ -222,7 +242,7 @@ def train_tcn(
     val_y_pos: torch.Tensor,
     cfg: TrainConfig | None = None,
 ):
-    """Standard supervised training loop with early‑stopping."""
+    """Standard supervised training loop with early-stopping."""
 
     cfg = cfg or TrainConfig()
     device = (
@@ -258,7 +278,8 @@ def train_tcn(
         model.train()
         train_loss_sum = 0.0
         for xb, y_cls, y_loc in train_loader:
-            xb = xb.unsqueeze(1).to(device)
+            # xb: (B, 31) -> (B, 2, 30)
+            xb = _to_two_channel(xb).to(device)
             y_cls = y_cls.to(device)
             y_loc = y_loc.to(device)
             logits, pos_hat = model(xb)
@@ -283,7 +304,7 @@ def train_tcn(
 
         print(
             f"E{epoch+1:02d} | trainL={avg_train_loss:.4f} | valL={val_loss:.4f} | "
-            f"Acc={val_acc:.3f} | RMSE={val_rmse:.3f}"  # noqa: T201
+            f"Acc={val_acc:.3f} | RMSE={val_rmse:.3f}"
         )
         scheduler.step()
 
@@ -295,7 +316,7 @@ def train_tcn(
         else:
             epochs_no_improve += 1
             if epochs_no_improve >= cfg.patience:
-                print("Early stopping")  # noqa: T201
+                print("Early stopping")
                 break
 
     # reload best
@@ -306,13 +327,13 @@ def train_tcn(
 
 
 # ---------------------------------------------------------------------------
-# Inference                                                                   |
+# Inference
 # ---------------------------------------------------------------------------
 
 
 def predict(
     model: OTDR_TCN,
-    data: torch.Tensor,
+    data: torch.Tensor,  # (N, 31)
     *,
     batch_size: int = 512,
     device: torch.device | str | None = None,
@@ -321,10 +342,12 @@ def predict(
 
     device = device or next(model.parameters()).device
     model.eval()
-    logits_list, pos_list = [], []
+    logits_list: list[torch.Tensor] = []
+    pos_list: list[torch.Tensor] = []
     with torch.no_grad():
         for i in range(0, data.size(0), batch_size):
-            xb = data[i : i + batch_size].unsqueeze(1).to(device)
+            xb = data[i : i + batch_size]          # (B, 31)
+            xb = _to_two_channel(xb).to(device)     # (B, 2, 30)
             logits, pos_hat = model(xb)
             logits_list.append(logits.cpu())
             pos_list.append(pos_hat.cpu())

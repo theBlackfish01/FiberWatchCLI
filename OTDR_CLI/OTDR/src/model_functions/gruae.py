@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 """GRU-based Auto-Encoder (GRU-AE) for anomaly detection.
-
-This module exposes:
-    * ``VectorGRUAE`` – the model class (encoder‑decoder GRU over *vector* inputs).
-    * ``train_gru_ae`` – util that trains on **normal** samples only and performs
-      early‑stopping, returning the _best_ model and reconstruction‑error
-      threshold (quantile over training errors).
-    * ``reconstruction_error`` – batched inference utility that yields mean‑
-      squared error per sample.
-    * ``detect`` – convenience wrapper that flags anomalies above the threshold.
-
-The encoder is bidirectional by default. When bidirectional, we concatenate the
-last hidden states from the forward **and** backward directions before feeding
-into the latent bottleneck.
+----------
+* ``VectorGRUAE`` – model class
+* ``TrainConfig`` – training hyperparams
+* ``train_gru_ae`` – trains on normal samples and returns (best_model, threshold)
+* ``reconstruction_error`` – batched MSE per sample
+* ``determine_threshold`` – quantile-based threshold
+* ``detect`` – flags anomalies
 """
 
 from dataclasses import dataclass
@@ -35,21 +29,26 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Model                                                                       |
+# Model
 # ---------------------------------------------------------------------------
 
 
 class VectorGRUAE(nn.Module):
-    """Symmetric GRU auto‑encoder over *vector* inputs."""
+    """GRU auto-encoder for *vector* inputs (shape (B, 1, feat_dim)).
+
+    Encoder: GRU → take last hidden → linear → latent
+    Decoder: latent → linear → initial hidden for GRU → GRU fed with zeros →
+             linear → reconstructed vector
+    """
 
     def __init__(
         self,
         feat_dim: int,
         *,
-        hidden: int = 256,
-        latent: int = 128,
-        layers: int = 5,
-        bidir: bool = True,
+        hidden: int = 128,
+        latent: int = 64,
+        layers: int = 1,
+        bidir: bool = False,
     ) -> None:
         super().__init__()
         self.feat_dim = feat_dim
@@ -70,14 +69,16 @@ class VectorGRUAE(nn.Module):
         self.fc_mu = nn.Linear(hidden * dir_mult, latent)
 
         # ---------------- decoder ---------------- #
+        # map latent to initial hidden state of decoder GRU
         self.fc_init = nn.Linear(latent, hidden * layers)
         self.decoder = nn.GRU(
-            input_size=feat_dim,
+            input_size=feat_dim,  # we'll feed zeros of this size
             hidden_size=hidden,
             num_layers=layers,
             batch_first=True,
         )
         self.out = nn.Linear(hidden, feat_dim)
+
         self._init_weights()
 
     # --------------------------------------------------------------------- #
@@ -90,28 +91,32 @@ class VectorGRUAE(nn.Module):
         Parameters
         ----------
         x : torch.Tensor
-            Input tensor of shape ``(B, 1, feat_dim)``.
+            Input tensor of shape (B, 1, feat_dim).
         """
-        assert x.dim() == 3, "Input must be (batch, seq_len, feat_dim)"
+        assert x.dim() == 3, "Input must be (batch, seq_len=1, feat_dim)"
+        B = x.size(0)
 
-        _, h_enc = self.encoder(x)  # (layers*dir_mult, B, hidden)
-
+        # ----- encode ----- #
+        _, h_enc = self.encoder(x)  # h_enc: (layers * dir_mult, B, hidden)
         if self.bidir:
-            # Concatenate last layer's forward and backward hidden states
-            h_forward = h_enc[-2]  # (B, hidden)
-            h_backward = h_enc[-1]  # (B, hidden)
-            h_cat = torch.cat([h_forward, h_backward], dim=1)  # (B, hidden*2)
+            # concatenate last layer's forward and backward states
+            h_fwd = h_enc[-2]  # (B, hidden)
+            h_bwd = h_enc[-1]  # (B, hidden)
+            h_cat = torch.cat([h_fwd, h_bwd], dim=1)  # (B, hidden*2)
         else:
             h_cat = h_enc[-1]  # (B, hidden)
 
         z = self.fc_mu(h_cat)  # (B, latent)
-        h0 = (
-            self.fc_init(z)
-            .view(self.layers, x.size(0), self.hidden)
-            .contiguous()
-        )  # (layers, B, hidden)
-        dec_out, _ = self.decoder(x, h0)
-        return self.out(dec_out)  # (B, 1, feat_dim)
+
+        # ----- prepare decoder init ----- #
+        h0 = self.fc_init(z).view(self.layers, B, self.hidden).contiguous()  # (layers, B, hidden)
+
+        # ----- decode from zeros, not from x ----- #
+        # force model to use latent
+        decoder_input = x.new_zeros(B, 1, self.feat_dim)  # (B, 1, feat_dim)
+        dec_out, _ = self.decoder(decoder_input, h0)  # (B, 1, hidden)
+        recon = self.out(dec_out)  # (B, 1, feat_dim)
+        return recon
 
     # ------------------------------------------------------------------ #
     # Weight initialisation                                              #
@@ -130,7 +135,7 @@ class VectorGRUAE(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Training                                                                    |
+# Training
 # ---------------------------------------------------------------------------
 
 
@@ -158,8 +163,9 @@ def _quick_val_loss(
     total = 0.0
     count = 0
     for i in range(0, val_tensor.size(0), batch_size):
-        xb = val_tensor[i : i + batch_size].unsqueeze(1).to(device)
-        loss = loss_fn(model(xb), xb)
+        xb = val_tensor[i : i + batch_size].unsqueeze(1).to(device)  # (B, 1, feat_dim)
+        recon = model(xb)
+        loss = loss_fn(recon, xb)
         total += loss.item() * xb.size(0)
         count += xb.size(0)
     return total / count if count else float("nan")
@@ -171,6 +177,7 @@ def train_gru_ae(
     val_tensor: torch.Tensor,
     cfg: TrainConfig | None = None,
 ) -> Tuple["VectorGRUAE", float]:
+    """Train AE on *normal* data and return (best_model, threshold)."""
     cfg = cfg or TrainConfig()
     device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -178,7 +185,13 @@ def train_gru_ae(
         else torch.device(cfg.device)
     )
     model = model.to(device)
-    loader = DataLoader(TensorDataset(train_tensor), batch_size=cfg.batch_size, shuffle=True, drop_last=True)
+
+    loader = DataLoader(
+        TensorDataset(train_tensor),
+        batch_size=cfg.batch_size,
+        shuffle=True,
+        drop_last=True,
+    )
     optim = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=cfg.step_size, gamma=cfg.gamma)
     loss_fn = nn.MSELoss()
@@ -190,8 +203,9 @@ def train_gru_ae(
         model.train()
         epoch_loss = 0.0
         for (xb,) in loader:
-            xb = xb.unsqueeze(1).to(device)
-            loss = loss_fn(model(xb), xb)
+            xb = xb.unsqueeze(1).to(device)  # (B, 1, feat_dim)
+            recon = model(xb)
+            loss = loss_fn(recon, xb)
             optim.zero_grad()
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -214,16 +228,18 @@ def train_gru_ae(
                 print("Early stopping")  # noqa: T201
                 break
 
+    # reload best
     if cfg.save_path and Path(cfg.save_path).exists():
         model.load_state_dict(torch.load(cfg.save_path, map_location=device))
 
+    # determine threshold on training errors
     errs = reconstruction_error(model, train_tensor, batch_size=cfg.batch_size, device=device)
     thresh = determine_threshold(errs, cfg.quantile)
     return model, thresh
 
 
 # ---------------------------------------------------------------------------
-# Inference & helpers                                                         |
+# Inference & helpers
 # ---------------------------------------------------------------------------
 
 
@@ -234,13 +250,15 @@ def reconstruction_error(
     batch_size: int = 512,
     device: torch.device | str | None = None,
 ) -> torch.Tensor:
+    """Return per-sample MSE reconstruction error."""
     model.eval()
     device = device or next(model.parameters()).device
     errs = []
     with torch.no_grad():
         for i in range(0, data.size(0), batch_size):
-            xb = data[i : i + batch_size].unsqueeze(1).to(device)
-            mse = (model(xb) - xb).pow(2).mean(dim=(1, 2))
+            xb = data[i : i + batch_size].unsqueeze(1).to(device)  # (B, 1, feat_dim)
+            recon = model(xb)
+            mse = (recon - xb).pow(2).mean(dim=(1, 2))  # mean over seq and features
             errs.append(mse.cpu())
     return torch.cat(errs, 0)
 
@@ -257,5 +275,6 @@ def detect(
     batch_size: int = 512,
     device: torch.device | str | None = None,
 ) -> torch.Tensor:
+    """Return boolean mask (is_anomaly) of shape (N,)."""
     errs = reconstruction_error(model, data, batch_size=batch_size, device=device)
     return errs > threshold

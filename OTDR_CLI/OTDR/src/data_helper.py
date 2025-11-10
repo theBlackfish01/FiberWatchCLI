@@ -44,11 +44,11 @@ class SplitTensors:
 
 
 def _measurement_columns(df: pd.DataFrame) -> list[str]:
-    """Return measurement columns: P\d+ and SNR."""
+    """Return measurement columns: SNR and P\d+."""
 
     pattern = re.compile(r"P\d+")
     cols = [c for c in df.columns if pattern.fullmatch(c)]
-    return cols + ["SNR"]
+    return ["SNR"] + cols
 
 
 def load_raw_dataframe(path: str | Path) -> pd.DataFrame:
@@ -62,7 +62,7 @@ def load_raw_dataframe(path: str | Path) -> pd.DataFrame:
 def make_splits(
     df: pd.DataFrame,
     *,
-    test_size: float = 0.20,
+    test_size: float = 0.10,
     val_size: float = 0.20,
     label_col: str = "Class",
     random_state: int = 42,
