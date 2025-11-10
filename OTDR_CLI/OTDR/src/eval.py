@@ -301,7 +301,7 @@ def _llm_explain(
     resp = client.chat.completions.create(
         model=openai_model,
         messages=messages,
-        # max_completion_tokens=1000,  # limit the response length
+        # max_completion_tokens=1000 # limit the response length
     )
 
     rag_flag = False

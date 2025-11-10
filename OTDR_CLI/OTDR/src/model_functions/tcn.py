@@ -34,7 +34,7 @@ __all__ = [
 
 
 # ---------------------------------------------------------------------------
-# Building blocks                                                             |
+# Building blocks
 # ---------------------------------------------------------------------------
 
 
@@ -50,7 +50,7 @@ class Chomp1d(nn.Module):
 
 
 class TemporalBlock(nn.Module):
-    """Residual dilated causal convolutional block (à la WaveNet)."""
+    """Residual dilated causal convolutional block."""
 
     def __init__(self, in_ch: int, out_ch: int, k: int, d: int, dropout: float = 0.0):
         super().__init__()
@@ -75,7 +75,7 @@ class TemporalBlock(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Model                                                                       |
+# Model
 # ---------------------------------------------------------------------------
 
 
@@ -111,7 +111,7 @@ class OTDR_TCN(nn.Module):
     k : int
         Kernel width.
     n_classes : int
-        Number of categorical fault classes (include class 0 = healthy).
+        Number of categorical fault classes.
     """
 
     def __init__(
@@ -158,17 +158,16 @@ class OTDR_TCN(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Training                                                                    |
+# Training
 # ---------------------------------------------------------------------------
-
 
 @dataclass
 class TrainConfig:
-    epochs: int = 50
+    epochs: int = 150
     batch_size: int = 256
     lr: float = 1e-3
-    patience: int = 10
-    lambda_loc: float = 0.5  # weight of localisation MSE
+    patience: int = 25
+    lambda_loc: float = 0.2  # weight of localisation MSE
     step_size: int = 15
     gamma: float = 0.5
     device: torch.device | str | None = None
@@ -231,6 +230,7 @@ def train_tcn(
         if cfg.device is None
         else torch.device(cfg.device)
     )
+    print("[INFO] Using device:", device)
     model = model.to(device)
 
     train_loader = DataLoader(
