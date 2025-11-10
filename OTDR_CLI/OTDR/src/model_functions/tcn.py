@@ -79,6 +79,24 @@ class TemporalBlock(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+class AttentionPooling(nn.Module):
+    """Additive attention pooling over temporal dimension."""
+
+    def __init__(self, in_ch: int, hidden_ch: int | None = None) -> None:
+        super().__init__()
+        hidden_ch = hidden_ch or in_ch
+        self.score = nn.Sequential(
+            nn.Conv1d(in_ch, hidden_ch, kernel_size=1),
+            nn.Tanh(),
+            nn.Conv1d(hidden_ch, 1, kernel_size=1),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:  # (B, C, L)
+        attn = self.score(x)  # (B, 1, L)
+        weights = torch.softmax(attn, dim=-1)
+        return torch.sum(x * weights, dim=-1)
+
+
 class OTDR_TCN(nn.Module):
     """Dilated TCN multitask model.
 
@@ -113,7 +131,7 @@ class OTDR_TCN(nn.Module):
             layers.append(TemporalBlock(ch, mid_ch, k, 2 ** b, dropout=dropout))
             ch = mid_ch
         self.tcn = nn.Sequential(*layers)
-        self.gap = nn.AdaptiveAvgPool1d(1)  # (B, C, 1)
+        self.attn_pool = AttentionPooling(mid_ch)
 
         # heads
         self.class_head = nn.Linear(mid_ch, n_classes)
@@ -124,7 +142,7 @@ class OTDR_TCN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:  # (B, 1, L)
         h = self.tcn(x)
-        h = self.gap(h).squeeze(-1)  # (B, mid_ch)
+        h = self.attn_pool(h)  # (B, mid_ch)
         return self.class_head(h), self.loc_head(h).squeeze(-1)
 
     def _init_weights(self) -> None:
