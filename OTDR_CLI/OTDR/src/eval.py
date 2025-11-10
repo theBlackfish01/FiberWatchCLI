@@ -253,10 +253,10 @@ def _llm_explain(
 
     # ---------- build messages ------------------------------------------
     system_prompt = (
-        "You are an optical‑fibre fault‑analysis expert. "
-        "Given the following figures (each shows amplitude over P‑points with "
+        "You are an optical-fibre fault-analysis expert. "
+        "Given the following figures (each shows amplitude over P-points with "
         f"predictions vs ground truth in the title predicted using a {classifier_type} machine learning model), "
-        f"write a concise explanation for each figure"
+        "write a concise explanation for each figure "
         "of common patterns you observe, including typical failure modes and "
         "any misclassifications. Explain the type of fault, position, possible causes "
         "and possible solutions. Provide brief answers.\n\n"
@@ -264,15 +264,15 @@ def _llm_explain(
         "citing snippets like [1], [2] where appropriate. When SHAP highlights features, incorporate that evidence in your reasoning. "
         "Specify the information provided by the SHAP values.\n\n"
         "Fault Classes are labelled as follows:\n"
-        "id\tfault type \ttypical signs\n"
-        "0\tnormal / no fault\tloss = 0, Position = 0\n"
-        "1\tfibre cut / strong attenuation\thigh loss, reflectance 0\n"
-        "2\tdirty connector\tsmall reflectance spike, low loss\n"
-        "3\toptical tap (eavesdrop)\treflectance ≈ 0, moderate loss\n"
-        "4\tmacrobend / sharp bend\tmedium loss, no reflectance\n"
-        "5\tbad splice\treflectance < 0 dB, moderate loss\n"
-        "6\thigh‑reflective break\treflectance −0.3 … −0.5 dB\n"
-        "7\tunknown / mixed\tthe catch‑all class"
+        "id\tfault type\t\t\ttypical signs\n"
+        "0\tnormal / no fault\t\tbaseline trace, loss ≈ 0, position = 0\n"
+        "1\tfiber tapping\t\tlocalized disturbance, moderate loss due to coupler, reflectance can be low/absent\n"
+        "2\tbad splice\t\t\tlocalized event with excess loss, small/possible reflection\n"
+        "3\tbending event\t\tgradual/medium loss, usually no clear reflectance peak\n"
+        "4\tdirty connector\t\tconnector-like event with extra loss and messy/variable reflectance\n"
+        "5\tfiber cut\t\t\tabrupt large loss/end-of-trace, may appear near end position\n"
+        "6\tPC connector\t\tclean connector-type reflective event, expected position\n"
+        "7\treflector\t\t\tstrongly reflective event, high reflectance value\n"
     )
 
     # first part: reference snippets (if any) + lead‑in text
