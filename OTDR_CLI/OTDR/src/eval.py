@@ -229,6 +229,100 @@ def _compute_shap_summaries(
 
     return summaries
 
+def _llm_explain_with_self_reflection(
+        img_paths: List[Path],
+        classifier_type: str = "tcn",
+        openai_model: str = "gpt-4o-mini",
+        shap_summaries: List[str] | None = None,
+) -> tuple[str, str, bool] | None:
+    """
+    First generates a DIRECT explanation (same behavior as _llm_explain),
+    then runs a SELF-REFLECTION pass that critiques and rewrites the draft
+    using a strict checklist (sign consistency vs SHAP, coverage of top-k,
+    grounded citations, no hallucinated numbers, concise operator actions).
+
+    Returns (direct_text, refined_text, rag_used_flag), or None if no API key.
+    """
+    api_key = cfg.OPENAI_API_KEY
+    if not api_key:
+        print("OPENAI_API_KEY not set – skipping LLM explanation")
+        return None
+
+    client = OpenAI(api_key=api_key)
+
+    # ---------- RAG: retrieve reference snippets (shared by both passes) ---
+    query = "OTDR fault plots – " + ", ".join(p.stem for p in img_paths)
+    try:
+        retrieved = retrieve(query, k=5)
+    except Exception as exc:
+        print(f"RAG retrieval failed. {exc}")
+        retrieved = []
+    ref_block = "\n\n".join(f"[{i + 1}] {r['text']}" for i, r in enumerate(retrieved))
+    rag_flag = bool(retrieved)
+    if rag_flag:
+        print("RAG retrieval successful, using retrieved snippets in LLM prompt.")
+
+    # ---------- Shared SHAP text -------------------------------------------
+    shap_text = "\n".join(shap_summaries) if shap_summaries else ""
+
+    # ---------- DIRECT pass -------------------------------------------------
+    system_direct = (
+        "You are an optical-fibre fault-analysis expert. "
+        "Given the following figures (OTDR amplitude over P-points; titles include true/pred predicted by a "
+        f"{classifier_type} model), write a concise explanation for each figure. "
+        "Explain fault type, position, likely causes, and concrete next actions. "
+        "Use the reference snippets and the SHAP feature attributions when available. "
+        "Cite snippets like [1], [2] when used. If SHAP is present, explicitly state which features raised/lowered the predicted class probability."
+    )
+    user_direct_parts: List[dict] = [
+        {"type": "text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
+    ]
+    if shap_text:
+        user_direct_parts.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
+    user_direct_parts.append({"type": "text", "text": "Selected samples for inspection (images):"})
+    user_direct_parts += [
+        {"type": "image_url", "image_url": {"url": _b64(p)}}
+        for p in img_paths
+    ]
+
+    direct_messages = [
+        {"role": "system", "content": system_direct},
+        {"role": "user", "content": user_direct_parts},
+    ]
+    direct_resp = client.chat.completions.create(model=openai_model, messages=direct_messages)
+    direct_text = direct_resp.choices[0].message.content.strip()
+
+    # ---------- SELF-REFLECTION pass ---------------------------------------
+    # The reviewer checks for: SHAP sign consistency, coverage of top-k |SHAP|,
+    # grounded citations, and removal of hallucinated numbers/claims.
+    system_reflect = (
+        "You are a meticulous QA reviewer for optical-fibre explanations. "
+        "You will receive: (a) the same context (reference snippets and SHAP summaries), and (b) a DRAFT explanation. "
+        "Critique and then OUTPUT ONLY an improved explanation that:\n"
+        "1) Matches SHAP signs (features with positive SHAP must be described as increasing the predicted class probability; negative → decreasing).\n"
+        "2) Mentions the top-k absolute SHAP contributors (k≈5) in plain English.\n"
+        "3) Grounds any standards/definitions with citations [i] that exist in the provided snippet list.\n"
+        "4) Avoids hallucinated numbers. If a number is not in SHAP/metrics/snippets, replace with cautious wording or a range derived from context.\n"
+        "5) Keeps the operator section actionable (2–3 steps). "
+        "Return the final REWRITTEN explanation only—no preamble, no bullet checklists of critique."
+    )
+
+    reflect_user_content = [
+        {"type": "text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
+    ]
+    if shap_text:
+        reflect_user_content.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
+    reflect_user_content.append({"type": "text", "text": "DRAFT explanation to review:\n" + direct_text})
+
+    reflect_messages = [
+        {"role": "system", "content": system_reflect},
+        {"role": "user", "content": reflect_user_content},
+    ]
+    reflect_resp = client.chat.completions.create(model=openai_model, messages=reflect_messages)
+    refined_text = reflect_resp.choices[0].message.content.strip()
+
+    return direct_text, refined_text, rag_flag
+
 
 def _llm_explain(
         img_paths: List[Path], classifier_type: str = "tcn",
@@ -523,23 +617,41 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         p_pos = float(pos_hat[idx_to_eval == idx][0].item())
         img_paths.append(_visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, int(idx), out_dir))
 
-    # ------------- LLM explanation ------------- #
-    explanation, rag_flag = _llm_explain(img_paths, openai_model= "gpt-5", classifier_type=classifier, shap_summaries=shap_summaries)
+    # ------------- LLM explanation (direct + self-reflection) ------------- #
+    explain_pair = _llm_explain_with_self_reflection(
+        img_paths,
+        openai_model="gpt-5",  # keep your configured model string
+        classifier_type=classifier,
+        shap_summaries=shap_summaries
+    )
+
     classifier_name = classifier.upper()
     llm_dir = Path("outputs/llm_output")
     llm_dir.mkdir(parents=True, exist_ok=True)
-    if explanation:
+
+    if explain_pair:
+        direct_text, refined_text, rag_flag = explain_pair
         explanation_file = llm_dir / "llm_explanation_shap.txt"
         i = 1
         while explanation_file.exists():
             explanation_file = llm_dir / f"llm_explanation_shap_{i}.txt"
             i += 1
-        if rag_flag:
-            explanation = f"LLM explanation for eval subset with RAG for {classifier_name} in {mode} mode:\n\n{explanation}"
-        else:
-            explanation = f"LLM explanation for eval subset without RAG for {classifier_name} in {mode} mode:\n\n{explanation}"
-        explanation_file.write_text(explanation, encoding='utf-8')
-        print(f"LLM explanation saved to {explanation_file.name}")  # noqa: T201
+
+        header = (
+            f"LLM explanation for eval subset {'with' if rag_flag else 'without'} RAG "
+            f"for {classifier_name} in {mode} mode:\n\n"
+        )
+        combined = (
+                header
+                + "=== DIRECT ===\n"
+                + direct_text.strip()
+                + "\n\n=== SELF-REFLECTION (REVISED) ===\n"
+                + refined_text.strip()
+                + "\n"
+        )
+        explanation_file.write_text(combined, encoding="utf-8")
+        print(f"LLM explanation (direct + self-reflection) saved to {explanation_file.name}")  # noqa: T201
+
 
 if __name__ == "__main__":
     main()
