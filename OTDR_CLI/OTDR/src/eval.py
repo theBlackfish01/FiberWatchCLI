@@ -513,6 +513,14 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     y_cls_test = splits["test"].y_class
     y_pos_test = splits["test"].y_pos
 
+    if classifier == "tst":
+        fault_mask = y_cls_test != 0
+        if fault_mask.sum().item() == 0:
+            raise ValueError("No faulty samples available in the test set for TST evaluation.")
+        X_test = X_test[fault_mask]
+        y_cls_test = y_cls_test[fault_mask]
+        y_pos_test = y_pos_test[fault_mask]
+
     device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if device is None else torch.device(device)

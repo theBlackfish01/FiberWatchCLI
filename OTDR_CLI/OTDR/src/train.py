@@ -30,6 +30,7 @@ from sklearn.metrics import accuracy_score, root_mean_squared_error, roc_auc_sco
 # ---------------------------------------------------------------------------
 
 from data_helper import (
+    SplitTensors,
     load_raw_dataframe,
     make_splits,
     fit_scaler,
@@ -188,6 +189,21 @@ def _evaluate_tabnet(
     return cls_acc, rmse
 
 
+def _faulty_only(split: SplitTensors, normal_label: int = 0) -> SplitTensors:
+    """Return tensors containing only faulty samples (label != normal_label)."""
+
+    mask = split.y_class != normal_label
+    if mask.sum().item() == 0:
+        raise ValueError(
+            "No faulty samples available – cannot train/evaluate the TST on an empty set."
+        )
+    return SplitTensors(
+        X=split.X[mask],
+        y_class=split.y_class[mask],
+        y_pos=split.y_pos[mask],
+    )
+
+
 # ---------------------------------------------------------------------------
 # Click CLI
 # ---------------------------------------------------------------------------
@@ -313,17 +329,21 @@ def main(mode, data_path, out_dir, device) -> None:
 
     # ----------------------------- TST -------------------------------------#
     if mode in {"tst", "all"}:
-        tst = TimeSeriesTransformer(seq_len=splits["train"].X.shape[1])
+        fault_train = _faulty_only(splits["train"])
+        fault_val = _faulty_only(splits["val"])
+        fault_test = _faulty_only(splits["test"])
+
+        tst = TimeSeriesTransformer(seq_len=fault_train.X.shape[1])
         tst_cfg = TSTConfig(save_path=out_dir / "tst.pt", device=device)
         tst = train_tst(
             tst,
-            splits["train"].X,
-            splits["train"].y_pos,
-            splits["val"].X,
-            splits["val"].y_pos,
+            fault_train.X,
+            fault_train.y_pos,
+            fault_val.X,
+            fault_val.y_pos,
             cfg=tst_cfg,
         )
-        _evaluate_tst(tst, splits["test"].X, splits["test"].y_pos)
+        _evaluate_tst(tst, fault_test.X, fault_test.y_pos)
 
     # ----------------------------- TabNet ----------------------------------#
     if mode in {"tab"}:
