@@ -161,16 +161,14 @@ def _evaluate_tcn(
 def _evaluate_tst(
         tst: TimeSeriesTransformer,
         X_test: torch.Tensor,
-        y_test_cls: torch.Tensor,
         y_test_pos: torch.Tensor,
-) -> Tuple[float, float]:
-    logits, pos_hat = predict_tst(tst, X_test)
-    cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
+) -> float:
+    pos_hat = predict_tst(tst, X_test)
     rmse = root_mean_squared_error(
         y_test_pos.numpy().ravel(), pos_hat.numpy()
     )
-    print(f"[TST]    Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
-    return cls_acc, rmse
+    print(f"[TST]    Test RMSE={rmse:.3f}")
+    return rmse
 
 
 # ----------------------------- TabNet eval ----------------------------------#
@@ -315,20 +313,17 @@ def main(mode, data_path, out_dir, device) -> None:
 
     # ----------------------------- TST -------------------------------------#
     if mode in {"tst", "all"}:
-        n_classes = int(df["Class"].max() + 1)
-        tst = TimeSeriesTransformer(seq_len=splits["train"].X.shape[1], n_classes=n_classes)
+        tst = TimeSeriesTransformer(seq_len=splits["train"].X.shape[1])
         tst_cfg = TSTConfig(save_path=out_dir / "tst.pt", device=device)
         tst = train_tst(
             tst,
             splits["train"].X,
-            splits["train"].y_class,
             splits["train"].y_pos,
             splits["val"].X,
-            splits["val"].y_class,
             splits["val"].y_pos,
             cfg=tst_cfg,
         )
-        _evaluate_tst(tst, splits["test"].X, splits["test"].y_class, splits["test"].y_pos)
+        _evaluate_tst(tst, splits["test"].X, splits["test"].y_pos)
 
     # ----------------------------- TabNet ----------------------------------#
     if mode in {"tab"}:
