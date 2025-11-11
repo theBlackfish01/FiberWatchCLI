@@ -30,6 +30,7 @@ from sklearn.metrics import accuracy_score, root_mean_squared_error, roc_auc_sco
 # ---------------------------------------------------------------------------
 
 from data_helper import (
+    SplitTensors,
     load_raw_dataframe,
     make_splits,
     fit_scaler,
@@ -161,16 +162,14 @@ def _evaluate_tcn(
 def _evaluate_tst(
         tst: TimeSeriesTransformer,
         X_test: torch.Tensor,
-        y_test_cls: torch.Tensor,
         y_test_pos: torch.Tensor,
-) -> Tuple[float, float]:
-    logits, pos_hat = predict_tst(tst, X_test)
-    cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
+) -> float:
+    pos_hat = predict_tst(tst, X_test)
     rmse = root_mean_squared_error(
         y_test_pos.numpy().ravel(), pos_hat.numpy()
     )
-    print(f"[TST]    Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
-    return cls_acc, rmse
+    print(f"[TST]    Test RMSE={rmse:.3f}")
+    return rmse
 
 
 # ----------------------------- TabNet eval ----------------------------------#
@@ -188,6 +187,21 @@ def _evaluate_tabnet(
     )
     print(f"[TabNet] Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
     return cls_acc, rmse
+
+
+def _faulty_only(split: SplitTensors, normal_label: int = 0) -> SplitTensors:
+    """Return tensors containing only faulty samples (label != normal_label)."""
+
+    mask = split.y_class != normal_label
+    if mask.sum().item() == 0:
+        raise ValueError(
+            "No faulty samples available – cannot train/evaluate the TST on an empty set."
+        )
+    return SplitTensors(
+        X=split.X[mask],
+        y_class=split.y_class[mask],
+        y_pos=split.y_pos[mask],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -315,20 +329,21 @@ def main(mode, data_path, out_dir, device) -> None:
 
     # ----------------------------- TST -------------------------------------#
     if mode in {"tst", "all"}:
-        n_classes = int(df["Class"].max() + 1)
-        tst = TimeSeriesTransformer(seq_len=splits["train"].X.shape[1], n_classes=n_classes)
+        fault_train = _faulty_only(splits["train"])
+        fault_val = _faulty_only(splits["val"])
+        fault_test = _faulty_only(splits["test"])
+
+        tst = TimeSeriesTransformer(seq_len=fault_train.X.shape[1])
         tst_cfg = TSTConfig(save_path=out_dir / "tst.pt", device=device)
         tst = train_tst(
             tst,
-            splits["train"].X,
-            splits["train"].y_class,
-            splits["train"].y_pos,
-            splits["val"].X,
-            splits["val"].y_class,
-            splits["val"].y_pos,
+            fault_train.X,
+            fault_train.y_pos,
+            fault_val.X,
+            fault_val.y_pos,
             cfg=tst_cfg,
         )
-        _evaluate_tst(tst, splits["test"].X, splits["test"].y_class, splits["test"].y_pos)
+        _evaluate_tst(tst, fault_test.X, fault_test.y_pos)
 
     # ----------------------------- TabNet ----------------------------------#
     if mode in {"tab"}:
