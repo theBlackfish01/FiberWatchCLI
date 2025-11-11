@@ -49,6 +49,7 @@ class VectorGRUAE(nn.Module):
         latent: int = 64,
         layers: int = 1,
         bidir: bool = False,
+        dropout: float = 0.1,
     ) -> None:
         super().__init__()
         self.feat_dim = feat_dim
@@ -56,28 +57,50 @@ class VectorGRUAE(nn.Module):
         self.latent = latent
         self.layers = layers
         self.bidir = bidir
+        self.dropout_p = float(dropout)
 
         # ---------------- encoder ---------------- #
+        gru_dropout = dropout if layers > 1 else 0.0
         self.encoder = nn.GRU(
             input_size=feat_dim,
             hidden_size=hidden,
             num_layers=layers,
             batch_first=True,
             bidirectional=bidir,
+            dropout=gru_dropout,
         )
         dir_mult = 2 if bidir else 1
-        self.fc_mu = nn.Linear(hidden * dir_mult, latent)
+        enc_dim = hidden * dir_mult
+        self.fc_mu = nn.Sequential(
+            nn.Linear(enc_dim, enc_dim),
+            nn.GELU(),
+            nn.LayerNorm(enc_dim),
+            nn.Linear(enc_dim, latent),
+        )
+        self.latent_norm = nn.LayerNorm(latent)
+        self.latent_dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
         # ---------------- decoder ---------------- #
         # map latent to initial hidden state of decoder GRU
-        self.fc_init = nn.Linear(latent, hidden * layers)
+        self.fc_init = nn.Sequential(
+            nn.Linear(latent, latent),
+            nn.GELU(),
+            nn.Linear(latent, hidden * layers),
+        )
         self.decoder = nn.GRU(
             input_size=feat_dim,  # we'll feed zeros of this size
             hidden_size=hidden,
             num_layers=layers,
             batch_first=True,
+            dropout=gru_dropout,
         )
-        self.out = nn.Linear(hidden, feat_dim)
+        self.decoder_dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+        self.out = nn.Sequential(
+            nn.Linear(hidden, hidden),
+            nn.GELU(),
+            nn.Linear(hidden, feat_dim),
+        )
+        self.out_norm = nn.LayerNorm(feat_dim)
 
         self._init_weights()
 
@@ -107,6 +130,8 @@ class VectorGRUAE(nn.Module):
             h_cat = h_enc[-1]  # (B, hidden)
 
         z = self.fc_mu(h_cat)  # (B, latent)
+        z = self.latent_norm(z)
+        z = self.latent_dropout(z)
 
         # ----- prepare decoder init ----- #
         h0 = self.fc_init(z).view(self.layers, B, self.hidden).contiguous()  # (layers, B, hidden)
@@ -115,7 +140,9 @@ class VectorGRUAE(nn.Module):
         # force model to use latent
         decoder_input = x.new_zeros(B, 1, self.feat_dim)  # (B, 1, feat_dim)
         dec_out, _ = self.decoder(decoder_input, h0)  # (B, 1, hidden)
+        dec_out = self.decoder_dropout(dec_out)
         recon = self.out(dec_out)  # (B, 1, feat_dim)
+        recon = self.out_norm(recon)
         return recon
 
     # ------------------------------------------------------------------ #
@@ -145,11 +172,14 @@ class TrainConfig:
     batch_size: int = 256
     lr: float = 1e-3
     patience: int = 10
-    step_size: int = 10
-    gamma: float = 0.5
+    lr_patience: int = 5
+    lr_factor: float = 0.5
+    min_lr: float = 1e-5
     quantile: float = 0.95
     device: torch.device | str | None = None
     save_path: str | Path | None = None
+    weight_decay: float = 1e-5
+    grad_clip: float = 1.0
 
 
 @torch.no_grad()
@@ -192,12 +222,21 @@ def train_gru_ae(
         shuffle=True,
         drop_last=True,
     )
-    optim = torch.optim.Adam(model.parameters(), lr=cfg.lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optim, step_size=cfg.step_size, gamma=cfg.gamma)
+    optim = torch.optim.AdamW(
+        model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optim,
+        mode="min",
+        patience=cfg.lr_patience,
+        factor=cfg.lr_factor,
+        min_lr=cfg.min_lr,
+    )
     loss_fn = nn.MSELoss()
 
     best_val = float("inf")
     epochs_no_improve = 0
+    best_state_dict: dict[str, torch.Tensor] | None = None
 
     for epoch in range(cfg.epochs):
         model.train()
@@ -208,18 +247,23 @@ def train_gru_ae(
             loss = loss_fn(recon, xb)
             optim.zero_grad()
             loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            if cfg.grad_clip and cfg.grad_clip > 0:
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=cfg.grad_clip)
             optim.step()
             epoch_loss += loss.item() * xb.size(0)
 
         avg_train_loss = epoch_loss / len(loader.dataset)
         val_loss = _quick_val_loss(model, val_tensor, loss_fn, device, cfg.batch_size)
-        print(f"E{epoch:02d}  trainMSE={avg_train_loss:.5f}  valMSE={val_loss:.5f}")  # noqa: T201
-        scheduler.step()
+        current_lr = optim.param_groups[0]["lr"]
+        print(
+            f"E{epoch:02d}  trainMSE={avg_train_loss:.5f}  valMSE={val_loss:.5f}  lr={current_lr:.2e}"  # noqa: T201
+        )
+        scheduler.step(val_loss)
 
         if val_loss < best_val:
             best_val = val_loss
             epochs_no_improve = 0
+            best_state_dict = {k: v.detach().cpu() for k, v in model.state_dict().items()}
             if cfg.save_path:
                 torch.save(model.state_dict(), cfg.save_path)
         else:
@@ -231,6 +275,8 @@ def train_gru_ae(
     # reload best
     if cfg.save_path and Path(cfg.save_path).exists():
         model.load_state_dict(torch.load(cfg.save_path, map_location=device))
+    elif best_state_dict is not None:
+        model.load_state_dict(best_state_dict)
 
     # determine threshold on training errors
     errs = reconstruction_error(model, train_tensor, batch_size=cfg.batch_size, device=device)
