@@ -206,7 +206,7 @@ def _save_correlation_heatmap(df: pd.DataFrame, output_dir: Path, columns: Itera
 
 def analyze_dataset(
     csv_path: Path | str,
-    output_dir: Path | str = "analysis_artifacts",
+    output_dir: Path | str = "analysis_outputs",
     class_column: str = "Class",
     summary_json: bool = True,
 ) -> DatasetSummary:
@@ -298,7 +298,7 @@ if __name__ == "__main__":  # pragma: no cover - manual execution entry point
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("analysis_artifacts"),
+        default=Path("outputs/analysis_outputs"),
         help="Directory where analysis artifacts will be saved",
     )
     parser.add_argument(

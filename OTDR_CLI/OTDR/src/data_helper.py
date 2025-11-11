@@ -62,8 +62,8 @@ def load_raw_dataframe(path: str | Path) -> pd.DataFrame:
 def make_splits(
     df: pd.DataFrame,
     *,
-    test_size: float = 0.10,
-    val_size: float = 0.20,
+    test_size: float = 0.5,
+    val_size: float = 0.25,
     label_col: str = "Class",
     random_state: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:

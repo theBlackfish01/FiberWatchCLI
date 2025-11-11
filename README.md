@@ -35,8 +35,8 @@ Both tracks include **visual diagnostics** and an optional **LLM explainability*
 * Input is a **1-D amplitude trace** sampled along distance (P-points) plus a few scalars (e.g., SNR).
 * Tasks:
 
-  1. **Detection** (GRU-AE reconstruction error) — “Is there a fault?”
-  2. **Diagnosis + localization** (TCN/TST/TabNet) — fault **type** and **position** (meters).
+  1. **Detection** (GRU-AE reconstruction error) 
+  2. **Diagnosis + localization** (TCN/TST/TabNet) — fault **type** and **position**.
 
 ### Φ-OTDR / DAS
 
