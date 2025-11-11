@@ -158,7 +158,10 @@ class VectorGRUAE(nn.Module):
             elif "bias" in name:
                 nn.init.zeros_(param)
             elif name.endswith("weight"):
-                nn.init.xavier_uniform_(param)
+                if param.dim() >= 2:
+                    nn.init.xavier_uniform_(param)
+                else:
+                    nn.init.ones_(param)
 
 
 # ---------------------------------------------------------------------------
