@@ -266,9 +266,35 @@ def main(mode, data_path, out_dir, device) -> None:
         print(f"[GRU-AE] Threshold={thresh:.5f}")
         _evaluate_gru_ae(ae, thresh, splits["test"].X, splits["test"].y_class)
 
-        # Save AE metadata (threshold only; scaler is now separate)
+        gru_meta = {
+            "threshold": float(thresh),
+            "scaler_mean": scaler.mean_.tolist(),
+            "scaler_scale": scaler.scale_.tolist(),
+            "feature_names": measurements,
+            "source_data": str(data_path),
+            "model_kwargs": {
+                "feat_dim": int(ae.feat_dim),
+                "hidden": int(ae.hidden),
+                "latent": int(ae.latent),
+                "layers": int(ae.layers),
+                "bidir": bool(ae.bidir),
+                "dropout": float(ae.dropout_p),
+            },
+            "train_config": {
+                "epochs": ae_cfg.epochs,
+                "batch_size": ae_cfg.batch_size,
+                "lr": ae_cfg.lr,
+                "patience": ae_cfg.patience,
+                "lr_patience": ae_cfg.lr_patience,
+                "lr_factor": ae_cfg.lr_factor,
+                "min_lr": ae_cfg.min_lr,
+                "quantile": ae_cfg.quantile,
+                "weight_decay": ae_cfg.weight_decay,
+                "grad_clip": ae_cfg.grad_clip,
+            },
+        }
         with open(out_dir / "gru_ae.json", "w") as fp:
-            json.dump({"threshold": thresh}, fp, indent=2)
+            json.dump(gru_meta, fp, indent=2)
 
     # ----------------------------- TCN -------------------------------------#
     if mode in {"tcn", "all"}:

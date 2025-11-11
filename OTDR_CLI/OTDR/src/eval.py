@@ -49,8 +49,15 @@ def _load_gru_ae(det_path: Path, device: torch.device) -> Tuple[VectorGRUAE, flo
     meta = json.loads(Path(meta_path).read_text())
 
     # reconstruct scaler params (used only for plots in this script)
-    scaler_mean = np.array(meta["scaler_mean"], dtype=np.float32)
-    scaler_scale = np.array(meta["scaler_scale"], dtype=np.float32)
+    if "scaler_mean" in meta and "scaler_scale" in meta:
+        scaler_mean = np.array(meta["scaler_mean"], dtype=np.float32)
+        scaler_scale = np.array(meta["scaler_scale"], dtype=np.float32)
+    elif "mean" in meta and "scale" in meta:
+        # backwards compatibility with early metadata files
+        scaler_mean = np.array(meta["mean"], dtype=np.float32)
+        scaler_scale = np.array(meta["scale"], dtype=np.float32)
+    else:
+        raise KeyError("GRU-AE metadata must contain scaler_mean/scale entries")
     threshold = float(meta["threshold"])
 
     # feature dim = scaler_mean length
