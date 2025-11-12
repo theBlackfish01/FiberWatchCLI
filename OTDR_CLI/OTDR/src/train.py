@@ -16,6 +16,7 @@ python -m src.train --mode all
 """
 
 from pathlib import Path
+from dataclasses import fields, is_dataclass
 import json
 import re
 from typing import Tuple, Optional
@@ -79,6 +80,24 @@ warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
 
 def _ensure_dir(p: Path) -> None:
     p.mkdir(parents=True, exist_ok=True)
+
+
+def _config_to_dict(cfg) -> dict:
+    """Serialise dataclass config objects into JSON-friendly dictionaries."""
+
+    if not is_dataclass(cfg):
+        return {}
+
+    serialised: dict[str, object] = {}
+    for f in fields(cfg):
+        value = getattr(cfg, f.name)
+        if isinstance(value, Path):
+            serialised[f.name] = str(value)
+        elif isinstance(value, torch.device):
+            serialised[f.name] = str(value)
+        else:
+            serialised[f.name] = value
+    return serialised
 
 
 def _resolve_device(requested: Optional[str]) -> torch.device:
@@ -408,6 +427,7 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only) -> None:
 
     # ----------------------------- TCN -------------------------------------#
     if mode in {"tcn", "all"}:
+        anomaly_classes_list: list[int] | None = None
         if tcn_anomaly_only:
             train_faulty, anomaly_classes = _faulty_only_relabel(
                 splits["train"], normal_label=0
@@ -418,6 +438,7 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only) -> None:
             test_faulty, _ = _faulty_only_relabel(
                 splits["test"], normal_label=0, classes=anomaly_classes
             )
+            anomaly_classes_list = [int(c) for c in anomaly_classes.tolist()]
             class_map = ", ".join(
                 f"{int(orig)}→{idx}" for idx, orig in enumerate(anomaly_classes.tolist())
             )
@@ -435,7 +456,10 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only) -> None:
 
         n_classes = int(train_split.y_class.max().item() + 1)
         tcn = OTDR_TCN(n_classes=n_classes)
-        tcn_cfg = TCNConfig(save_path=out_dir / "tcn.pt", device=device)
+        tcn_save_path = out_dir / (
+            "tcn_anomaly.pt" if tcn_anomaly_only else "tcn_full.pt"
+        )
+        tcn_cfg = TCNConfig(save_path=tcn_save_path, device=device)
         tcn = train_tcn(
             tcn,
             train_split.X,
@@ -448,13 +472,38 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only) -> None:
         )
         _evaluate_tcn(tcn, test_split.X, test_split.y_class, test_split.y_pos)
 
+        class_labels = sorted(int(c) for c in torch.unique(train_split.y_class).tolist())
+        tcn_meta = {
+            "variant": "anomaly_only" if tcn_anomaly_only else "full",
+            "feature_names": measurements,
+            "source_data": str(data_path),
+            "normal_label": 0,
+            "n_classes": int(n_classes),
+            "class_labels": class_labels,
+            "train_config": _config_to_dict(tcn_cfg),
+        }
+        if tcn_anomaly_only:
+            if not anomaly_classes_list:
+                raise RuntimeError("Anomaly class mapping missing for metadata emission.")
+            tcn_meta["original_classes"] = anomaly_classes_list
+            tcn_meta["class_index_map"] = {
+                str(orig): idx for idx, orig in enumerate(anomaly_classes_list)
+            }
+        else:
+            tcn_meta["original_classes"] = class_labels
+            tcn_meta["class_index_map"] = {str(cls): cls for cls in class_labels}
+
+        with open(tcn_save_path.with_suffix(".json"), "w") as fp:
+            json.dump(tcn_meta, fp, indent=2)
+
     if mode == "tcn_binary":
         train_bin = _binary_labels(splits["train"])
         val_bin = _binary_labels(splits["val"])
         test_bin = _binary_labels(splits["test"])
 
         tcn_binary = OTDR_TCNBinary()
-        tcn_bin_cfg = TCNBinaryConfig(save_path=out_dir / "tcn_binary.pt", device=device)
+        tcn_binary_path = out_dir / "tcn_binary.pt"
+        tcn_bin_cfg = TCNBinaryConfig(save_path=tcn_binary_path, device=device)
         tcn_binary = train_tcn_binary(
             tcn_binary,
             train_bin.X,
@@ -464,6 +513,18 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only) -> None:
             cfg=tcn_bin_cfg,
         )
         _evaluate_tcn_binary(tcn_binary, test_bin.X, test_bin.y_class)
+
+        tcn_binary_meta = {
+            "variant": "binary",
+            "feature_names": measurements,
+            "source_data": str(data_path),
+            "class_labels": [0, 1],
+            "normal_label": 0,
+            "positive_label": 1,
+            "train_config": _config_to_dict(tcn_bin_cfg),
+        }
+        with open(tcn_binary_path.with_suffix(".json"), "w") as fp:
+            json.dump(tcn_binary_meta, fp, indent=2)
 
     # ----------------------------- TST -------------------------------------#
     if mode in {"tst", "all"}:
