@@ -75,6 +75,7 @@ class TrainConfig:
     gamma: float = 0.5
     device: torch.device | str | None = None
     save_path: str | Path | None = None
+    pos_count: int = 30
 
 
 def _compute_class_weights(labels: torch.Tensor, n_classes: int) -> torch.Tensor:
@@ -91,6 +92,7 @@ def _val_metrics(
     *,
     loss_fn: nn.Module,
     device: torch.device,
+    pos_count: int,
 ) -> Tuple[float, float]:
     model.eval()
     v_loss = 0.0
@@ -98,7 +100,7 @@ def _val_metrics(
     v_samples = 0
     with torch.no_grad():
         for xb, y_cls in loader:
-            xb = _to_two_channel(xb).to(device)
+            xb = _to_two_channel(xb, pos_count=pos_count).to(device)
             y_cls = y_cls.to(device)
             logits = model(xb)
             loss = loss_fn(logits, y_cls)
@@ -151,7 +153,7 @@ def train_tcn_binary(
         model.train()
         train_loss_sum = 0.0
         for xb, y_cls in train_loader:
-            xb = _to_two_channel(xb).to(device)
+            xb = _to_two_channel(xb, pos_count=cfg.pos_count).to(device)
             y_cls = y_cls.to(device)
             logits = model(xb)
             loss = loss_fn(logits, y_cls)
@@ -162,7 +164,13 @@ def train_tcn_binary(
             train_loss_sum += loss.item() * xb.size(0)
 
         avg_train_loss = train_loss_sum / len(train_loader.dataset)
-        val_loss, val_acc = _val_metrics(model, val_loader, loss_fn=loss_fn, device=device)
+        val_loss, val_acc = _val_metrics(
+            model,
+            val_loader,
+            loss_fn=loss_fn,
+            device=device,
+            pos_count=cfg.pos_count,
+        )
 
         print(
             f"E{epoch + 1:02d} | trainL={avg_train_loss:.4f} | valL={val_loss:.4f} | Acc={val_acc:.3f}"
@@ -192,6 +200,7 @@ def predict(
     *,
     batch_size: int = 512,
     device: torch.device | str | None = None,
+    pos_count: int = 30,
 ) -> torch.Tensor:
     device = device or next(model.parameters()).device
     model.eval()
@@ -199,7 +208,7 @@ def predict(
     with torch.no_grad():
         for i in range(0, data.size(0), batch_size):
             xb = data[i : i + batch_size]
-            xb = _to_two_channel(xb).to(device)
+            xb = _to_two_channel(xb, pos_count=pos_count).to(device)
             logits = model(xb)
             logits_list.append(logits.cpu())
     return torch.cat(logits_list, 0)

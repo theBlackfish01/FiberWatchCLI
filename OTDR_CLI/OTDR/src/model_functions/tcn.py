@@ -5,13 +5,15 @@ from __future__ import annotations
 Implements the lightweight dilated-TCN you trained in the notebook. It predicts
 both **fault class** (categorical) and **fault position** (regression).
 
-This version treats the first feature (SNR) as a **global scalar** and injects it
-as a **second channel** by broadcasting it across the 30 positional steps:
+This version treats the first feature (SNR) – and any optional leakage / extra
+scalars – as **global channels** by broadcasting them across the positional
+trace:
 
-    raw row:  [SNR, P1, P2, ... , P30]  ->  (B, 31)
-    model in: (B, 2, 30)
+    raw row:  [SNR, P1, P2, ... , P30, loss, Reflectance]  ->  (B, F)
+    model in: (B, 1 + 1 + extras, 30)
         chan 0 = positions (P1..P30)
         chan 1 = SNR repeated 30 times
+        chan 2.. = each extra scalar repeated 30 times
 
 Public API
 ----------
@@ -179,18 +181,30 @@ class TrainConfig:
     gamma: float = 0.5
     device: torch.device | str | None = None
     save_path: str | Path | None = None
+    pos_count: int = 30
 
 
-def _to_two_channel(xb: torch.Tensor) -> torch.Tensor:
-    """Convert (B, 31) = [snr, p1..p30] to (B, 2, 30)."""
-    # xb: (B, 31)
-    snr = xb[:, 0]                 # (B,)
-    pos = xb[:, 1:]                # (B, 30)
-    # broadcast SNR across sequence length
-    snr_seq = snr.unsqueeze(1).repeat(1, pos.size(1))  # (B, 30)
-    # stack as channels
-    x2 = torch.stack([pos, snr_seq], dim=1)            # (B, 2, 30)
-    return x2
+def _to_two_channel(xb: torch.Tensor, *, pos_count: int) -> torch.Tensor:
+    """Convert vector measurements to multi-channel tensors."""
+
+    if xb.size(1) < pos_count + 1:
+        raise ValueError(
+            f"Expected at least {pos_count + 1} features (SNR + positions); got {xb.size(1)}."
+        )
+
+    pos = xb[:, 1 : 1 + pos_count]
+    extras = xb[:, 1 + pos_count :]
+    seq_len = pos.size(1)
+
+    channels = [pos]
+    snr = xb[:, 0]
+    channels.append(snr.unsqueeze(1).repeat(1, seq_len))
+    if extras.numel() > 0:
+        for idx in range(extras.size(1)):
+            feat = extras[:, idx]
+            channels.append(feat.unsqueeze(1).repeat(1, seq_len))
+
+    return torch.stack(channels, dim=1)
 
 
 def _val_metrics(
@@ -201,6 +215,7 @@ def _val_metrics(
     loss_fn_loc: nn.Module,
     lambda_loc: float,
     device: torch.device,
+    pos_count: int,
 ) -> Tuple[float, float, float]:
     """Return (loss, accuracy, RMSE)."""
 
@@ -212,8 +227,7 @@ def _val_metrics(
     y_pred: list[np.ndarray] = []
     with torch.no_grad():
         for xb, y_cls, y_loc in loader:
-            # xb: (B, 31) -> (B, 2, 30)
-            xb = _to_two_channel(xb).to(device)
+            xb = _to_two_channel(xb, pos_count=pos_count).to(device)
             y_cls = y_cls.to(device)
             y_loc = y_loc.to(device)
             logits, pos_hat = model(xb)
@@ -278,8 +292,7 @@ def train_tcn(
         model.train()
         train_loss_sum = 0.0
         for xb, y_cls, y_loc in train_loader:
-            # xb: (B, 31) -> (B, 2, 30)
-            xb = _to_two_channel(xb).to(device)
+            xb = _to_two_channel(xb, pos_count=cfg.pos_count).to(device)
             y_cls = y_cls.to(device)
             y_loc = y_loc.to(device)
             logits, pos_hat = model(xb)
@@ -300,6 +313,7 @@ def train_tcn(
             loss_fn_loc=loss_loc,
             lambda_loc=cfg.lambda_loc,
             device=device,
+            pos_count=cfg.pos_count,
         )
 
         print(
@@ -337,6 +351,7 @@ def predict(
     *,
     batch_size: int = 512,
     device: torch.device | str | None = None,
+    pos_count: int = 30,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     """Return (class_logits, pos_pred) concatenated over input rows."""
 
@@ -346,8 +361,8 @@ def predict(
     pos_list: list[torch.Tensor] = []
     with torch.no_grad():
         for i in range(0, data.size(0), batch_size):
-            xb = data[i : i + batch_size]          # (B, 31)
-            xb = _to_two_channel(xb).to(device)     # (B, 2, 30)
+            xb = data[i : i + batch_size]
+            xb = _to_two_channel(xb, pos_count=pos_count).to(device)
             logits, pos_hat = model(xb)
             logits_list.append(logits.cpu())
             pos_list.append(pos_hat.cpu())
