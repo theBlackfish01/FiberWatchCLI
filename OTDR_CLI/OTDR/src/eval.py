@@ -73,7 +73,7 @@ def _load_classifier(kind: str, cls_path: Path, seq_len: int, n_classes: int, de
         model = OTDR_TCN(n_classes=n_classes)
         model.load_state_dict(torch.load(cls_path, map_location=device))
     elif kind == "tst":
-        model = TimeSeriesTransformer(seq_len=seq_len, n_classes=n_classes)
+        model = TimeSeriesTransformer(seq_len=seq_len)
         model.load_state_dict(torch.load(cls_path, map_location=device))
     elif kind == "tab":
         model = OTDR_TabNet(n_classes=n_classes)
@@ -87,7 +87,7 @@ def _visualise_sample(
         amps: np.ndarray,
         snr: float,
         true_cls: int,
-        pred_cls: int,
+        pred_cls: int | None,
         true_pos: float,
         pred_pos: float,
         idx: int,
@@ -95,8 +95,9 @@ def _visualise_sample(
 ):
     plt.figure(figsize=(10, 8))
     plt.plot(np.arange(amps.size), amps, label="Amplitude")
+    pred_label = "N/A" if pred_cls is None else str(pred_cls)
     plt.title(
-        f"Sample #{idx} | TrueC={true_cls} PredC={pred_cls} | "
+        f"Sample #{idx} | TrueC={true_cls} PredC={pred_label} | "
         f"TruePos={true_pos:.3f}m  PredPos={pred_pos:.3f}m | SNR={snr:.2f}"
     )
     plt.xlabel("P-index")
@@ -127,7 +128,7 @@ def _make_predict_fn(model, classifier: str, device: torch.device):
         if classifier == "tcn":
             logits, _ = predict_tcn(model, data, device=device)
         elif classifier == "tst":
-            logits, _ = predict_tst(model, data, device=device)
+            raise RuntimeError("TST model does not provide classification logits.")
         else:
             logits, _ = predict_tabnet(model, data, device=device)
         probs = torch.softmax(logits, dim=1)
@@ -418,6 +419,14 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     y_cls_test = splits["test"].y_class
     y_pos_test = splits["test"].y_pos
 
+    if classifier == "tst":
+        fault_mask = y_cls_test != 0
+        if fault_mask.sum().item() == 0:
+            raise ValueError("No faulty samples available in the test set for TST evaluation.")
+        X_test = X_test[fault_mask]
+        y_cls_test = y_cls_test[fault_mask]
+        y_pos_test = y_pos_test[fault_mask]
+
     device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if device is None else torch.device(device)
@@ -446,30 +455,37 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     # ------------- inference ------------- #
     if classifier == "tcn":
         logits, pos_hat = predict_tcn(classifier_model, X_test[idx_to_eval])
+        preds_cls = logits.argmax(1)
     elif classifier == "tst":
-        logits, pos_hat = predict_tst(classifier_model, X_test[idx_to_eval])
+        pos_hat = predict_tst(classifier_model, X_test[idx_to_eval])
+        preds_cls = None
     else:  # tab
         logits, pos_hat = predict_tabnet(classifier_model, X_test[idx_to_eval])
+        preds_cls = logits.argmax(1)
 
-    preds_cls = logits.argmax(1)
-
-    # metrics
-    acc = accuracy_score(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
     rmse = root_mean_squared_error(y_pos_test[idx_to_eval].numpy(), pos_hat.numpy())
-    print(f"Eval subset size = {idx_to_eval.size(0)} | Acc = {acc:.3f} | RMSE = {rmse:.3f}")  # noqa: T201
-    y_true = y_cls_test[idx_to_eval].numpy()
-    y_pred = preds_cls.numpy()
-    print("\nClassification report:")
-    print(classification_report(y_true, y_pred, digits=3))
+    if preds_cls is not None:
+        acc = accuracy_score(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
+        print(
+            f"Eval subset size = {idx_to_eval.size(0)} | Acc = {acc:.3f} | RMSE = {rmse:.3f}"
+        )  # noqa: T201
+        y_true = y_cls_test[idx_to_eval].numpy()
+        y_pred = preds_cls.numpy()
+        print("\nClassification report:")
+        print(classification_report(y_true, y_pred, digits=3))
 
-    # Confusion matrix plot
-    cm = confusion_matrix(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
-    ConfusionMatrixDisplay(cm).plot(include_values=True, cmap="Blues", colorbar=False)
-    plt.title("Confusion Matrix – Eval subset")
-    plt.tight_layout()
-    cm_path = out_dir / "confusion_matrix.png"
-    plt.savefig(cm_path, dpi=150)
-    plt.close()
+        # Confusion matrix plot
+        cm = confusion_matrix(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
+        ConfusionMatrixDisplay(cm).plot(include_values=True, cmap="Blues", colorbar=False)
+        plt.title("Confusion Matrix – Eval subset")
+        plt.tight_layout()
+        cm_path = out_dir / "confusion_matrix.png"
+        plt.savefig(cm_path, dpi=150)
+        plt.close()
+    else:
+        print(
+            f"Eval subset size = {idx_to_eval.size(0)} | RMSE = {rmse:.3f}"
+        )  # noqa: T201
 
     # ------------- random visualisations ------------- #
     rng = np.random.default_rng(42)
@@ -477,28 +493,29 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
 
     # ------------- SHAP explainability ------------- #
     shap_summaries: List[str] = []
-    try:
-        idx_eval_cpu = idx_to_eval.detach().cpu()
-        preds_cpu = preds_cls.detach().cpu()
-        pred_lookup = {int(idx_eval_cpu[i].item()): int(preds_cpu[i].item()) for i in range(idx_eval_cpu.size(0))}
-        bg_size = min(50, idx_eval_cpu.size(0))
-        if bg_size > 0 and chosen.size > 0:
-            background = X_test[idx_eval_cpu[:bg_size]].numpy()
-            sample_tensor = torch.as_tensor(chosen, dtype=torch.long)
-            shap_samples = X_test[sample_tensor].numpy()
-            shap_summaries = _compute_shap_summaries(
-                classifier_model,
-                classifier,
-                device,
-                background,
-                shap_samples,
-                chosen.tolist(),
-                pred_lookup,
-                meas_cols,
-            )
-    except Exception as exc:  # pragma: no cover - fallback path
-        print(f"[WARN] SHAP computation failed: {exc}")
-        shap_summaries = []
+    if preds_cls is not None:
+        try:
+            idx_eval_cpu = idx_to_eval.detach().cpu()
+            preds_cpu = preds_cls.detach().cpu()
+            pred_lookup = {int(idx_eval_cpu[i].item()): int(preds_cpu[i].item()) for i in range(idx_eval_cpu.size(0))}
+            bg_size = min(50, idx_eval_cpu.size(0))
+            if bg_size > 0 and chosen.size > 0:
+                background = X_test[idx_eval_cpu[:bg_size]].numpy()
+                sample_tensor = torch.as_tensor(chosen, dtype=torch.long)
+                shap_samples = X_test[sample_tensor].numpy()
+                shap_summaries = _compute_shap_summaries(
+                    classifier_model,
+                    classifier,
+                    device,
+                    background,
+                    shap_samples,
+                    chosen.tolist(),
+                    pred_lookup,
+                    meas_cols,
+                )
+        except Exception as exc:  # pragma: no cover - fallback path
+            print(f"[WARN] SHAP computation failed: {exc}")
+            shap_summaries = []
 
     img_paths = []
     num_points = X_test.shape[1] - 1  # number of P-points in the traces
@@ -506,7 +523,10 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         amp = X_test[idx][:num_points].numpy() * scaler.scale_[:num_points] + scaler.mean_[:num_points]
         snr = float(X_test[idx][num_points].item() * scaler.scale_[num_points] + scaler.mean_[num_points])
         t_cls = int(y_cls_test[idx].item())
-        p_cls = int(preds_cls[idx_to_eval == idx][0].item())
+        if preds_cls is None:
+            p_cls = None
+        else:
+            p_cls = int(preds_cls[idx_to_eval == idx][0].item())
         t_pos = float(y_pos_test[idx].item())
         p_pos = float(pos_hat[idx_to_eval == idx][0].item())
         img_paths.append(_visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, int(idx), out_dir))
