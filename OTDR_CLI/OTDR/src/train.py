@@ -168,7 +168,9 @@ def _evaluate_tst(
     rmse = root_mean_squared_error(
         y_test_pos.numpy().ravel(), pos_hat.numpy()
     )
-    print(f"[TST]    Test RMSE={rmse:.3f}")
+    classes = torch.unique(y_test_cls).cpu().numpy()
+    cls_summary = ", ".join(str(int(c)) for c in classes)
+    print(f"[TST]    Test RMSE={rmse:.3f} | Classes={cls_summary}")
     return rmse
 
 
@@ -338,12 +340,14 @@ def main(mode, data_path, out_dir, device) -> None:
         tst = train_tst(
             tst,
             fault_train.X,
+            fault_train.y_class,
             fault_train.y_pos,
             fault_val.X,
+            fault_val.y_class,
             fault_val.y_pos,
             cfg=tst_cfg,
         )
-        _evaluate_tst(tst, fault_test.X, fault_test.y_pos)
+        _evaluate_tst(tst, fault_test.X, fault_test.y_class, fault_test.y_pos)
 
     # ----------------------------- TabNet ----------------------------------#
     if mode in {"tab"}:

@@ -126,7 +126,7 @@ def _val_metrics(
     y_true: list[np.ndarray] = []
     y_pred: list[np.ndarray] = []
     with torch.no_grad():
-        for xb, y_loc in loader:
+        for xb, _y_cls, y_loc in loader:
             xb = xb.to(device)
             y_loc = y_loc.to(device)
             pos_hat = model(xb)
@@ -160,12 +160,12 @@ def train_tst(
     model = model.to(device)
 
     train_loader = DataLoader(
-        TensorDataset(train_tensor, train_y_pos.view(-1)),
+        TensorDataset(train_tensor, train_y_cls.view(-1), train_y_pos.view(-1)),
         batch_size=cfg.batch_size,
         shuffle=True,
     )
     val_loader = DataLoader(
-        TensorDataset(val_tensor, val_y_pos.view(-1)),
+        TensorDataset(val_tensor, val_y_cls.view(-1), val_y_pos.view(-1)),
         batch_size=cfg.batch_size,
     )
 
@@ -183,7 +183,7 @@ def train_tst(
         # ----------- training ------------ #
         model.train()
         train_loss_sum = 0.0
-        for xb, y_loc in train_loader:
+        for xb, _y_cls, y_loc in train_loader:
             xb = xb.to(device)
             y_loc = y_loc.to(device)
             pos_hat = model(xb)
