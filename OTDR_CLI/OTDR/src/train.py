@@ -207,6 +207,47 @@ def _faulty_only(split: SplitTensors, normal_label: int = 0) -> SplitTensors:
     )
 
 
+def _faulty_only_relabel(
+        split: SplitTensors,
+        *,
+        normal_label: int = 0,
+        classes: torch.Tensor | None = None,
+) -> tuple[SplitTensors, torch.Tensor]:
+    """Faulty-only tensors with class labels remapped to a contiguous range."""
+
+    mask = split.y_class != normal_label
+    if mask.sum().item() == 0:
+        raise ValueError(
+            "No faulty samples available – cannot train/evaluate on an empty set."
+        )
+
+    y_cls = split.y_class[mask]
+    if classes is None:
+        classes = torch.unique(y_cls, sorted=True)
+    else:
+        # Ensure ``classes`` tensor lives on CPU for indexing
+        classes = classes.to(y_cls.device)
+
+    remapped = torch.searchsorted(classes, y_cls)
+    if torch.any(remapped >= classes.numel()):
+        raise ValueError("Class mapping produced out-of-range indices.")
+    if not torch.all(classes[remapped] == y_cls):
+        missing = torch.unique(y_cls[classes[remapped] != y_cls])
+        raise ValueError(
+            "Encountered class labels without a defined mapping: "
+            f"{missing.tolist()}"
+        )
+
+    return (
+        SplitTensors(
+            X=split.X[mask],
+            y_class=remapped.to(dtype=torch.long),
+            y_pos=split.y_pos[mask],
+        ),
+        classes.detach().clone(),
+    )
+
+
 def _with_class_feature(split: SplitTensors) -> SplitTensors:
     """Append the class label as an explicit feature for localisation models."""
 
@@ -251,7 +292,13 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
     default=None,
     help="cuda | cuda:0 | mps | cpu | leave empty for auto-detect.",
 )
-def main(mode, data_path, out_dir, device) -> None:
+@click.option(
+    "--tcn-anomaly-only/--tcn-all-data",
+    "tcn_anomaly_only",
+    default=False,
+    help="Train the TCN using only anomaly samples (Class != 0).",
+)
+def main(mode, data_path, out_dir, device, tcn_anomaly_only) -> None:
     out_dir = Path(out_dir)
     _ensure_dir(out_dir)
 
@@ -326,20 +373,45 @@ def main(mode, data_path, out_dir, device) -> None:
 
     # ----------------------------- TCN -------------------------------------#
     if mode in {"tcn", "all"}:
-        n_classes = int(df["Class"].max() + 1)
+        if tcn_anomaly_only:
+            train_faulty, anomaly_classes = _faulty_only_relabel(
+                splits["train"], normal_label=0
+            )
+            val_faulty, _ = _faulty_only_relabel(
+                splits["val"], normal_label=0, classes=anomaly_classes
+            )
+            test_faulty, _ = _faulty_only_relabel(
+                splits["test"], normal_label=0, classes=anomaly_classes
+            )
+            class_map = ", ".join(
+                f"{int(orig)}→{idx}" for idx, orig in enumerate(anomaly_classes.tolist())
+            )
+            print(
+                "[TCN] Training with anomaly-only data. Class remapping: "
+                f"{class_map}"
+            )
+            train_split = train_faulty
+            val_split = val_faulty
+            test_split = test_faulty
+        else:
+            train_split = splits["train"]
+            val_split = splits["val"]
+            test_split = splits["test"]
+
+        n_classes = int(train_split.y_class.max().item() + 1)
         tcn = OTDR_TCN(n_classes=n_classes)
         tcn_cfg = TCNConfig(save_path=out_dir / "tcn.pt", device=device)
         tcn = train_tcn(
             tcn,
-            splits["train"].X,
-            splits["train"].y_class,
-            splits["train"].y_pos,
-            splits["val"].X,
-            splits["val"].y_class,
-            splits["val"].y_pos,
+            train_split.X,
+            train_split.y_class,
+            train_split.y_pos,
+            val_split.X,
+            val_split.y_class,
+            val_split.y_pos,
             cfg=tcn_cfg,
         )
-        _evaluate_tcn(tcn, splits["test"].X, splits["test"].y_class, splits["test"].y_pos)
+        _evaluate_tcn(tcn, test_split.X, test_split.y_class, test_split.y_pos)
 
     # ----------------------------- TST -------------------------------------#
     if mode in {"tst", "all"}:
