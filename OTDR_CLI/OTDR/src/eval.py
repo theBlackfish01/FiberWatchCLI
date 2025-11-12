@@ -15,7 +15,6 @@ from __future__ import annotations
 import base64
 import click
 import json
-import re
 from typing import Any, List, Tuple
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
@@ -30,7 +29,12 @@ from sklearn.metrics import (
     classification_report,
     roc_auc_score,
 )
-from data_helper import load_raw_dataframe, make_splits, tensorise_splits
+from data_helper import (
+    load_raw_dataframe,
+    make_splits,
+    tensorise_splits,
+    measurement_columns,
+)
 from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import OTDR_TCN, predict as predict_tcn
 from model_functions.tcn_binary import OTDR_TCNBinary, predict as predict_tcn_binary
@@ -578,10 +582,19 @@ def _llm_explain(
 )
 @click.option(
     "--num-samples",
-    type=int,
+    type=click.IntRange(0, None),
     default=4,
     show_default=True,
-    help="Random samples to visualise & explain.",
+    help="Random samples to visualise & explain (0 to skip explainability).",
+)
+@click.option(
+    "--extra-feature",
+    "extra_features",
+    multiple=True,
+    help=(
+        "Optional additional feature columns to append to the default measurement "
+        "set (repeat flag for multiple columns)."
+    ),
 )
 @click.option(
     "--out-dir",
@@ -607,6 +620,7 @@ def main(
     device,
     tcn_anomaly_only,
     orchestrate_tst,
+    extra_features,
 ):  # noqa: C901
     out_dir = Path("outputs") / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -617,41 +631,80 @@ def main(
             "The anomaly-only flag is only applicable when --classifier=tcn.",
         )
 
+    extras = tuple(extra_features)
+
     # ---------- data ---------- #
     df = load_raw_dataframe(data_path)
     _, _, test_df = make_splits(df)
 
-    meas_cols = [c for c in test_df.columns if re.fullmatch(r"P\d+", c)] + ["SNR"]
+    scaler_path = Path(detector).parent / "scaler.json"
+    scaler = StandardScaler()
+    feature_names_meta: list[str] | None = None
+    if scaler_path.exists():
+        scaler_meta = json.loads(scaler_path.read_text())
+        feature_names_meta = scaler_meta.get("feature_names")
+        scaler.mean_ = np.asarray(scaler_meta["mean"], dtype=np.float32)
+        scaler.scale_ = np.asarray(scaler_meta["scale"], dtype=np.float32)
+    else:
+        detector_meta_path = Path(detector).with_suffix(".json")
+        detector_meta = json.loads(detector_meta_path.read_text())
+        feature_names_meta = detector_meta.get("feature_names")
+        scaler.mean_ = np.asarray(detector_meta["scaler_mean"], dtype=np.float32)
+        scaler.scale_ = np.asarray(detector_meta["scaler_scale"], dtype=np.float32)
+    scaler.var_ = scaler.scale_ ** 2
+    scaler.n_features_in_ = scaler.mean_.shape[0]
+
+    if feature_names_meta:
+        meas_cols = list(feature_names_meta)
+        missing_cols = [c for c in meas_cols if c not in test_df.columns]
+        if missing_cols:
+            raise ValueError(
+                "Dataset is missing feature columns required by the scaler metadata: "
+                + ", ".join(missing_cols)
+            )
+        if extras:
+            missing_requested = [c for c in extras if c not in meas_cols]
+            if missing_requested:
+                raise click.BadOptionUsage(
+                    "--extra-feature",
+                    "Requested additional feature(s) not present in the saved scaler metadata: "
+                    + ", ".join(missing_requested),
+                )
+    else:
+        try:
+            meas_cols = measurement_columns(test_df, extras)
+        except KeyError as exc:
+            raise click.BadOptionUsage("--extra-feature", str(exc)) from exc
+
+    if len(meas_cols) != scaler.n_features_in_:
+        raise ValueError(
+            "Scaler metadata dimensionality does not match selected measurement columns."
+        )
+
     leakage_cols = {"Reflectance", "loss", "Loss"}
     leaked = [c for c in meas_cols if c in leakage_cols]
-    if leaked:
+    if leaked and not extras:
         raise ValueError(
             "Measurement column selection must not include leakage features, found: "
             + ", ".join(leaked)
         )
-    print(
-        "[INFO] Using measurement columns (ordered): "
-        + ", ".join(meas_cols)
-        + ". 'Reflectance' and 'loss' are excluded from model inputs."
-    )
+    if leaked and extras:
+        print(
+            "[WARN] Additional features include potential leakage columns: "
+            + ", ".join(leaked)
+        )
 
-    # test scaling only using training dataset info
-    scaler_path = Path(detector).parent / "scaler.json"
-    if scaler_path.exists():
-        meta = json.loads(scaler_path.read_text())
-        scaler = StandardScaler()
-        scaler.mean_ = np.asarray(meta["mean"], dtype=np.float32)
-        scaler.scale_ = np.asarray(meta["scale"], dtype=np.float32)
-        scaler.var_ = scaler.scale_ ** 2
-        scaler.n_features_in_ = scaler.mean_.shape[0]
-    else:
-        meta = json.loads(Path(detector).with_suffix(".json").read_text())
-        scaler = StandardScaler()
-        scaler.mean_ = np.asarray(meta["scaler_mean"], dtype=np.float32)
-        scaler.scale_ = np.asarray(meta["scaler_scale"], dtype=np.float32)
-        scaler.var_ = scaler.scale_ ** 2
-        scaler.n_features_in_ = scaler.mean_.shape[0]
-    splits = tensorise_splits(test_df, test_df, test_df, scaler)  # only need "test" key
+    print("[INFO] Using measurement columns (ordered): " + ", ".join(meas_cols))
+    if extras:
+        print("[INFO] Extra features appended: " + ", ".join(extras))
+
+    splits = tensorise_splits(
+        test_df,
+        test_df,
+        test_df,
+        scaler,
+        measurement_override=meas_cols,
+    )  # only need "test" key
     X_test = splits["test"].X
     y_cls_test = splits["test"].y_class
     y_pos_test = splits["test"].y_pos
@@ -842,17 +895,27 @@ def main(
 
     # ------------- random visualisations ------------- #
     rng = np.random.default_rng(42)
-    chosen = rng.choice(idx_to_eval.numpy(), size=min(num_samples, idx_to_eval.size(0)), replace=False)
+    if num_samples <= 0 or idx_to_eval.size(0) == 0:
+        chosen = np.empty(0, dtype=int)
+    else:
+        chosen = rng.choice(
+            idx_to_eval.numpy(),
+            size=min(num_samples, idx_to_eval.size(0)),
+            replace=False,
+        )
 
     # ------------- SHAP explainability ------------- #
     shap_summaries: List[str] = []
-    if preds_cls is not None:
+    if preds_cls is not None and chosen.size > 0:
         try:
             idx_eval_cpu = idx_to_eval.detach().cpu()
             preds_cpu = preds_cls.detach().cpu()
-            pred_lookup = {int(idx_eval_cpu[i].item()): int(preds_cpu[i].item()) for i in range(idx_eval_cpu.size(0))}
+            pred_lookup = {
+                int(idx_eval_cpu[i].item()): int(preds_cpu[i].item())
+                for i in range(idx_eval_cpu.size(0))
+            }
             bg_size = min(50, idx_eval_cpu.size(0))
-            if bg_size > 0 and chosen.size > 0:
+            if bg_size > 0:
                 background = X_test[idx_eval_cpu[:bg_size]].numpy()
                 sample_tensor = torch.as_tensor(chosen, dtype=torch.long)
                 shap_samples = X_test[sample_tensor].numpy()
@@ -870,7 +933,7 @@ def main(
             print(f"[WARN] SHAP computation failed: {exc}")
             shap_summaries = []
 
-    img_paths = []
+    img_paths: list[Path] = []
     num_points = X_test.shape[1] - 1  # number of P-points in the traces
     for idx in chosen:
         amp = X_test[idx][:num_points].numpy() * scaler.scale_[:num_points] + scaler.mean_[:num_points]
@@ -887,13 +950,15 @@ def main(
             p_pos = float(pos_hat[idx_to_eval == idx][0].item())
         img_paths.append(_visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, int(idx), out_dir))
 
-    # ------------- LLM explanation (direct + self-reflection) ------------- #
-    explain_pair = _llm_explain_with_self_reflection(
-        img_paths,
-        openai_model="gpt-5",  # keep your configured model string
-        classifier_type=classifier,
-        shap_summaries=shap_summaries
-    )
+    explain_pair: tuple[str, str, bool] | None = None
+    if img_paths:
+        # ------------- LLM explanation (direct + self-reflection) ------------- #
+        explain_pair = _llm_explain_with_self_reflection(
+            img_paths,
+            openai_model="gpt-5",  # keep your configured model string
+            classifier_type=classifier,
+            shap_summaries=shap_summaries
+        )
 
     classifier_name = classifier.upper()
     llm_dir = Path("outputs/llm_output")

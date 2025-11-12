@@ -138,12 +138,20 @@ python PHI-OTDR/src/eval.py eval --model tcn --skip-llm   # or --model tft | cnn
 python PHI-OTDR/src/eval.py eval --model tft              # runs LLM if key is set
 ```
 
-**OTDR pipeline examples:**
+**OTDR one-shot pipeline:**
 
 ```bash
-python OTDR/src/train.py --mode all
-python OTDR/src/eval.py  --mode pipeline --classifier tcn
+cd OTDR_CLI/OTDR
+python -m src.pipeline --full-run
 ```
+
+Key flags:
+
+* `--tcn-anomaly-only` – train the anomaly-only TCN variant and evaluate it in the pipeline.
+* `--extra-feature Reflectance` – append extra dataset columns to the model inputs (repeat for multiple columns).
+* `--num-samples 0` – skip SHAP/LLM explainability during the evaluation hop.
+
+The legacy individual commands (`python -m src.train` / `python -m src.eval`) still work if you prefer manual control.
 
 > If the Φ-OTDR `.mat` roots don’t have `label.txt`, use `data_handler.py` to rebuild/validate labels from folder names.
 

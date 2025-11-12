@@ -18,7 +18,6 @@ python -m src.train --mode all
 from pathlib import Path
 from dataclasses import fields, is_dataclass
 import json
-import re
 from typing import Tuple, Optional
 
 import click
@@ -36,6 +35,7 @@ from data_helper import (
     make_splits,
     fit_scaler,
     tensorise_splits,
+    measurement_columns,
 )
 
 from model_functions.gruae import (
@@ -352,7 +352,16 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
     default=False,
     help="Train the TCN using only anomaly samples (Class != 0).",
 )
-def main(mode, data_path, out_dir, device, tcn_anomaly_only) -> None:
+@click.option(
+    "--extra-feature",
+    "extra_features",
+    multiple=True,
+    help=(
+        "Optional additional feature columns to append to the default measurement "
+        "set (repeat flag for multiple columns)."
+    ),
+)
+def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> None:
     out_dir = Path(out_dir)
     _ensure_dir(out_dir)
 
@@ -360,10 +369,17 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only) -> None:
     df = load_raw_dataframe(data_path)
     train_df, val_df, test_df = make_splits(df)
 
-    # measurement columns: P1..Pn + SNR
-    measurements = ["SNR"] + [c for c in train_df.columns if re.fullmatch(r"P\d+", c)]
+    # measurement columns: P1..Pn + SNR (+ optional extras)
+    extras = tuple(extra_features)
+    measurements = measurement_columns(train_df, extras)
     scaler = fit_scaler(train_df[measurements].values.astype(np.float32))
-    splits = tensorise_splits(train_df, val_df, test_df, scaler)
+    splits = tensorise_splits(
+        train_df,
+        val_df,
+        test_df,
+        scaler,
+        extra_features=extras,
+    )
 
     # ----------------------------- Device ---------------------------------#
     device = _resolve_device(device)
