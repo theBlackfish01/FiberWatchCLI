@@ -149,6 +149,7 @@ def train_tst(
     train_y_pos: torch.Tensor,
     val_tensor: torch.Tensor,
     val_y_pos: torch.Tensor,
+    *,
     cfg: TrainConfig | None = None,
 ) -> TimeSeriesTransformer:
     cfg = cfg or TrainConfig()

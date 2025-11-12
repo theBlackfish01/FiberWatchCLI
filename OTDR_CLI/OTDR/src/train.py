@@ -338,13 +338,13 @@ def main(mode, data_path, out_dir, device) -> None:
         tst = TimeSeriesTransformer(seq_len=fault_train.X.shape[1])
         tst_cfg = TSTConfig(save_path=out_dir / "tst.pt", device=device)
         tst = train_tst(
-            tst,
-            fault_train.X,
-            fault_train.y_class,
-            fault_train.y_pos,
-            fault_val.X,
-            fault_val.y_class,
-            fault_val.y_pos,
+            model=tst,
+            train_tensor=fault_train.X,
+            train_y_cls=fault_train.y_class,
+            train_y_pos=fault_train.y_pos,
+            val_tensor=fault_val.X,
+            val_y_cls=fault_val.y_class,
+            val_y_pos=fault_val.y_pos,
             cfg=tst_cfg,
         )
         _evaluate_tst(tst, fault_test.X, fault_test.y_class, fault_test.y_pos)
