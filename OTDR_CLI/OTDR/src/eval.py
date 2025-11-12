@@ -40,7 +40,6 @@ from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import OTDR_TCN, predict as predict_tcn
 from model_functions.tcn_binary import OTDR_TCNBinary, predict as predict_tcn_binary
 from model_functions.tst import TimeSeriesTransformer, predict as predict_tst
-from model_functions.tabnet import OTDR_TabNet, predict as predict_tabnet
 import config.config as cfg
 from pathlib import Path
 from rag import retrieve
@@ -141,11 +140,8 @@ def _load_classifier(
     elif kind == "tst":
         model = TimeSeriesTransformer(seq_len=seq_len)
         model.load_state_dict(torch.load(cls_path, map_location=device))
-    elif kind == "tab":
-        model = OTDR_TabNet(n_classes=n_classes)
-        model.load_state_dict(torch.load(cls_path, map_location=device))
     else:
-        raise ValueError("classifier kind must be 'tcn', 'tcn_binary', 'tab' or 'tst'")
+        raise ValueError("classifier kind must be 'tcn', 'tcn_binary' or 'tst'")
     return model.eval().to(device)
 
 
@@ -256,7 +252,7 @@ def _make_predict_fn(
         elif classifier == "tst":
             raise RuntimeError("TST model does not provide classification logits.")
         else:
-            logits, _ = predict_tabnet(model, data, device=device)
+            raise ValueError(f"Unsupported classifier '{classifier}' for SHAP analysis.")
         probs = torch.softmax(logits, dim=1)
         return probs.numpy()
 
@@ -562,7 +558,7 @@ def _llm_explain(
 )
 @click.option(
     "--classifier",
-    type=click.Choice(["tcn", "tcn_binary", "tst", "tab"], case_sensitive=False),
+    type=click.Choice(["tcn", "tcn_binary", "tst"], case_sensitive=False),
     required=True,
     help="Classifier to use.",
 )
@@ -951,9 +947,6 @@ def main(
     elif classifier == "tst":
         pos_hat = predict_tst(classifier_model, tst_features[idx_to_eval])
         preds_cls = None
-    else:  # tab
-        logits, pos_hat = predict_tabnet(classifier_model, X_test[idx_to_eval])
-        preds_cls = logits.argmax(1)
 
     if pos_hat is not None:
         rmse = root_mean_squared_error(y_pos_test[idx_to_eval].numpy(), pos_hat.numpy())

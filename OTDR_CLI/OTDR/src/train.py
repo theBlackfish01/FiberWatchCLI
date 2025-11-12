@@ -57,12 +57,6 @@ from model_functions.tcn_binary import (
     train_tcn_binary,
     predict as predict_tcn_binary,
 )
-from model_functions.tabnet import (
-    OTDR_TabNet,
-    TrainConfig as TabNetConfig,
-    train_tabnet,
-    predict as predict_tabnet,
-)
 from model_functions.tst import (
     TimeSeriesTransformer,
     TrainConfig as TSTConfig,
@@ -227,23 +221,6 @@ def _evaluate_tst(
     return rmse
 
 
-# ----------------------------- TabNet eval ----------------------------------#
-
-def _evaluate_tabnet(
-        tabnet: OTDR_TabNet,
-        X_test: torch.Tensor,
-        y_test_cls: torch.Tensor,
-        y_test_pos: torch.Tensor,
-) -> Tuple[float, float]:
-    logits, pos_hat = predict_tabnet(tabnet, X_test)
-    cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
-    rmse = root_mean_squared_error(
-        y_test_pos.numpy().ravel(), pos_hat.numpy()
-    )
-    print(f"[TabNet] Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
-    return cls_acc, rmse
-
-
 def _faulty_only(split: SplitTensors, normal_label: int = 0) -> SplitTensors:
     """Return tensors containing only faulty samples (label != normal_label)."""
 
@@ -327,7 +304,7 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
 )
 @click.option(
     "--mode",
-    type=click.Choice(["gru_ae", "tcn", "tcn_binary", "tst", "tab", "all"], case_sensitive=False),
+    type=click.Choice(["gru_ae", "tcn", "tcn_binary", "tst", "all"], case_sensitive=False),
     required=True,
     help="Which component(s) to train.",
 )
