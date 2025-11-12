@@ -103,12 +103,12 @@ class TimeSeriesTransformer(nn.Module):
 @dataclass
 class TrainConfig:
     epochs: int = 150
-    batch_size: int = 256
+    batch_size: int = 64
     lr: float = 2e-4
     weight_decay: float = 1e-2
     step_size: int = 15
     gamma: float = 0.5
-    patience: int = 10
+    patience: int = 25
     device: torch.device | str | None = None
     save_path: str | Path | None = None
 
@@ -146,10 +146,8 @@ def _val_metrics(
 def train_tst(
     model: TimeSeriesTransformer,
     train_tensor: torch.Tensor,
-    train_y_cls: torch.Tensor,
     train_y_pos: torch.Tensor,
     val_tensor: torch.Tensor,
-    val_y_cls: torch.Tensor,
     val_y_pos: torch.Tensor,
     *,
     cfg: TrainConfig | None = None,

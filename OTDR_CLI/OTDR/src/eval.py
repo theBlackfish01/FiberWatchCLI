@@ -16,7 +16,7 @@ import base64
 import click
 import json
 import re
-from typing import List, Tuple
+from typing import Any, List, Tuple
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import numpy as np
@@ -37,6 +37,48 @@ import warnings
 
 warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
 client = OpenAI(api_key=cfg.OPENAI_API_KEY)
+
+
+def _extract_response_text(resp: Any) -> str:
+    """Best-effort extraction of text content from the Responses API result."""
+
+    output_text = getattr(resp, "output_text", None)
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text.strip()
+
+    texts: list[str] = []
+    for item in getattr(resp, "output", []) or []:
+        for content in getattr(item, "content", []) or []:
+            text_obj = getattr(content, "text", None)
+            if isinstance(text_obj, str):
+                texts.append(text_obj)
+            else:
+                value = getattr(text_obj, "value", None)
+                if isinstance(value, str):
+                    texts.append(value)
+
+    if texts:
+        return "\n".join(t.strip() for t in texts if t.strip())
+
+    raise RuntimeError("No textual content returned by the Responses API")
+
+
+def _call_responses_api(
+        llm_client: OpenAI,
+        model: str,
+        system_text: str,
+        user_content: list[dict[str, Any]],
+) -> str:
+    """Invoke the modern Responses API for multimodal prompts."""
+
+    resp = llm_client.responses.create(
+        model=model,
+        input=[
+            {"role": "system", "content": [{"type": "text", "text": system_text}]},
+            {"role": "user", "content": user_content},
+        ],
+    )
+    return _extract_response_text(resp)
 
 # --------------------------------------------------
 # Utility helpers
@@ -229,6 +271,118 @@ def _compute_shap_summaries(
 
     return summaries
 
+def _llm_explain_with_self_reflection(
+        img_paths: List[Path],
+        classifier_type: str = "tcn",
+        openai_model: str = "gpt-4o-mini",
+        shap_summaries: List[str] | None = None,
+) -> tuple[str, str, bool] | None:
+    """
+    DIRECT pass -> SELF-REFLECTION pass with explicit TrueC/PredC handling.
+    Returns (direct_text, refined_text, rag_used_flag) or None if no API key.
+    """
+    api_key = cfg.OPENAI_API_KEY
+    if not api_key:
+        print("OPENAI_API_KEY not set – skipping LLM explanation")
+        return None
+
+    client = OpenAI(api_key=api_key)
+
+    # ---------- Fault class block (shared) ---------------------------------
+    fault_classes_block = (
+        "Fault Classes are labelled as follows:\n"
+        "id\tfault type\t\t\ttypical signs\n"
+        "0\tnormal / no fault\t\tbaseline trace, loss ≈ 0, position = 0\n"
+        "1\tfiber tapping\t\tlocalized disturbance, moderate loss due to coupler, reflectance can be low/absent\n"
+        "2\tbad splice\t\t\tlocalized event with excess loss, small/possible reflection\n"
+        "3\tbending event\t\tgradual/medium loss, usually no clear reflectance peak\n"
+        "4\tdirty connector\t\tconnector-like event with extra loss and messy/variable reflectance\n"
+        "5\tfiber cut\t\t\tabrupt large loss/end-of-trace, may appear near end position\n"
+        "6\tPC connector\t\tclean connector-type reflective event, expected position\n"
+        "7\treflector\t\t\tstrongly reflective event, high reflectance value\n"
+    )
+
+    # ---------- RAG retrieval (shared) -------------------------------------
+    query = "OTDR fault plots – " + ", ".join(p.stem for p in img_paths)
+    try:
+        retrieved = retrieve(query, k=5)
+    except Exception as exc:
+        print(f"RAG retrieval failed. {exc}")
+        retrieved = []
+    ref_block = "\n\n".join(f"[{i + 1}] {r['text']}" for i, r in enumerate(retrieved))
+    rag_flag = bool(retrieved)
+    if rag_flag:
+        print("RAG retrieval successful, using retrieved snippets in LLM prompt.")
+
+    # ---------- SHAP text (shared) -----------------------------------------
+    shap_text = "\n".join(shap_summaries) if shap_summaries else ""
+
+    # ---------- DIRECT pass -------------------------------------------------
+    # IMPORTANT: disambiguate TrueC vs PredC and force wording when they differ
+    true_pred_rules = (
+        "READ TITLES CAREFULLY: each figure title contains 'TrueC=<int> PredC=<int>'.\n"
+        "- 'TrueC' is the ground-truth class.\n"
+        "- 'PredC' is the model's predicted class (may be 'N/A' for regression-only models).\n"
+        "- If TrueC != PredC, explicitly write: \"misclassified as <PredC> (true: <TrueC>)\".\n"
+        "- NEVER swap or rename these; do not call TrueC the prediction or PredC the truth.\n"
+    )
+
+    system_direct = (
+        "You are an optical-fibre fault-analysis expert. "
+        "Given the following figures (OTDR amplitude over P-points; titles include TrueC/PredC and positions), "
+        f"write a concise explanation for each figure predicted by a {classifier_type} model. "
+        "Explain fault type, position, likely causes, and concrete next actions. "
+        "Use the reference snippets and the SHAP feature attributions when available. "
+        "Cite snippets like [1], [2] when used. If SHAP is present, explicitly state which features raised/lowered "
+        "the predicted class probability.\n\n"
+        + true_pred_rules
+        + fault_classes_block
+    )
+
+    user_direct_parts: List[dict[str, Any]] = [
+        {"type": "text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
+    ]
+    if shap_text:
+        user_direct_parts.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
+    user_direct_parts.append({"type": "text", "text": "Selected samples for inspection (images):"})
+    user_direct_parts += [
+        {"type": "input_image", "image_url": {"url": _b64(p)}} for p in img_paths
+    ]
+
+    direct_text = _call_responses_api(client, openai_model, system_direct, user_direct_parts)
+
+    # ---------- SELF-REFLECTION pass ---------------------------------------
+    # Provide SAME images so the reviewer can verify visually.
+    # Repeat the TrueC/PredC rule to avoid drift.
+    system_reflect = (
+        "You are a meticulous QA reviewer for optical-fibre explanations. "
+        "You will receive: (a) the same context (reference snippets, SHAP summaries, and the images), and (b) a DRAFT explanation. "
+        "OUTPUT ONLY an improved explanation that:\n"
+        "1) Matches SHAP signs (positive SHAP → increases predicted class probability; negative → decreases).\n"
+        "2) Mentions the top-k absolute SHAP contributors (k≈5) in plain English.\n"
+        "3) Grounds standards/definitions with citations [i] that exist in the provided snippet list.\n"
+        "4) Avoids hallucinated numbers; if a number isn’t present, use cautious wording or a justified range.\n"
+        "5) Keeps the operator section actionable (2–3 steps).\n\n"
+        + true_pred_rules
+        + fault_classes_block
+    )
+
+    reflect_user_content: List[dict[str, Any]] = [
+        {"type": "text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
+    ]
+    if shap_text:
+        reflect_user_content.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
+    reflect_user_content.append({"type": "text", "text": "Images (verify titles with TrueC/PredC and positions):"})
+    reflect_user_content += [
+        {"type": "input_image", "image_url": {"url": _b64(p)}} for p in img_paths
+    ]
+    reflect_user_content.append({"type": "text", "text": "DRAFT explanation to review:\n" + direct_text})
+
+    refined_text = _call_responses_api(client, openai_model, system_reflect, reflect_user_content)
+
+    return direct_text, refined_text, rag_flag
+
+
 
 def _llm_explain(
         img_paths: List[Path], classifier_type: str = "tcn",
@@ -284,7 +438,7 @@ def _llm_explain(
     )
 
     # first part: reference snippets (if any) + lead‑in text
-    user_parts: List[dict] = [
+    user_parts: List[dict[str, Any]] = [
         {"type": "text",
          "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
@@ -293,31 +447,21 @@ def _llm_explain(
         user_parts.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
     user_parts.append({"type": "text", "text": "Here are the selected samples for inspection:"})
     user_parts += [
-                     {  # the images themselves
-                         "type": "image_url",
+                     {
+                         "type": "input_image",
                          "image_url": {"url": _b64(p)},
                      }
                      for p in img_paths
                  ]
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_parts},
-    ]
-
-    # ---------- chat completion -----------------------------------------
-    resp = client.chat.completions.create(
-        model=openai_model,
-        messages=messages,
-        # max_completion_tokens=1000 # limit the response length
-    )
+    resp_text = _call_responses_api(client, openai_model, system_prompt, user_parts)
 
     rag_flag = False
     if retrieved:
         rag_flag = True
         print("RAG retrieval successful, using retrieved snippets in LLM prompt.")
 
-    return resp.choices[0].message.content.strip(), rag_flag
+    return resp_text, rag_flag
 
 
 # --------------------------------------------------
@@ -531,23 +675,41 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         p_pos = float(pos_hat[idx_to_eval == idx][0].item())
         img_paths.append(_visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, int(idx), out_dir))
 
-    # ------------- LLM explanation ------------- #
-    explanation, rag_flag = _llm_explain(img_paths, openai_model= "gpt-5", classifier_type=classifier, shap_summaries=shap_summaries)
+    # ------------- LLM explanation (direct + self-reflection) ------------- #
+    explain_pair = _llm_explain_with_self_reflection(
+        img_paths,
+        openai_model="gpt-5",  # keep your configured model string
+        classifier_type=classifier,
+        shap_summaries=shap_summaries
+    )
+
     classifier_name = classifier.upper()
     llm_dir = Path("outputs/llm_output")
     llm_dir.mkdir(parents=True, exist_ok=True)
-    if explanation:
+
+    if explain_pair:
+        direct_text, refined_text, rag_flag = explain_pair
         explanation_file = llm_dir / "llm_explanation_shap.txt"
         i = 1
         while explanation_file.exists():
             explanation_file = llm_dir / f"llm_explanation_shap_{i}.txt"
             i += 1
-        if rag_flag:
-            explanation = f"LLM explanation for eval subset with RAG for {classifier_name} in {mode} mode:\n\n{explanation}"
-        else:
-            explanation = f"LLM explanation for eval subset without RAG for {classifier_name} in {mode} mode:\n\n{explanation}"
-        explanation_file.write_text(explanation, encoding='utf-8')
-        print(f"LLM explanation saved to {explanation_file.name}")  # noqa: T201
+
+        header = (
+            f"LLM explanation for eval subset {'with' if rag_flag else 'without'} RAG "
+            f"for {classifier_name} in {mode} mode:\n\n"
+        )
+        combined = (
+                header
+                + "=== DIRECT ===\n"
+                + direct_text.strip()
+                + "\n\n=== SELF-REFLECTION (REVISED) ===\n"
+                + refined_text.strip()
+                + "\n"
+        )
+        explanation_file.write_text(combined, encoding="utf-8")
+        print(f"LLM explanation (direct + self-reflection) saved to {explanation_file.name}")  # noqa: T201
+
 
 if __name__ == "__main__":
     main()
