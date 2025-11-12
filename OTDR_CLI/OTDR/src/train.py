@@ -23,7 +23,7 @@ from typing import Tuple, Optional
 import click
 import numpy as np
 import torch
-from sklearn.metrics import accuracy_score, root_mean_squared_error, roc_auc_score, roc_curve
+from sklearn.metrics import accuracy_score, root_mean_squared_error, roc_auc_score, roc_curve, classification_report
 
 # ---------------------------------------------------------------------------
 # Local project imports
@@ -160,6 +160,8 @@ def _evaluate_tcn(
         y_test_pos.numpy().ravel(), pos_hat.numpy()
     )
     print(f"[TCN]    Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
+    print("\nClassification Report:")
+    print(classification_report(y_test_cls.cpu().numpy(), pos_hat.numpy().round()))
     return cls_acc, rmse
 
 
@@ -175,6 +177,8 @@ def _evaluate_tcn_binary(
     acc = accuracy_score(y_true, preds)
     auc = roc_auc_score(y_true, probs)
     print(f"[TCN-B]  Test Acc={acc:.3f}  AUC={auc:.3f}")
+    print("\nClassification Report:")
+    print(classification_report(y_test_cls.numpy(), preds))
     return acc, auc
 
 
@@ -193,6 +197,9 @@ def _evaluate_tst(
     classes = torch.unique(y_test_cls).cpu().numpy()
     cls_summary = ", ".join(str(int(c)) for c in classes)
     print(f"[TST]    Test RMSE={rmse:.3f} | Classes={cls_summary}")
+    print("\nClassification Report:")
+    print(classification_report(y_test_cls.cpu().numpy(), pos_hat.numpy().round()))
+
     return rmse
 
 
