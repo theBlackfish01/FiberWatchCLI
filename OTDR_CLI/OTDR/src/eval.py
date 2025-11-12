@@ -74,7 +74,7 @@ def _call_responses_api(
     resp = llm_client.responses.create(
         model=model,
         input=[
-            {"role": "system", "content": [{"type": "text", "text": system_text}]},
+            {"role": "system", "content": [{"type": "input_text", "text": system_text}]},
             {"role": "user", "content": user_content},
         ],
     )
@@ -340,13 +340,13 @@ def _llm_explain_with_self_reflection(
     )
 
     user_direct_parts: List[dict[str, Any]] = [
-        {"type": "text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
+        {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
     if shap_text:
-        user_direct_parts.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
-    user_direct_parts.append({"type": "text", "text": "Selected samples for inspection (images):"})
+        user_direct_parts.append({"type": "input_text", "text": "SHAP attributions per sample:\n" + shap_text})
+    user_direct_parts.append({"type": "input_text", "text": "Selected samples for inspection (images):"})
     user_direct_parts += [
-        {"type": "input_image", "image_url": {"url": _b64(p)}} for p in img_paths
+        {"type": "input_image", "image_url": _b64(p)} for p in img_paths
     ]
 
     direct_text = _call_responses_api(client, openai_model, system_direct, user_direct_parts)
@@ -368,15 +368,15 @@ def _llm_explain_with_self_reflection(
     )
 
     reflect_user_content: List[dict[str, Any]] = [
-        {"type": "text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
+        {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
     if shap_text:
-        reflect_user_content.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
-    reflect_user_content.append({"type": "text", "text": "Images (verify titles with TrueC/PredC and positions):"})
+        reflect_user_content.append({"type": "input_text", "text": "SHAP attributions per sample:\n" + shap_text})
+    reflect_user_content.append({"type": "input_text", "text": "Images (verify titles with TrueC/PredC and positions):"})
     reflect_user_content += [
-        {"type": "input_image", "image_url": {"url": _b64(p)}} for p in img_paths
+        {"type": "input_image", "image_url": _b64(p)} for p in img_paths
     ]
-    reflect_user_content.append({"type": "text", "text": "DRAFT explanation to review:\n" + direct_text})
+    reflect_user_content.append({"type": "input_text", "text": "DRAFT explanation to review:\n" + direct_text})
 
     refined_text = _call_responses_api(client, openai_model, system_reflect, reflect_user_content)
 
@@ -439,17 +439,17 @@ def _llm_explain(
 
     # first part: reference snippets (if any) + lead‑in text
     user_parts: List[dict[str, Any]] = [
-        {"type": "text",
+        {"type": "input_text",
          "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
     if shap_summaries:
         shap_text = "\n".join(shap_summaries)
-        user_parts.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
-    user_parts.append({"type": "text", "text": "Here are the selected samples for inspection:"})
+        user_parts.append({"type": "input_text", "text": "SHAP attributions per sample:\n" + shap_text})
+    user_parts.append({"type": "input_text", "text": "Here are the selected samples for inspection:"})
     user_parts += [
                      {
                          "type": "input_image",
-                         "image_url": {"url": _b64(p)},
+                         "image_url": _b64(p),
                      }
                      for p in img_paths
                  ]
