@@ -19,6 +19,7 @@ __all__ = [
     "fit_scaler",
     "tensorise_splits",
     "make_dataloaders",
+    "measurement_columns",
 ]
 
 # ---------------------------------------------------------------------------
@@ -43,12 +44,43 @@ class SplitTensors:
 # ---------------------------------------------------------------------------
 
 
-def _measurement_columns(df: pd.DataFrame) -> list[str]:
-    """Return measurement columns: SNR and P\d+."""
+def measurement_columns(
+    df: pd.DataFrame,
+    extra_features: Tuple[str, ...] | None = None,
+) -> list[str]:
+    """Return ordered measurement columns (SNR, P-points, plus optional extras).
+
+    Parameters
+    ----------
+    df:
+        Input dataframe containing the OTDR samples.
+    extra_features:
+        Optional iterable of additional column names to append to the default
+        measurement set.  Validation ensures that every requested column exists
+        in ``df`` and is only added once, preserving the order provided by the
+        caller.
+    """
 
     pattern = re.compile(r"P\d+")
     cols = [c for c in df.columns if pattern.fullmatch(c)]
-    return ["SNR"] + cols
+    ordered = ["SNR"] + cols
+
+    if extra_features:
+        seen: set[str] = set(ordered)
+        extras: list[str] = []
+        for name in extra_features:
+            if name not in df.columns:
+                raise KeyError(f"Extra feature column '{name}' not found in dataframe.")
+            if name in seen:
+                # Already part of the measurement vector; skip silently to allow
+                # idempotent CLI usage (e.g., repeating --extra-feature=SNR).
+                continue
+            if name not in extras:
+                extras.append(name)
+                seen.add(name)
+        ordered.extend(extras)
+
+    return ordered
 
 
 def load_raw_dataframe(path: str | Path) -> pd.DataFrame:
@@ -118,8 +150,14 @@ def tensorise_splits(
     val_df: pd.DataFrame,
     test_df: pd.DataFrame,
     scaler: StandardScaler,
+    *,
+    measurement_override: Tuple[str, ...] | list[str] | None = None,
+    extra_features: Tuple[str, ...] | None = None,
 ) -> Dict[str, SplitTensors]:
-    measurement_cols = _measurement_columns(train_df)
+    if measurement_override is not None:
+        measurement_cols = list(measurement_override)
+    else:
+        measurement_cols = measurement_columns(train_df, extra_features)
 
     def _process(df):
         X, y_cls, y_pos = _prepare_arrays(df, measurement_cols)
