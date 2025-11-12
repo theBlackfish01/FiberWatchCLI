@@ -34,6 +34,7 @@ from data_helper import (
     make_splits,
     tensorise_splits,
     measurement_columns,
+    summarise_feature_layout,
 )
 from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import OTDR_TCN, predict as predict_tcn
@@ -121,12 +122,20 @@ def _load_gru_ae(det_path: Path, device: torch.device) -> Tuple[VectorGRUAE, flo
     return ae, threshold, scaler_mean, scaler_scale
 
 
-def _load_classifier(kind: str, cls_path: Path, seq_len: int, n_classes: int, device: torch.device):
+def _load_classifier(
+    kind: str,
+    cls_path: Path,
+    seq_len: int,
+    n_classes: int,
+    device: torch.device,
+    *,
+    input_channels: int | None = None,
+):
     if kind == "tcn":
-        model = OTDR_TCN(n_classes=n_classes)
+        model = OTDR_TCN(n_classes=n_classes, in_ch=input_channels or 2)
         model.load_state_dict(torch.load(cls_path, map_location=device))
     elif kind == "tcn_binary":
-        model = OTDR_TCNBinary()
+        model = OTDR_TCNBinary(in_ch=input_channels or 2)
         model.load_state_dict(torch.load(cls_path, map_location=device))
     elif kind == "tst":
         model = TimeSeriesTransformer(seq_len=seq_len)
@@ -222,7 +231,13 @@ def _b64(path: Path) -> str:
     return f"data:{mime};base64,{enc}"
 
 
-def _make_predict_fn(model, classifier: str, device: torch.device):
+def _make_predict_fn(
+    model,
+    classifier: str,
+    device: torch.device,
+    *,
+    pos_count: int,
+):
     """Wrap the classifier into a numpy → probability function for SHAP."""
 
     def _predict(x: np.ndarray) -> np.ndarray:
@@ -231,9 +246,9 @@ def _make_predict_fn(model, classifier: str, device: torch.device):
             arr = arr.reshape(1, -1)
         data = torch.from_numpy(arr)
         if classifier == "tcn":
-            logits, _ = predict_tcn(model, data, device=device)
+            logits, _ = predict_tcn(model, data, device=device, pos_count=pos_count)
         elif classifier == "tcn_binary":
-            logits = predict_tcn_binary(model, data, device=device)
+            logits = predict_tcn_binary(model, data, device=device, pos_count=pos_count)
         elif classifier == "tst":
             raise RuntimeError("TST model does not provide classification logits.")
         else:
@@ -277,6 +292,8 @@ def _compute_shap_summaries(
         sample_indices: List[int],
         pred_lookup: dict[int, int],
         feature_names: List[str],
+        *,
+        pos_count: int,
 ) -> List[str]:
     """Compute SHAP attributions and return formatted summaries per sample."""
 
@@ -289,7 +306,7 @@ def _compute_shap_summaries(
     sample_arr = np.asarray(samples, dtype=np.float32)
 
     masker = shap.maskers.Independent(bg)
-    predict_fn = _make_predict_fn(model, classifier, device)
+    predict_fn = _make_predict_fn(model, classifier, device, pos_count=pos_count)
     explainer = shap.Explainer(predict_fn, masker, algorithm="permutation")
     max_evals = 2 * sample_arr.shape[1] + 2048
     shap_exp = explainer(sample_arr, max_evals=max_evals)
@@ -298,7 +315,7 @@ def _compute_shap_summaries(
     dataset_context = (
         "Model input is a numpy.ndarray[float32] shaped "
         f"({sample_arr.shape[0]}, {sample_arr.shape[1]}) with ordered features: "
-        f"{feature_list}. Columns 'Reflectance' and 'loss' are intentionally excluded to avoid data leakage."
+        f"{feature_list}. Leakage-prone columns (loss / Reflectance) are included only when explicitly enabled."
     )
     print(f"[SHAP] {dataset_context}")
 
@@ -555,9 +572,8 @@ def _llm_explain(
 @click.option(
     "--detector",
     type=click.Path(dir_okay=False, path_type=Path),
-    default=Path("models/gru_ae.pt"),
-    show_default=True,
-    help="Path to GRU-AE weights.",
+    default=None,
+    help="Path to GRU-AE weights (defaults based on feature configuration).",
 )
 @click.option(
     "--tcn-anomaly-only/--tcn-all-data",
@@ -593,6 +609,14 @@ def _llm_explain(
     ),
 )
 @click.option(
+    "--use-loss-reflectance",
+    is_flag=True,
+    help=(
+        "Append 'loss' and 'Reflectance' to the measurement vector and load models "
+        "trained with those leakage-prone features."
+    ),
+)
+@click.option(
     "--out-dir",
     type=str,
     default="eval_outputs",
@@ -617,6 +641,7 @@ def main(
     tcn_anomaly_only,
     orchestrate_tst,
     extra_features,
+    use_loss_reflectance,
 ):  # noqa: C901
     out_dir = Path("outputs") / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -628,27 +653,66 @@ def main(
         )
 
     extras = tuple(extra_features)
+    feature_suffix = "_lr" if use_loss_reflectance else ""
+    detector_path = (
+        Path(detector)
+        if detector is not None
+        else Path("models") / (f"gru_ae{feature_suffix}.pt" if feature_suffix else "gru_ae.pt")
+    )
 
     # ---------- data ---------- #
     df = load_raw_dataframe(data_path)
     _, _, test_df = make_splits(df)
 
-    scaler_path = Path(detector).parent / "scaler.json"
     scaler = StandardScaler()
     feature_names_meta: list[str] | None = None
-    if scaler_path.exists():
-        scaler_meta = json.loads(scaler_path.read_text())
-        feature_names_meta = scaler_meta.get("feature_names")
-        scaler.mean_ = np.asarray(scaler_meta["mean"], dtype=np.float32)
-        scaler.scale_ = np.asarray(scaler_meta["scale"], dtype=np.float32)
-    else:
-        detector_meta_path = Path(detector).with_suffix(".json")
+    scaler_meta: dict[str, Any] | None = None
+    scaler_candidates: list[Path] = []
+    if feature_suffix:
+        scaler_candidates.append(detector_path.parent / f"scaler{feature_suffix}.json")
+    scaler_candidates.append(detector_path.parent / "scaler.json")
+    for candidate in scaler_candidates:
+        if candidate.exists():
+            scaler_meta = json.loads(candidate.read_text())
+            feature_names_meta = (
+                scaler_meta.get("feature_names")
+                or scaler_meta.get("active_features")
+            )
+            scaler.mean_ = np.asarray(scaler_meta["mean"], dtype=np.float32)
+            scaler.scale_ = np.asarray(scaler_meta["scale"], dtype=np.float32)
+            meta_use_lr = scaler_meta.get("use_loss_reflectance")
+            if meta_use_lr is not None and bool(meta_use_lr) != use_loss_reflectance:
+                raise ValueError(
+                    "Scaler metadata was generated with a different loss/reflectance configuration."
+                )
+            break
+
+    if scaler_meta is None:
+        detector_meta_path = detector_path.with_suffix(".json")
         detector_meta = json.loads(detector_meta_path.read_text())
-        feature_names_meta = detector_meta.get("feature_names")
+        feature_names_meta = (
+            detector_meta.get("feature_names")
+            or detector_meta.get("active_features")
+        )
         scaler.mean_ = np.asarray(detector_meta["scaler_mean"], dtype=np.float32)
         scaler.scale_ = np.asarray(detector_meta["scaler_scale"], dtype=np.float32)
+        meta_use_lr = detector_meta.get("use_loss_reflectance")
+        if meta_use_lr is not None and bool(meta_use_lr) != use_loss_reflectance:
+            raise ValueError(
+                "Detector metadata was generated with a different loss/reflectance configuration."
+            )
+
     scaler.var_ = scaler.scale_ ** 2
     scaler.n_features_in_ = scaler.mean_.shape[0]
+
+    try:
+        requested_cols = measurement_columns(
+            test_df,
+            extras,
+            include_loss_reflectance=use_loss_reflectance,
+        )
+    except KeyError as exc:
+        raise click.BadOptionUsage("--extra-feature", str(exc)) from exc
 
     if feature_names_meta:
         meas_cols = list(feature_names_meta)
@@ -658,19 +722,13 @@ def main(
                 "Dataset is missing feature columns required by the scaler metadata: "
                 + ", ".join(missing_cols)
             )
-        if extras:
-            missing_requested = [c for c in extras if c not in meas_cols]
-            if missing_requested:
-                raise click.BadOptionUsage(
-                    "--extra-feature",
-                    "Requested additional feature(s) not present in the saved scaler metadata: "
-                    + ", ".join(missing_requested),
-                )
+        if meas_cols != requested_cols:
+            raise ValueError(
+                "Requested feature configuration does not match the saved scaler metadata "
+                "(did you train with --use-loss-reflectance?)."
+            )
     else:
-        try:
-            meas_cols = measurement_columns(test_df, extras)
-        except KeyError as exc:
-            raise click.BadOptionUsage("--extra-feature", str(exc)) from exc
+        meas_cols = requested_cols
 
     if len(meas_cols) != scaler.n_features_in_:
         raise ValueError(
@@ -679,20 +737,30 @@ def main(
 
     leakage_cols = {"Reflectance", "loss", "Loss"}
     leaked = [c for c in meas_cols if c in leakage_cols]
-    if leaked and not extras:
+    if leaked and not (extras or use_loss_reflectance):
         raise ValueError(
             "Measurement column selection must not include leakage features, found: "
             + ", ".join(leaked)
         )
-    if leaked and extras:
+    if leaked and extras and not use_loss_reflectance:
         print(
             "[WARN] Additional features include potential leakage columns: "
             + ", ".join(leaked)
         )
 
+    layout = summarise_feature_layout(meas_cols)
+    pos_count = int(layout["pos_count"])
+    extra_scalar_count = len(layout["extra_features"])
+    input_channels = 1 + 1 + extra_scalar_count
+
+    if pos_count <= 0:
+        raise ValueError("No positional measurement columns (P*) were detected in the dataset.")
+
     print("[INFO] Using measurement columns (ordered): " + ", ".join(meas_cols))
     if extras:
         print("[INFO] Extra features appended: " + ", ".join(extras))
+    if use_loss_reflectance:
+        print("[INFO] Loss/Reflectance features enabled – using dedicated checkpoints.")
 
     splits = tensorise_splits(
         test_df,
@@ -724,15 +792,36 @@ def main(
     print("[INFO] Using device:", device)
 
     # ---------- load models ---------- #
-    if classifier == "tcn":
-        cls_default = "tcn_anomaly.pt" if tcn_anomaly_only else "tcn_full.pt"
+    if classifier == "tab":
+        cls_base = "tabnet"
+    elif classifier == "tcn":
+        cls_base = "tcn_anomaly" if tcn_anomaly_only else "tcn_full"
     elif classifier == "tcn_binary":
-        cls_default = "tcn_binary.pt"
+        cls_base = "tcn_binary"
     else:
-        cls_default = "tst.pt"
-    cls_path = Path(cls_path or Path("models") / cls_default)
+        cls_base = "tst"
+    default_cls_name = f"{cls_base}{feature_suffix}.pt" if feature_suffix else f"{cls_base}.pt"
+    cls_path = Path(cls_path) if cls_path else Path("models") / default_cls_name
 
     cls_meta = _load_classifier_meta(cls_path)
+
+    if cls_meta:
+        meta_features = cls_meta.get("active_features") or cls_meta.get("feature_names")
+        if meta_features and list(meta_features) != meas_cols:
+            raise ValueError(
+                "Classifier checkpoint features do not match the requested measurement configuration."
+            )
+        meta_use_lr = cls_meta.get("use_loss_reflectance")
+        if meta_use_lr is not None and bool(meta_use_lr) != use_loss_reflectance:
+            raise ValueError(
+                "Classifier checkpoint was trained with a different loss/reflectance setting."
+            )
+        meta_pos = cls_meta.get("pos_count")
+        if meta_pos is not None and int(meta_pos) != pos_count:
+            raise ValueError("Classifier checkpoint expects a different number of position columns.")
+        meta_channels = cls_meta.get("input_channels")
+        if meta_channels is not None and int(meta_channels) != input_channels:
+            raise ValueError("Classifier checkpoint expects a different input channel arrangement.")
 
     default_n_classes = int(df["Class"].max() + 1)
 
@@ -744,8 +833,10 @@ def main(
             )
 
         model_dir = cls_path.parent
-        binary_path = model_dir / "tcn_binary.pt"
-        anomaly_path = model_dir / "tcn_anomaly.pt"
+        binary_name = f"tcn_binary{feature_suffix}.pt" if feature_suffix else "tcn_binary.pt"
+        anomaly_name = f"tcn_anomaly{feature_suffix}.pt" if feature_suffix else "tcn_anomaly.pt"
+        binary_path = model_dir / binary_name
+        anomaly_path = model_dir / anomaly_name
 
         _run_tst_orchestrator(
             X_test=X_test,
@@ -757,6 +848,8 @@ def main(
             anomaly_path=anomaly_path,
             tst_path=cls_path,
             default_n_classes=default_n_classes,
+            pos_count=pos_count,
+            input_channels=input_channels,
         )
         return
 
@@ -819,10 +912,11 @@ def main(
         seq_len=seq_len,
         n_classes=n_classes,
         device=device,
+        input_channels=input_channels,
     )
 
     if mode == "pipeline":
-        ae, threshold, _, _ = _load_gru_ae(Path(detector), device)
+        ae, threshold, _, _ = _load_gru_ae(detector_path, device)
         errs = reconstruction_error(ae, X_test, device=device)
         is_fault = errs > threshold
         # if all healthy, fallback to sample of test
@@ -837,10 +931,18 @@ def main(
     logits = None
     preds_cls = None
     if classifier == "tcn":
-        logits, pos_hat = predict_tcn(classifier_model, X_test[idx_to_eval])
+        logits, pos_hat = predict_tcn(
+            classifier_model,
+            X_test[idx_to_eval],
+            pos_count=pos_count,
+        )
         preds_cls = logits.argmax(1)
     elif classifier == "tcn_binary":
-        logits = predict_tcn_binary(classifier_model, X_test[idx_to_eval])
+        logits = predict_tcn_binary(
+            classifier_model,
+            X_test[idx_to_eval],
+            pos_count=pos_count,
+        )
         preds_cls = logits.argmax(1)
     elif classifier == "tst":
         pos_hat = predict_tst(classifier_model, tst_features[idx_to_eval])
@@ -919,16 +1021,19 @@ def main(
                     chosen.tolist(),
                     pred_lookup,
                     meas_cols,
+                    pos_count=pos_count,
                 )
         except Exception as exc:  # pragma: no cover - fallback path
             print(f"[WARN] SHAP computation failed: {exc}")
             shap_summaries = []
 
     img_paths: list[Path] = []
-    num_points = X_test.shape[1] - 1  # number of P-points in the traces
+    num_points = pos_count
     for idx in chosen:
-        amp = X_test[idx][:num_points].numpy() * scaler.scale_[:num_points] + scaler.mean_[:num_points]
-        snr = float(X_test[idx][num_points].item() * scaler.scale_[num_points] + scaler.mean_[num_points])
+        amp_scaled = X_test[idx][1 : 1 + num_points].numpy()
+        amp = amp_scaled * scaler.scale_[1 : 1 + num_points] + scaler.mean_[1 : 1 + num_points]
+        snr_scaled = X_test[idx][0].item()
+        snr = float(snr_scaled * scaler.scale_[0] + scaler.mean_[0])
         t_cls = int(y_cls_test[idx].item())
         if preds_cls is None:
             p_cls = None
@@ -990,6 +1095,8 @@ def _run_tst_orchestrator(
         anomaly_path: Path,
         tst_path: Path,
         default_n_classes: int,
+        pos_count: int,
+        input_channels: int,
 ) -> None:
     """Evaluate the chained Binary-TCN ➜ anomaly-TCN ➜ TST pipeline."""
 
@@ -997,14 +1104,28 @@ def _run_tst_orchestrator(
     actual_anomalies = int((y_cls_test != 0).sum().item())
 
     # ---------- Stage 1: binary anomaly filter ---------- #
+    binary_meta = _load_classifier_meta(binary_path) or {}
+    meta_pos = binary_meta.get("pos_count")
+    if meta_pos is not None and int(meta_pos) != pos_count:
+        raise ValueError("Binary TCN checkpoint expects a different number of position columns.")
+    meta_channels = binary_meta.get("input_channels")
+    if meta_channels is not None and int(meta_channels) != input_channels:
+        raise ValueError("Binary TCN checkpoint expects a different input channel arrangement.")
+
     binary_model = _load_classifier(
         "tcn_binary",
         binary_path,
         seq_len=X_test.shape[1],
         n_classes=2,
         device=device,
+        input_channels=input_channels,
     )
-    binary_logits = predict_tcn_binary(binary_model, X_test, device=device)
+    binary_logits = predict_tcn_binary(
+        binary_model,
+        X_test,
+        device=device,
+        pos_count=pos_count,
+    )
     binary_probs = torch.softmax(binary_logits, dim=1)
     binary_preds = binary_probs.argmax(1)
     binary_truth = (y_cls_test != 0).to(dtype=torch.long)
@@ -1032,6 +1153,12 @@ def _run_tst_orchestrator(
         raise ValueError(
             "Anomaly-only TCN checkpoint metadata is required for the orchestrated pipeline."
         )
+    meta_pos = anomaly_meta.get("pos_count")
+    if meta_pos is not None and int(meta_pos) != pos_count:
+        raise ValueError("Anomaly TCN checkpoint expects a different number of position columns.")
+    meta_channels = anomaly_meta.get("input_channels")
+    if meta_channels is not None and int(meta_channels) != input_channels:
+        raise ValueError("Anomaly TCN checkpoint expects a different input channel arrangement.")
 
     _, _remapped_truth, _, mapping, _ = _remap_anomaly_only_targets(
         X_test,
@@ -1048,6 +1175,7 @@ def _run_tst_orchestrator(
         seq_len=X_test.shape[1],
         n_classes=anomaly_n_classes,
         device=device,
+        input_channels=input_channels,
     )
 
     stage2_pred_lookup: dict[int, int] = {}
@@ -1058,6 +1186,7 @@ def _run_tst_orchestrator(
             anomaly_model,
             X_test[anomaly_indices],
             device=device,
+            pos_count=pos_count,
         )
         stage2_preds_remap = stage2_logits.argmax(1).cpu()
         stage2_preds_orig = [inv_mapping[int(cls.item())] for cls in stage2_preds_remap]

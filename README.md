@@ -149,6 +149,7 @@ Key flags:
 
 * `--tcn-anomaly-only` – train the anomaly-only TCN variant and evaluate it in the pipeline.
 * `--extra-feature Reflectance` – append extra dataset columns to the model inputs (repeat for multiple columns).
+* `--use-loss-reflectance` – include the leakage-prone `loss`/`Reflectance` scalars. Trained checkpoints and scalers gain a `_lr` suffix and evaluation will look for those files automatically when the flag is set.
 * `--num-samples 0` – skip SHAP/LLM explainability during the evaluation hop.
 
 The legacy individual commands (`python -m src.train` / `python -m src.eval`) still work if you prefer manual control.

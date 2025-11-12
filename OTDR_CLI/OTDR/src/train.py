@@ -36,6 +36,7 @@ from data_helper import (
     fit_scaler,
     tensorise_splits,
     measurement_columns,
+    summarise_feature_layout,
 )
 
 from model_functions.gruae import (
@@ -166,8 +167,10 @@ def _evaluate_tcn(
         X_test: torch.Tensor,
         y_test_cls: torch.Tensor,
         y_test_pos: torch.Tensor,
+        *,
+        pos_count: int,
 ) -> Tuple[float, float]:
-    logits, pos_hat = predict_tcn(tcn, X_test)
+    logits, pos_hat = predict_tcn(tcn, X_test, pos_count=pos_count)
     cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
     rmse = root_mean_squared_error(
         y_test_pos.numpy().ravel(), pos_hat.numpy()
@@ -182,8 +185,10 @@ def _evaluate_tcn_binary(
         tcn: OTDR_TCNBinary,
         X_test: torch.Tensor,
         y_test_cls: torch.Tensor,
+        *,
+        pos_count: int,
 ) -> Tuple[float, float]:
-    logits = predict_tcn_binary(tcn, X_test)
+    logits = predict_tcn_binary(tcn, X_test, pos_count=pos_count)
     preds = logits.argmax(1).numpy()
     probs = torch.softmax(logits, dim=1)[:, 1].numpy()
     y_true = y_test_cls.numpy()
@@ -330,6 +335,14 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
     help="Train the TCN using only anomaly samples (Class != 0).",
 )
 @click.option(
+    "--use-loss-reflectance",
+    is_flag=True,
+    help=(
+        "Append 'loss' and 'Reflectance' to the measurement vector and train models "
+        "with those leakage-prone features."
+    ),
+)
+@click.option(
     "--extra-feature",
     "extra_features",
     multiple=True,
@@ -338,7 +351,15 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
         "set (repeat flag for multiple columns)."
     ),
 )
-def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> None:
+def main(
+    mode,
+    data_path,
+    out_dir,
+    device,
+    tcn_anomaly_only,
+    use_loss_reflectance,
+    extra_features,
+) -> None:
     out_dir = Path(out_dir)
     _ensure_dir(out_dir)
 
@@ -348,14 +369,22 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
 
     # measurement columns: P1..Pn + SNR (+ optional extras)
     extras = tuple(extra_features)
-    measurements = measurement_columns(train_df, extras)
+    measurements = measurement_columns(
+        train_df,
+        extras,
+        include_loss_reflectance=use_loss_reflectance,
+    )
+    layout = summarise_feature_layout(measurements)
+    pos_count = int(layout["pos_count"])
+    extra_scalar_count = int(layout["extra_scalar_count"])
+    feature_suffix = "_lr" if use_loss_reflectance else ""
     scaler = fit_scaler(train_df[measurements].values.astype(np.float32))
     splits = tensorise_splits(
         train_df,
         val_df,
         test_df,
         scaler,
-        extra_features=extras,
+        measurement_override=measurements,
     )
 
     # ----------------------------- Device ---------------------------------#
@@ -369,8 +398,11 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
         "n_features_in": int(scaler.mean_.shape[0]),
         "feature_names": measurements,
         "source_data": str(data_path),
+        "active_features": measurements,
+        "use_loss_reflectance": bool(use_loss_reflectance),
     }
-    with open(out_dir / "scaler.json", "w") as fp:
+    scaler_name = f"scaler{feature_suffix}.json" if feature_suffix else "scaler.json"
+    with open(out_dir / scaler_name, "w") as fp:
         json.dump(scaler_meta, fp, indent=2)
 
     # ----------------------------- GRU-AE ----------------------------------#
@@ -380,7 +412,8 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
         X_norm = splits["train"].X[norm_idx]
 
         ae = VectorGRUAE(feat_dim=X_norm.shape[1])
-        ae_cfg = AEConfig(save_path=out_dir / "gru_ae.pt", device=device)
+        ae_path = out_dir / f"gru_ae{feature_suffix}.pt" if feature_suffix else out_dir / "gru_ae.pt"
+        ae_cfg = AEConfig(save_path=ae_path, device=device)
         val_norm_idx = (splits["val"].y_class == NORMAL).nonzero(as_tuple=True)[0]
         X_val_norm = splits["val"].X[val_norm_idx]
         ae, thresh = train_gru_ae(ae, X_norm, X_val_norm, cfg=ae_cfg)
@@ -415,7 +448,10 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
                 "grad_clip": ae_cfg.grad_clip,
             },
         }
-        with open(out_dir / "gru_ae.json", "w") as fp:
+        gru_meta["active_features"] = measurements
+        gru_meta["use_loss_reflectance"] = bool(use_loss_reflectance)
+        gru_meta["feature_suffix"] = feature_suffix
+        with open(ae_path.with_suffix(".json"), "w") as fp:
             json.dump(gru_meta, fp, indent=2)
 
     # ----------------------------- TCN -------------------------------------#
@@ -448,11 +484,12 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
             test_split = splits["test"]
 
         n_classes = int(train_split.y_class.max().item() + 1)
-        tcn = OTDR_TCN(n_classes=n_classes)
-        tcn_save_path = out_dir / (
-            "tcn_anomaly.pt" if tcn_anomaly_only else "tcn_full.pt"
-        )
-        tcn_cfg = TCNConfig(save_path=tcn_save_path, device=device)
+        in_channels = 1 + 1 + extra_scalar_count
+        tcn = OTDR_TCN(n_classes=n_classes, in_ch=in_channels)
+        tcn_name = "tcn_anomaly" if tcn_anomaly_only else "tcn_full"
+        tcn_name = f"{tcn_name}{feature_suffix}" if feature_suffix else tcn_name
+        tcn_save_path = out_dir / f"{tcn_name}.pt"
+        tcn_cfg = TCNConfig(save_path=tcn_save_path, device=device, pos_count=pos_count)
         tcn = train_tcn(
             tcn,
             train_split.X,
@@ -463,7 +500,13 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
             val_split.y_pos,
             cfg=tcn_cfg,
         )
-        _evaluate_tcn(tcn, test_split.X, test_split.y_class, test_split.y_pos)
+        _evaluate_tcn(
+            tcn,
+            test_split.X,
+            test_split.y_class,
+            test_split.y_pos,
+            pos_count=pos_count,
+        )
 
         class_labels = sorted(int(c) for c in torch.unique(train_split.y_class).tolist())
         tcn_meta = {
@@ -474,6 +517,12 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
             "n_classes": int(n_classes),
             "class_labels": class_labels,
             "train_config": _config_to_dict(tcn_cfg),
+            "active_features": measurements,
+            "use_loss_reflectance": bool(use_loss_reflectance),
+            "pos_count": pos_count,
+            "extra_scalar_count": extra_scalar_count,
+            "input_channels": in_channels,
+            "feature_suffix": feature_suffix,
         }
         if tcn_anomaly_only:
             if not anomaly_classes_list:
@@ -494,9 +543,16 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
         val_bin = _binary_labels(splits["val"])
         test_bin = _binary_labels(splits["test"])
 
-        tcn_binary = OTDR_TCNBinary()
-        tcn_binary_path = out_dir / "tcn_binary.pt"
-        tcn_bin_cfg = TCNBinaryConfig(save_path=tcn_binary_path, device=device)
+        in_channels = 1 + 1 + extra_scalar_count
+        tcn_binary = OTDR_TCNBinary(in_ch=in_channels)
+        tcn_bin_name = "tcn_binary"
+        tcn_bin_name = f"{tcn_bin_name}{feature_suffix}" if feature_suffix else tcn_bin_name
+        tcn_binary_path = out_dir / f"{tcn_bin_name}.pt"
+        tcn_bin_cfg = TCNBinaryConfig(
+            save_path=tcn_binary_path,
+            device=device,
+            pos_count=pos_count,
+        )
         tcn_binary = train_tcn_binary(
             tcn_binary,
             train_bin.X,
@@ -505,7 +561,12 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
             val_bin.y_class,
             cfg=tcn_bin_cfg,
         )
-        _evaluate_tcn_binary(tcn_binary, test_bin.X, test_bin.y_class)
+        _evaluate_tcn_binary(
+            tcn_binary,
+            test_bin.X,
+            test_bin.y_class,
+            pos_count=pos_count,
+        )
 
         tcn_binary_meta = {
             "variant": "binary",
@@ -515,6 +576,12 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
             "normal_label": 0,
             "positive_label": 1,
             "train_config": _config_to_dict(tcn_bin_cfg),
+            "active_features": measurements,
+            "use_loss_reflectance": bool(use_loss_reflectance),
+            "pos_count": pos_count,
+            "extra_scalar_count": extra_scalar_count,
+            "input_channels": in_channels,
+            "feature_suffix": feature_suffix,
         }
         with open(tcn_binary_path.with_suffix(".json"), "w") as fp:
             json.dump(tcn_binary_meta, fp, indent=2)
@@ -526,7 +593,11 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
         fault_test = _with_class_feature(_faulty_only(splits["test"]))
 
         tst = TimeSeriesTransformer(seq_len=fault_train.X.shape[1])
-        tst_cfg = TSTConfig(save_path=out_dir / "tst.pt", device=device)
+        tst_name = f"tst{feature_suffix}" if feature_suffix else "tst"
+        tst_cfg = TSTConfig(
+            save_path=out_dir / f"{tst_name}.pt",
+            device=device,
+        )
         tst = train_tst(
             model=tst,
             train_tensor=fault_train.X,
@@ -538,6 +609,29 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only, extra_features) -> 
             cfg=tst_cfg,
         )
         _evaluate_tst(tst, fault_test.X, fault_test.y_class, fault_test.y_pos)
+
+    # ----------------------------- TabNet ----------------------------------#
+    if mode in {"tab"}:
+        n_classes = int(df["Class"].max() + 1)
+        tabnet_input_dim = int(splits["train"].X.shape[1])
+        tabnet = OTDR_TabNet(n_classes=n_classes, input_dim=tabnet_input_dim)
+        tabnet_name = f"tabnet{feature_suffix}" if feature_suffix else "tabnet"
+        tabnet_cfg = TabNetConfig(
+            save_path=out_dir / f"{tabnet_name}.pt",
+            device=device,
+        )
+        tabnet = train_tabnet(
+            tabnet,
+            splits["train"].X,
+            splits["train"].y_class,
+            splits["train"].y_pos,
+            splits["val"].X,
+            splits["val"].y_class,
+            splits["val"].y_pos,
+            cfg=tabnet_cfg,
+        )
+        _evaluate_tabnet(tabnet, splits["test"].X, splits["test"].y_class, splits["test"].y_pos)
+
 
 if __name__ == "__main__":
     main()

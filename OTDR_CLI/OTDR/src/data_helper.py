@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Sequence
 import re
 
 import numpy as np
@@ -20,6 +20,7 @@ __all__ = [
     "tensorise_splits",
     "make_dataloaders",
     "measurement_columns",
+    "summarise_feature_layout",
 ]
 
 # ---------------------------------------------------------------------------
@@ -47,6 +48,8 @@ class SplitTensors:
 def measurement_columns(
     df: pd.DataFrame,
     extra_features: Tuple[str, ...] | None = None,
+    *,
+    include_loss_reflectance: bool = False,
 ) -> list[str]:
     """Return ordered measurement columns (SNR, P-points, plus optional extras).
 
@@ -59,28 +62,60 @@ def measurement_columns(
         measurement set.  Validation ensures that every requested column exists
         in ``df`` and is only added once, preserving the order provided by the
         caller.
+    include_loss_reflectance:
+        When ``True`` the leakage-prone columns ``loss``/``Reflectance`` are
+        appended after the positional measurements.  The caller is responsible
+        for ensuring that the downstream models and checkpoints were trained
+        with the same feature configuration.
     """
 
     pattern = re.compile(r"P\d+")
     cols = [c for c in df.columns if pattern.fullmatch(c)]
     ordered = ["SNR"] + cols
 
+    seen: set[str] = set(ordered)
+
+    def _append_feature(name: str) -> None:
+        if name not in df.columns:
+            raise KeyError(f"Extra feature column '{name}' not found in dataframe.")
+        if name in seen:
+            return
+        ordered.append(name)
+        seen.add(name)
+
+    if include_loss_reflectance:
+        loss_name = "loss" if "loss" in df.columns else "Loss" if "Loss" in df.columns else None
+        if loss_name is None:
+            raise KeyError("Column 'loss' (or 'Loss') not found in dataframe for loss/reflectance flag.")
+        reflectance_name = "Reflectance" if "Reflectance" in df.columns else None
+        if reflectance_name is None:
+            raise KeyError("Column 'Reflectance' not found in dataframe for loss/reflectance flag.")
+        _append_feature(loss_name)
+        _append_feature(reflectance_name)
+
     if extra_features:
-        seen: set[str] = set(ordered)
-        extras: list[str] = []
         for name in extra_features:
-            if name not in df.columns:
-                raise KeyError(f"Extra feature column '{name}' not found in dataframe.")
-            if name in seen:
-                # Already part of the measurement vector; skip silently to allow
-                # idempotent CLI usage (e.g., repeating --extra-feature=SNR).
-                continue
-            if name not in extras:
-                extras.append(name)
-                seen.add(name)
-        ordered.extend(extras)
+            _append_feature(name)
 
     return ordered
+
+
+def summarise_feature_layout(feature_names: Sequence[str]) -> Dict[str, object]:
+    """Return counts and groupings for the OTDR measurement feature vector."""
+
+    pos_pattern = re.compile(r"P\d+")
+    position_cols = [name for name in feature_names if pos_pattern.fullmatch(name)]
+    extras = [
+        name
+        for name in feature_names
+        if name not in position_cols and name != "SNR"
+    ]
+    return {
+        "position_columns": position_cols,
+        "extra_features": extras,
+        "pos_count": len(position_cols),
+        "extra_scalar_count": len(extras),
+    }
 
 
 def load_raw_dataframe(path: str | Path) -> pd.DataFrame:
