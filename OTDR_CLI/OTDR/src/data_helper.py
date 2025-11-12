@@ -62,7 +62,7 @@ def load_raw_dataframe(path: str | Path) -> pd.DataFrame:
 def make_splits(
     df: pd.DataFrame,
     *,
-    test_size: float = 0.10,
+    test_size: float = 0.05,
     val_size: float = 0.20,
     label_col: str = "Class",
     random_state: int = 42,

@@ -162,7 +162,6 @@ def _evaluate_tcn(
 def _evaluate_tst(
         tst: TimeSeriesTransformer,
         X_test: torch.Tensor,
-        y_test_cls: torch.Tensor,
         y_test_pos: torch.Tensor,
 ) -> float:
     pos_hat = predict_tst(tst, X_test)
