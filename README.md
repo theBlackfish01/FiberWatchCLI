@@ -13,7 +13,7 @@ Both tracks include **visual diagnostics** and an optional **LLM explainability*
 
 * **OTDR/src/**
 
-  * Models: GRU-AE (detector), TCN / TST / TabNet (classifiers)
+  * Models: GRU-AE (detector), TCN / TST (classifiers)
   * `train.py`, `eval.py` (argparse CLIs), `data_helper.py`
   * Optional RAG (`corpus/`, `rag.py`) to ground LLM explanations
 
@@ -36,7 +36,7 @@ Both tracks include **visual diagnostics** and an optional **LLM explainability*
 * Tasks:
 
   1. **Detection** (GRU-AE reconstruction error) 
-  2. **Diagnosis + localization** (TCN/TST/TabNet) — fault **type** and **position**.
+  2. **Diagnosis + localization** (TCN/TST) — fault **type** and **position**.
 
 ### Φ-OTDR / DAS
 
