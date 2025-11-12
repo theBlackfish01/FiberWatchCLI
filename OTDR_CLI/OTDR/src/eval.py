@@ -236,12 +236,8 @@ def _llm_explain_with_self_reflection(
         shap_summaries: List[str] | None = None,
 ) -> tuple[str, str, bool] | None:
     """
-    First generates a DIRECT explanation (same behavior as _llm_explain),
-    then runs a SELF-REFLECTION pass that critiques and rewrites the draft
-    using a strict checklist (sign consistency vs SHAP, coverage of top-k,
-    grounded citations, no hallucinated numbers, concise operator actions).
-
-    Returns (direct_text, refined_text, rag_used_flag), or None if no API key.
+    DIRECT pass -> SELF-REFLECTION pass with explicit TrueC/PredC handling.
+    Returns (direct_text, refined_text, rag_used_flag) or None if no API key.
     """
     api_key = cfg.OPENAI_API_KEY
     if not api_key:
@@ -250,7 +246,21 @@ def _llm_explain_with_self_reflection(
 
     client = OpenAI(api_key=api_key)
 
-    # ---------- RAG: retrieve reference snippets (shared by both passes) ---
+    # ---------- Fault class block (shared) ---------------------------------
+    fault_classes_block = (
+        "Fault Classes are labelled as follows:\n"
+        "id\tfault type\t\t\ttypical signs\n"
+        "0\tnormal / no fault\t\tbaseline trace, loss ≈ 0, position = 0\n"
+        "1\tfiber tapping\t\tlocalized disturbance, moderate loss due to coupler, reflectance can be low/absent\n"
+        "2\tbad splice\t\t\tlocalized event with excess loss, small/possible reflection\n"
+        "3\tbending event\t\tgradual/medium loss, usually no clear reflectance peak\n"
+        "4\tdirty connector\t\tconnector-like event with extra loss and messy/variable reflectance\n"
+        "5\tfiber cut\t\t\tabrupt large loss/end-of-trace, may appear near end position\n"
+        "6\tPC connector\t\tclean connector-type reflective event, expected position\n"
+        "7\treflector\t\t\tstrongly reflective event, high reflectance value\n"
+    )
+
+    # ---------- RAG retrieval (shared) -------------------------------------
     query = "OTDR fault plots – " + ", ".join(p.stem for p in img_paths)
     try:
         retrieved = retrieve(query, k=5)
@@ -262,66 +272,88 @@ def _llm_explain_with_self_reflection(
     if rag_flag:
         print("RAG retrieval successful, using retrieved snippets in LLM prompt.")
 
-    # ---------- Shared SHAP text -------------------------------------------
+    # ---------- SHAP text (shared) -----------------------------------------
     shap_text = "\n".join(shap_summaries) if shap_summaries else ""
 
     # ---------- DIRECT pass -------------------------------------------------
+    # IMPORTANT: disambiguate TrueC vs PredC and force wording when they differ
+    true_pred_rules = (
+        "READ TITLES CAREFULLY: each figure title contains 'TrueC=<int> PredC=<int>'.\n"
+        "- 'TrueC' is the ground-truth class.\n"
+        "- 'PredC' is the model's predicted class (may be 'N/A' for regression-only models).\n"
+        "- If TrueC != PredC, explicitly write: \"misclassified as <PredC> (true: <TrueC>)\".\n"
+        "- NEVER swap or rename these; do not call TrueC the prediction or PredC the truth.\n"
+    )
+
     system_direct = (
         "You are an optical-fibre fault-analysis expert. "
-        "Given the following figures (OTDR amplitude over P-points; titles include true/pred predicted by a "
-        f"{classifier_type} model), write a concise explanation for each figure. "
+        "Given the following figures (OTDR amplitude over P-points; titles include TrueC/PredC and positions), "
+        f"write a concise explanation for each figure predicted by a {classifier_type} model. "
         "Explain fault type, position, likely causes, and concrete next actions. "
         "Use the reference snippets and the SHAP feature attributions when available. "
-        "Cite snippets like [1], [2] when used. If SHAP is present, explicitly state which features raised/lowered the predicted class probability."
+        "Cite snippets like [1], [2] when used. If SHAP is present, explicitly state which features raised/lowered "
+        "the predicted class probability.\n\n"
+        + true_pred_rules
+        + fault_classes_block
     )
+
     user_direct_parts: List[dict] = [
         {"type": "text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
     if shap_text:
         user_direct_parts.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
     user_direct_parts.append({"type": "text", "text": "Selected samples for inspection (images):"})
-    user_direct_parts += [
-        {"type": "image_url", "image_url": {"url": _b64(p)}}
-        for p in img_paths
-    ]
+    user_direct_parts += [{"type": "image_url", "image_url": {"url": _b64(p)}} for p in img_paths]
 
     direct_messages = [
         {"role": "system", "content": system_direct},
         {"role": "user", "content": user_direct_parts},
     ]
-    direct_resp = client.chat.completions.create(model=openai_model, messages=direct_messages)
+    direct_resp = client.chat.completions.create(
+        model=openai_model,
+        messages=direct_messages,
+        temperature=0.2,
+    )
     direct_text = direct_resp.choices[0].message.content.strip()
 
     # ---------- SELF-REFLECTION pass ---------------------------------------
-    # The reviewer checks for: SHAP sign consistency, coverage of top-k |SHAP|,
-    # grounded citations, and removal of hallucinated numbers/claims.
+    # Provide SAME images so the reviewer can verify visually.
+    # Repeat the TrueC/PredC rule to avoid drift.
     system_reflect = (
         "You are a meticulous QA reviewer for optical-fibre explanations. "
-        "You will receive: (a) the same context (reference snippets and SHAP summaries), and (b) a DRAFT explanation. "
-        "Critique and then OUTPUT ONLY an improved explanation that:\n"
-        "1) Matches SHAP signs (features with positive SHAP must be described as increasing the predicted class probability; negative → decreasing).\n"
+        "You will receive: (a) the same context (reference snippets, SHAP summaries, and the images), and (b) a DRAFT explanation. "
+        "OUTPUT ONLY an improved explanation that:\n"
+        "1) Matches SHAP signs (positive SHAP → increases predicted class probability; negative → decreases).\n"
         "2) Mentions the top-k absolute SHAP contributors (k≈5) in plain English.\n"
-        "3) Grounds any standards/definitions with citations [i] that exist in the provided snippet list.\n"
-        "4) Avoids hallucinated numbers. If a number is not in SHAP/metrics/snippets, replace with cautious wording or a range derived from context.\n"
-        "5) Keeps the operator section actionable (2–3 steps). "
-        "Return the final REWRITTEN explanation only—no preamble, no bullet checklists of critique."
+        "3) Grounds standards/definitions with citations [i] that exist in the provided snippet list.\n"
+        "4) Avoids hallucinated numbers; if a number isn’t present, use cautious wording or a justified range.\n"
+        "5) Keeps the operator section actionable (2–3 steps).\n\n"
+        + true_pred_rules
+        + fault_classes_block
     )
 
-    reflect_user_content = [
+    reflect_user_content: List[dict] = [
         {"type": "text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
     if shap_text:
         reflect_user_content.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
+    reflect_user_content.append({"type": "text", "text": "Images (verify titles with TrueC/PredC and positions):"})
+    reflect_user_content += [{"type": "image_url", "image_url": {"url": _b64(p)}} for p in img_paths]
     reflect_user_content.append({"type": "text", "text": "DRAFT explanation to review:\n" + direct_text})
 
     reflect_messages = [
         {"role": "system", "content": system_reflect},
         {"role": "user", "content": reflect_user_content},
     ]
-    reflect_resp = client.chat.completions.create(model=openai_model, messages=reflect_messages)
+    reflect_resp = client.chat.completions.create(
+        model=openai_model,
+        messages=reflect_messages,
+        temperature=0.2,
+    )
     refined_text = reflect_resp.choices[0].message.content.strip()
 
     return direct_text, refined_text, rag_flag
+
 
 
 def _llm_explain(
