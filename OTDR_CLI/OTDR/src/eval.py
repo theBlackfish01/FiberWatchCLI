@@ -22,7 +22,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import shap
 import torch
-from sklearn.metrics import accuracy_score, root_mean_squared_error, confusion_matrix, ConfusionMatrixDisplay, classification_report
+from sklearn.metrics import (
+    accuracy_score,
+    root_mean_squared_error,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+    classification_report,
+    roc_auc_score,
+)
 from data_helper import load_raw_dataframe, make_splits, tensorise_splits
 from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import OTDR_TCN, predict as predict_tcn
@@ -141,7 +148,13 @@ def _remap_anomaly_only_targets(
     y_cls: torch.Tensor,
     y_pos: torch.Tensor,
     meta: dict[str, Any],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[int, int]]:
+) -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    dict[int, int],
+    torch.Tensor,
+]:
     mapping_raw = meta.get("class_index_map")
     if mapping_raw is not None:
         mapping = {int(k): int(v) for k, v in mapping_raw.items()}
@@ -171,7 +184,7 @@ def _remap_anomaly_only_targets(
     for orig, idx in mapping.items():
         remapped[y_cls_sel == int(orig)] = int(idx)
 
-    return X_sel, remapped.to(dtype=torch.long), y_pos_sel, mapping
+    return X_sel, remapped.to(dtype=torch.long), y_pos_sel, mapping, selected
 
 
 def _visualise_sample(
@@ -553,6 +566,11 @@ def _llm_explain(
     help="When evaluating TCN models, select the anomaly-only classifier variant.",
 )
 @click.option(
+    "--orchestrate-tst",
+    is_flag=True,
+    help="Chain binary TCN ➜ anomaly-only TCN ➜ TST for localisation evaluation.",
+)
+@click.option(
     "--cls-path",
     type=click.Path(dir_okay=False, path_type=Path),
     default=None,
@@ -588,6 +606,7 @@ def main(
     out_dir,
     device,
     tcn_anomaly_only,
+    orchestrate_tst,
 ):  # noqa: C901
     out_dir = Path("outputs") / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -637,7 +656,7 @@ def main(
     y_cls_test = splits["test"].y_class
     y_pos_test = splits["test"].y_pos
 
-    if classifier == "tst":
+    if classifier == "tst" and not orchestrate_tst:
         fault_mask = y_cls_test != 0
         if fault_mask.sum().item() == 0:
             raise ValueError("No faulty samples available in the test set for TST evaluation.")
@@ -669,6 +688,31 @@ def main(
     cls_meta = _load_classifier_meta(cls_path)
 
     default_n_classes = int(df["Class"].max() + 1)
+
+    if orchestrate_tst:
+        if classifier != "tst":
+            raise click.BadOptionUsage(
+                "--orchestrate-tst",
+                "The chained orchestrator is only available when --classifier=tst.",
+            )
+
+        model_dir = cls_path.parent
+        binary_path = model_dir / "tcn_binary.pt"
+        anomaly_path = model_dir / "tcn_anomaly.pt"
+
+        _run_tst_orchestrator(
+            X_test=X_test,
+            y_cls_test=y_cls_test,
+            y_pos_test=y_pos_test,
+            device=device,
+            out_dir=out_dir,
+            binary_path=binary_path,
+            anomaly_path=anomaly_path,
+            tst_path=cls_path,
+            default_n_classes=default_n_classes,
+        )
+        return
+
     if classifier == "tcn_binary":
         n_classes = 2
     elif classifier == "tcn":
@@ -710,7 +754,7 @@ def main(
 
     anomaly_mapping: dict[int, int] | None = None
     if classifier == "tcn" and tcn_anomaly_only:
-        X_test, y_cls_test, y_pos_test, anomaly_mapping = _remap_anomaly_only_targets(
+        X_test, y_cls_test, y_pos_test, anomaly_mapping, _ = _remap_anomaly_only_targets(
             X_test,
             y_cls_test,
             y_pos_test,
@@ -878,6 +922,188 @@ def main(
         explanation_file.write_text(combined, encoding="utf-8")
         print(f"LLM explanation (direct + self-reflection) saved to {explanation_file.name}")  # noqa: T201
 
+
+def _run_tst_orchestrator(
+        *,
+        X_test: torch.Tensor,
+        y_cls_test: torch.Tensor,
+        y_pos_test: torch.Tensor,
+        device: torch.device,
+        out_dir: Path,
+        binary_path: Path,
+        anomaly_path: Path,
+        tst_path: Path,
+        default_n_classes: int,
+) -> None:
+    """Evaluate the chained Binary-TCN ➜ anomaly-TCN ➜ TST pipeline."""
+
+    total_samples = int(X_test.size(0))
+    actual_anomalies = int((y_cls_test != 0).sum().item())
+
+    # ---------- Stage 1: binary anomaly filter ---------- #
+    binary_model = _load_classifier(
+        "tcn_binary",
+        binary_path,
+        seq_len=X_test.shape[1],
+        n_classes=2,
+        device=device,
+    )
+    binary_logits = predict_tcn_binary(binary_model, X_test, device=device)
+    binary_probs = torch.softmax(binary_logits, dim=1)
+    binary_preds = binary_probs.argmax(1)
+    binary_truth = (y_cls_test != 0).to(dtype=torch.long)
+
+    binary_acc = accuracy_score(
+        binary_truth.cpu().numpy(),
+        binary_preds.cpu().numpy(),
+    )
+    binary_auc: float | None = None
+    if torch.unique(binary_truth).numel() == 2:
+        try:
+            binary_auc = roc_auc_score(
+                binary_truth.cpu().numpy(),
+                binary_probs[:, 1].cpu().numpy(),
+            )
+        except ValueError:
+            binary_auc = None
+
+    anomaly_indices = torch.nonzero(binary_preds == 1, as_tuple=True)[0]
+    anomaly_count = int(anomaly_indices.numel())
+
+    # ---------- Stage 2: anomaly-only multi-class TCN ---------- #
+    anomaly_meta = _load_classifier_meta(anomaly_path)
+    if anomaly_meta is None:
+        raise ValueError(
+            "Anomaly-only TCN checkpoint metadata is required for the orchestrated pipeline."
+        )
+
+    _, _remapped_truth, _, mapping, _ = _remap_anomaly_only_targets(
+        X_test,
+        y_cls_test,
+        y_pos_test,
+        anomaly_meta,
+    )
+    inv_mapping = {int(v): int(k) for k, v in mapping.items()}
+    anomaly_n_classes = len(mapping)
+
+    anomaly_model = _load_classifier(
+        "tcn",
+        anomaly_path,
+        seq_len=X_test.shape[1],
+        n_classes=anomaly_n_classes,
+        device=device,
+    )
+
+    stage2_pred_lookup: dict[int, int] = {}
+    stage2_accuracy: float | None = None
+    stage2_eval_count = 0
+    if anomaly_indices.numel() > 0:
+        stage2_logits, _ = predict_tcn(
+            anomaly_model,
+            X_test[anomaly_indices],
+            device=device,
+        )
+        stage2_preds_remap = stage2_logits.argmax(1).cpu()
+        stage2_preds_orig = [inv_mapping[int(cls.item())] for cls in stage2_preds_remap]
+        stage2_pred_lookup = {
+            int(idx.item()): int(stage2_preds_orig[pos])
+            for pos, idx in enumerate(anomaly_indices.cpu())
+        }
+
+        # Accuracy only on samples whose ground-truth class belongs to the anomaly mapping
+        stage2_truth: list[int] = []
+        stage2_preds_eval: list[int] = []
+        for idx in anomaly_indices.cpu().tolist():
+            true_cls = int(y_cls_test[idx].item())
+            if true_cls in mapping:
+                stage2_truth.append(true_cls)
+                stage2_preds_eval.append(stage2_pred_lookup[idx])
+        stage2_eval_count = len(stage2_truth)
+        if stage2_truth:
+            stage2_accuracy = accuracy_score(stage2_truth, stage2_preds_eval)
+
+    # ---------- Stage 3: TST localisation ---------- #
+    stage3_rmse: float | None = None
+    stage3_count = 0
+    if anomaly_indices.numel() > 0:
+        class_feature = torch.tensor(
+            [float(stage2_pred_lookup.get(int(idx.item()), 0)) for idx in anomaly_indices],
+            dtype=X_test.dtype,
+        ).unsqueeze(1)
+        tst_input = torch.cat([class_feature, X_test[anomaly_indices]], dim=1)
+        tst_model = _load_classifier(
+            "tst",
+            tst_path,
+            seq_len=tst_input.shape[1],
+            n_classes=default_n_classes,
+            device=device,
+        )
+        pos_hat = predict_tst(tst_model, tst_input, device=device)
+        stage3_count = int(pos_hat.size(0))
+        if stage3_count > 0:
+            stage3_rmse = root_mean_squared_error(
+                y_pos_test[anomaly_indices].cpu().numpy(),
+                pos_hat.cpu().numpy(),
+            )
+
+    # ---------- Aggregate predictions ---------- #
+    final_preds = torch.zeros_like(y_cls_test)
+    for idx, pred_cls in stage2_pred_lookup.items():
+        final_preds[idx] = int(pred_cls)
+
+    y_true_np = y_cls_test.cpu().numpy()
+    y_pred_np = final_preds.cpu().numpy()
+
+    report = classification_report(y_true_np, y_pred_np, digits=3)
+    cm = confusion_matrix(y_true_np, y_pred_np)
+    ConfusionMatrixDisplay(cm).plot(include_values=True, cmap="Blues", colorbar=False)
+    plt.title("Confusion Matrix – Binary➜TCN➜TST pipeline")
+    plt.tight_layout()
+    cm_path = out_dir / "confusion_matrix_orchestrator.png"
+    plt.savefig(cm_path, dpi=150)
+    plt.close()
+
+    # ---------- Textual summary ---------- #
+    summary_lines = [
+        (
+            "Stage 1 – Binary anomaly filter: "
+            f"accuracy={binary_acc:.3f}, auc={binary_auc:.3f if binary_auc is not None else 'N/A'}, "
+            f"predicted {anomaly_count}/{total_samples} traces as faulty (ground-truth faults: {actual_anomalies})."
+        ),
+    ]
+
+    if stage2_pred_lookup:
+        acc_str = f"{stage2_accuracy:.3f}" if stage2_accuracy is not None else "N/A"
+        summary_lines.append(
+            "Stage 2 – Anomaly-only TCN: "
+            f"accuracy={acc_str} over {stage2_eval_count} mapped faults; "
+            f"issued predictions for {len(stage2_pred_lookup)} traces."
+        )
+    else:
+        summary_lines.append(
+            "Stage 2 – Anomaly-only TCN: no anomaly predictions received from the binary filter."
+        )
+
+    if stage3_count > 0:
+        rmse_str = f"{stage3_rmse:.3f}" if stage3_rmse is not None else "N/A"
+        summary_lines.append(
+            "Stage 3 – Time-series transformer localisation: "
+            f"RMSE={rmse_str} m over {stage3_count} traces."
+        )
+    else:
+        summary_lines.append(
+            "Stage 3 – Time-series transformer localisation: skipped (no anomaly candidates)."
+        )
+
+    summary_lines.append(
+        "Confusion matrix (rows=true, cols=pred):\n" + np.array2string(cm)
+    )
+    summary_lines.append(
+        "Overall – chained prediction classification report:\n" + report
+    )
+
+    print("\n".join(summary_lines))  # noqa: T201
+    print(f"Confusion matrix saved to {cm_path}")  # noqa: T201
 
 if __name__ == "__main__":
     main()
