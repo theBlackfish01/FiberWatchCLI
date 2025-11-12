@@ -26,6 +26,7 @@ from sklearn.metrics import accuracy_score, root_mean_squared_error, confusion_m
 from data_helper import load_raw_dataframe, make_splits, tensorise_splits
 from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import OTDR_TCN, predict as predict_tcn
+from model_functions.tcn_binary import OTDR_TCNBinary, predict as predict_tcn_binary
 from model_functions.tst import TimeSeriesTransformer, predict as predict_tst
 from model_functions.tabnet import OTDR_TabNet, predict as predict_tabnet
 import config.config as cfg
@@ -114,6 +115,9 @@ def _load_classifier(kind: str, cls_path: Path, seq_len: int, n_classes: int, de
     if kind == "tcn":
         model = OTDR_TCN(n_classes=n_classes)
         model.load_state_dict(torch.load(cls_path, map_location=device))
+    elif kind == "tcn_binary":
+        model = OTDR_TCNBinary()
+        model.load_state_dict(torch.load(cls_path, map_location=device))
     elif kind == "tst":
         model = TimeSeriesTransformer(seq_len=seq_len)
         model.load_state_dict(torch.load(cls_path, map_location=device))
@@ -121,7 +125,7 @@ def _load_classifier(kind: str, cls_path: Path, seq_len: int, n_classes: int, de
         model = OTDR_TabNet(n_classes=n_classes)
         model.load_state_dict(torch.load(cls_path, map_location=device))
     else:
-        raise ValueError("classifier kind must be 'tcn', 'tab' or 'tst'")
+        raise ValueError("classifier kind must be 'tcn', 'tcn_binary', 'tab' or 'tst'")
     return model.eval().to(device)
 
 
@@ -131,16 +135,17 @@ def _visualise_sample(
         true_cls: int,
         pred_cls: int | None,
         true_pos: float,
-        pred_pos: float,
+        pred_pos: float | None,
         idx: int,
         out_dir: Path,
 ):
     plt.figure(figsize=(10, 8))
     plt.plot(np.arange(amps.size), amps, label="Amplitude")
     pred_label = "N/A" if pred_cls is None else str(pred_cls)
+    pred_pos_str = "N/A" if pred_pos is None else f"{pred_pos:.3f}"
     plt.title(
         f"Sample #{idx} | TrueC={true_cls} PredC={pred_label} | "
-        f"TruePos={true_pos:.3f}m  PredPos={pred_pos:.3f}m | SNR={snr:.2f}"
+        f"TruePos={true_pos:.3f}m  PredPos={pred_pos_str}m | SNR={snr:.2f}"
     )
     plt.xlabel("P-index")
     plt.ylabel("Amplitude")
@@ -169,6 +174,8 @@ def _make_predict_fn(model, classifier: str, device: torch.device):
         data = torch.from_numpy(arr)
         if classifier == "tcn":
             logits, _ = predict_tcn(model, data, device=device)
+        elif classifier == "tcn_binary":
+            logits = predict_tcn_binary(model, data, device=device)
         elif classifier == "tst":
             raise RuntimeError("TST model does not provide classification logits.")
         else:
@@ -476,7 +483,7 @@ def _llm_explain(
 )
 @click.option(
     "--classifier",
-    type=click.Choice(["tcn", "tst", "tab"], case_sensitive=False),
+    type=click.Choice(["tcn", "tcn_binary", "tst", "tab"], case_sensitive=False),
     required=True,
     help="Classifier to use.",
 )
@@ -582,10 +589,20 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     print("[INFO] Using device:", device)
 
     # ---------- load models ---------- #
-    cls_default = "tabnet.pt" if classifier == "tab" else ("tcn.pt" if classifier == "tcn" else "tst.pt")
+    if classifier == "tab":
+        cls_default = "tabnet.pt"
+    elif classifier == "tcn":
+        cls_default = "tcn.pt"
+    elif classifier == "tcn_binary":
+        cls_default = "tcn_binary.pt"
+    else:
+        cls_default = "tst.pt"
     cls_path = Path(cls_path or Path("models") / cls_default)
 
-    n_classes = int(df["Class"].max() + 1)
+    if classifier == "tcn_binary":
+        n_classes = 2
+    else:
+        n_classes = int(df["Class"].max() + 1)
     seq_len = tst_features.shape[1] if tst_features is not None else X_test.shape[1]
     classifier_model = _load_classifier(
         classifier,
@@ -607,8 +624,14 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         idx_to_eval = torch.arange(X_test.size(0))
 
     # ------------- inference ------------- #
+    pos_hat = None
+    logits = None
+    preds_cls = None
     if classifier == "tcn":
         logits, pos_hat = predict_tcn(classifier_model, X_test[idx_to_eval])
+        preds_cls = logits.argmax(1)
+    elif classifier == "tcn_binary":
+        logits = predict_tcn_binary(classifier_model, X_test[idx_to_eval])
         preds_cls = logits.argmax(1)
     elif classifier == "tst":
         pos_hat = predict_tst(classifier_model, tst_features[idx_to_eval])
@@ -617,16 +640,29 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         logits, pos_hat = predict_tabnet(classifier_model, X_test[idx_to_eval])
         preds_cls = logits.argmax(1)
 
-    rmse = root_mean_squared_error(y_pos_test[idx_to_eval].numpy(), pos_hat.numpy())
+    if pos_hat is not None:
+        rmse = root_mean_squared_error(y_pos_test[idx_to_eval].numpy(), pos_hat.numpy())
+    else:
+        rmse = None
+
     if preds_cls is not None:
         acc = accuracy_score(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
-        print(
-            f"Eval subset size = {idx_to_eval.size(0)} | Acc = {acc:.3f} | RMSE = {rmse:.3f}"
-        )  # noqa: T201
+        if rmse is not None:
+            print(
+                f"Eval subset size = {idx_to_eval.size(0)} | Acc = {acc:.3f} | RMSE = {rmse:.3f}"
+            )  # noqa: T201
+        else:
+            print(
+                f"Eval subset size = {idx_to_eval.size(0)} | Acc = {acc:.3f}"
+            )  # noqa: T201
         y_true = y_cls_test[idx_to_eval].numpy()
         y_pred = preds_cls.numpy()
         print("\nClassification report:")
         print(classification_report(y_true, y_pred, digits=3))
+        if logits is not None and logits.shape[1] == 2:
+            probs = torch.softmax(logits, dim=1)[:, 1].numpy()
+            auc_val = roc_auc_score(y_true, probs)
+            print(f"AUC = {auc_val:.3f}")
 
         # Confusion matrix plot
         cm = confusion_matrix(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
@@ -637,9 +673,10 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         plt.savefig(cm_path, dpi=150)
         plt.close()
     else:
-        print(
-            f"Eval subset size = {idx_to_eval.size(0)} | RMSE = {rmse:.3f}"
-        )  # noqa: T201
+        if rmse is not None:
+            print(
+                f"Eval subset size = {idx_to_eval.size(0)} | RMSE = {rmse:.3f}"
+            )  # noqa: T201
 
     # ------------- random visualisations ------------- #
     rng = np.random.default_rng(42)
@@ -682,7 +719,10 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         else:
             p_cls = int(preds_cls[idx_to_eval == idx][0].item())
         t_pos = float(y_pos_test[idx].item())
-        p_pos = float(pos_hat[idx_to_eval == idx][0].item())
+        if pos_hat is None:
+            p_pos = None
+        else:
+            p_pos = float(pos_hat[idx_to_eval == idx][0].item())
         img_paths.append(_visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, int(idx), out_dir))
 
     # ------------- LLM explanation (direct + self-reflection) ------------- #

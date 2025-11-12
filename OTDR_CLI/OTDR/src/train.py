@@ -49,6 +49,12 @@ from model_functions.tcn import (
     train_tcn,
     predict as predict_tcn
 )
+from model_functions.tcn_binary import (
+    OTDR_TCNBinary,
+    TrainConfig as TCNBinaryConfig,
+    train_tcn_binary,
+    predict as predict_tcn_binary,
+)
 from model_functions.tabnet import (
     OTDR_TabNet,
     TrainConfig as TabNetConfig,
@@ -157,6 +163,21 @@ def _evaluate_tcn(
     return cls_acc, rmse
 
 
+def _evaluate_tcn_binary(
+        tcn: OTDR_TCNBinary,
+        X_test: torch.Tensor,
+        y_test_cls: torch.Tensor,
+) -> Tuple[float, float]:
+    logits = predict_tcn_binary(tcn, X_test)
+    preds = logits.argmax(1).numpy()
+    probs = torch.softmax(logits, dim=1)[:, 1].numpy()
+    y_true = y_test_cls.numpy()
+    acc = accuracy_score(y_true, preds)
+    auc = roc_auc_score(y_true, probs)
+    print(f"[TCN-B]  Test Acc={acc:.3f}  AUC={auc:.3f}")
+    return acc, auc
+
+
 # ----------------------------- TST eval -------------------------------------#
 
 def _evaluate_tst(
@@ -205,6 +226,13 @@ def _faulty_only(split: SplitTensors, normal_label: int = 0) -> SplitTensors:
         y_class=split.y_class[mask],
         y_pos=split.y_pos[mask],
     )
+
+
+def _binary_labels(split: SplitTensors, normal_label: int = 0) -> SplitTensors:
+    """Map the multiclass labels to binary normal(0)/anomaly(1)."""
+
+    binary = (split.y_class != normal_label).to(dtype=torch.long)
+    return SplitTensors(X=split.X, y_class=binary, y_pos=split.y_pos)
 
 
 def _faulty_only_relabel(
@@ -268,7 +296,7 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
 )
 @click.option(
     "--mode",
-    type=click.Choice(["gru_ae", "tcn", "tst", "tab", "all"], case_sensitive=False),
+    type=click.Choice(["gru_ae", "tcn", "tcn_binary", "tst", "tab", "all"], case_sensitive=False),
     required=True,
     help="Which component(s) to train.",
 )
@@ -412,6 +440,23 @@ def main(mode, data_path, out_dir, device, tcn_anomaly_only) -> None:
             cfg=tcn_cfg,
         )
         _evaluate_tcn(tcn, test_split.X, test_split.y_class, test_split.y_pos)
+
+    if mode == "tcn_binary":
+        train_bin = _binary_labels(splits["train"])
+        val_bin = _binary_labels(splits["val"])
+        test_bin = _binary_labels(splits["test"])
+
+        tcn_binary = OTDR_TCNBinary()
+        tcn_bin_cfg = TCNBinaryConfig(save_path=out_dir / "tcn_binary.pt", device=device)
+        tcn_binary = train_tcn_binary(
+            tcn_binary,
+            train_bin.X,
+            train_bin.y_class,
+            val_bin.X,
+            val_bin.y_class,
+            cfg=tcn_bin_cfg,
+        )
+        _evaluate_tcn_binary(tcn_binary, test_bin.X, test_bin.y_class)
 
     # ----------------------------- TST -------------------------------------#
     if mode in {"tst", "all"}:
