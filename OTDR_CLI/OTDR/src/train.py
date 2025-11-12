@@ -162,6 +162,7 @@ def _evaluate_tcn(
 def _evaluate_tst(
         tst: TimeSeriesTransformer,
         X_test: torch.Tensor,
+        y_test_cls: torch.Tensor,
         y_test_pos: torch.Tensor,
 ) -> float:
     pos_hat = predict_tst(tst, X_test)
@@ -203,6 +204,17 @@ def _faulty_only(split: SplitTensors, normal_label: int = 0) -> SplitTensors:
         X=split.X[mask],
         y_class=split.y_class[mask],
         y_pos=split.y_pos[mask],
+    )
+
+
+def _with_class_feature(split: SplitTensors) -> SplitTensors:
+    """Append the class label as an explicit feature for localisation models."""
+
+    class_column = split.y_class.to(dtype=split.X.dtype).unsqueeze(1)
+    return SplitTensors(
+        X=torch.cat([class_column, split.X], dim=1),
+        y_class=split.y_class,
+        y_pos=split.y_pos,
     )
 
 
@@ -331,9 +343,9 @@ def main(mode, data_path, out_dir, device) -> None:
 
     # ----------------------------- TST -------------------------------------#
     if mode in {"tst", "all"}:
-        fault_train = _faulty_only(splits["train"])
-        fault_val = _faulty_only(splits["val"])
-        fault_test = _faulty_only(splits["test"])
+        fault_train = _with_class_feature(_faulty_only(splits["train"]))
+        fault_val = _with_class_feature(_faulty_only(splits["val"]))
+        fault_test = _with_class_feature(_faulty_only(splits["test"]))
 
         tst = TimeSeriesTransformer(seq_len=fault_train.X.shape[1])
         tst_cfg = TSTConfig(save_path=out_dir / "tst.pt", device=device)
