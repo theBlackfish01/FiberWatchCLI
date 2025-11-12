@@ -2,6 +2,9 @@ from __future__ import annotations
 
 """Time‑Series Transformer (TST) localisation model for OTDR traces.
 
+The TST consumes per-trace sequences where the **class label** is prepended to the
+measurement vector (``[Class, SNR, P0, ..., Pn]``) and predicts the fault position.
+
 Public API
 ----------
 * ``TimeSeriesTransformer`` – model definition.
@@ -146,8 +149,10 @@ def _val_metrics(
 def train_tst(
     model: TimeSeriesTransformer,
     train_tensor: torch.Tensor,
+    train_y_cls: torch.Tensor | None,
     train_y_pos: torch.Tensor,
     val_tensor: torch.Tensor,
+    val_y_cls: torch.Tensor | None,
     val_y_pos: torch.Tensor,
     *,
     cfg: TrainConfig | None = None,
@@ -159,6 +164,11 @@ def train_tst(
         else torch.device(cfg.device)
     )
     model = model.to(device)
+
+    if train_y_cls is None:
+        train_y_cls = torch.zeros_like(train_y_pos)
+    if val_y_cls is None:
+        val_y_cls = torch.zeros_like(val_y_pos)
 
     train_loader = DataLoader(
         TensorDataset(train_tensor, train_y_cls.view(-1), train_y_pos.view(-1)),

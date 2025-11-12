@@ -570,6 +570,10 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         X_test = X_test[fault_mask]
         y_cls_test = y_cls_test[fault_mask]
         y_pos_test = y_pos_test[fault_mask]
+        class_feature = y_cls_test.to(dtype=X_test.dtype).unsqueeze(1)
+        tst_features = torch.cat([class_feature, X_test], dim=1)
+    else:
+        tst_features = None
 
     device = (
         torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -582,8 +586,14 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     cls_path = Path(cls_path or Path("models") / cls_default)
 
     n_classes = int(df["Class"].max() + 1)
-    classifier_model = _load_classifier(classifier, cls_path, seq_len=X_test.shape[1], n_classes=n_classes,
-                                        device=device)
+    seq_len = tst_features.shape[1] if tst_features is not None else X_test.shape[1]
+    classifier_model = _load_classifier(
+        classifier,
+        cls_path,
+        seq_len=seq_len,
+        n_classes=n_classes,
+        device=device,
+    )
 
     if mode == "pipeline":
         ae, threshold, _, _ = _load_gru_ae(Path(detector), device)
@@ -601,7 +611,7 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
         logits, pos_hat = predict_tcn(classifier_model, X_test[idx_to_eval])
         preds_cls = logits.argmax(1)
     elif classifier == "tst":
-        pos_hat = predict_tst(classifier_model, X_test[idx_to_eval])
+        pos_hat = predict_tst(classifier_model, tst_features[idx_to_eval])
         preds_cls = None
     else:  # tab
         logits, pos_hat = predict_tabnet(classifier_model, X_test[idx_to_eval])
