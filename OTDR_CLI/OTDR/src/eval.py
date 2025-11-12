@@ -129,6 +129,51 @@ def _load_classifier(kind: str, cls_path: Path, seq_len: int, n_classes: int, de
     return model.eval().to(device)
 
 
+def _load_classifier_meta(cls_path: Path) -> dict[str, Any] | None:
+    meta_path = cls_path.with_suffix(".json")
+    if not meta_path.exists():
+        return None
+    return json.loads(meta_path.read_text())
+
+
+def _remap_anomaly_only_targets(
+    X: torch.Tensor,
+    y_cls: torch.Tensor,
+    y_pos: torch.Tensor,
+    meta: dict[str, Any],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[int, int]]:
+    mapping_raw = meta.get("class_index_map")
+    if mapping_raw is not None:
+        mapping = {int(k): int(v) for k, v in mapping_raw.items()}
+    else:
+        original_classes = meta.get("original_classes")
+        if not original_classes:
+            raise ValueError(
+                "Anomaly-only TCN metadata must include 'class_index_map' or 'original_classes'."
+            )
+        mapping = {int(orig): idx for idx, orig in enumerate(original_classes)}
+
+    mask = torch.zeros_like(y_cls, dtype=torch.bool)
+    for orig in mapping:
+        mask |= y_cls == int(orig)
+
+    selected = torch.nonzero(mask, as_tuple=True)[0]
+    if selected.numel() == 0:
+        raise ValueError(
+            "No samples with the anomaly classes required by the anomaly-only TCN were found."
+        )
+
+    X_sel = X[selected]
+    y_pos_sel = y_pos[selected]
+    y_cls_sel = y_cls[selected]
+
+    remapped = torch.empty_like(y_cls_sel)
+    for orig, idx in mapping.items():
+        remapped[y_cls_sel == int(orig)] = int(idx)
+
+    return X_sel, remapped.to(dtype=torch.long), y_pos_sel, mapping
+
+
 def _visualise_sample(
         amps: np.ndarray,
         snr: float,
@@ -502,6 +547,12 @@ def _llm_explain(
     help="Path to GRU-AE weights.",
 )
 @click.option(
+    "--tcn-anomaly-only/--tcn-all-data",
+    "tcn_anomaly_only",
+    default=False,
+    help="When evaluating TCN models, select the anomaly-only classifier variant.",
+)
+@click.option(
     "--cls-path",
     type=click.Path(dir_okay=False, path_type=Path),
     default=None,
@@ -527,9 +578,25 @@ def _llm_explain(
     default=None,
     help="cuda | cpu | leave empty for auto-detect.",
 )
-def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, device):  # noqa: C901
+def main(
+    mode,
+    classifier,
+    data_path,
+    detector,
+    cls_path,
+    num_samples,
+    out_dir,
+    device,
+    tcn_anomaly_only,
+):  # noqa: C901
     out_dir = Path("outputs") / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if classifier != "tcn" and tcn_anomaly_only:
+        raise click.BadOptionUsage(
+            "--tcn-anomaly-only",
+            "The anomaly-only flag is only applicable when --classifier=tcn.",
+        )
 
     # ---------- data ---------- #
     df = load_raw_dataframe(data_path)
@@ -592,17 +659,68 @@ def main(mode, classifier, data_path, detector, cls_path, num_samples, out_dir, 
     if classifier == "tab":
         cls_default = "tabnet.pt"
     elif classifier == "tcn":
-        cls_default = "tcn.pt"
+        cls_default = "tcn_anomaly.pt" if tcn_anomaly_only else "tcn_full.pt"
     elif classifier == "tcn_binary":
         cls_default = "tcn_binary.pt"
     else:
         cls_default = "tst.pt"
     cls_path = Path(cls_path or Path("models") / cls_default)
 
+    cls_meta = _load_classifier_meta(cls_path)
+
+    default_n_classes = int(df["Class"].max() + 1)
     if classifier == "tcn_binary":
         n_classes = 2
+    elif classifier == "tcn":
+        variant = "anomaly_only" if tcn_anomaly_only else "full"
+        if cls_meta and "variant" in cls_meta:
+            meta_variant = cls_meta["variant"]
+            if meta_variant not in {"full", "anomaly_only"}:
+                raise ValueError(f"Unknown TCN variant '{meta_variant}' in metadata.")
+            if meta_variant != variant:
+                if tcn_anomaly_only:
+                    raise ValueError(
+                        "Requested anomaly-only TCN but provided checkpoint metadata "
+                        "describes the full-data variant."
+                    )
+                else:
+                    print(
+                        f"[INFO] Detected '{meta_variant}' TCN variant from metadata; adjusting evaluation."
+                    )
+                    variant = meta_variant
+        tcn_anomaly_only = variant == "anomaly_only"
+        if tcn_anomaly_only:
+            if cls_meta is None:
+                raise ValueError(
+                    "Anomaly-only TCN checkpoints must include metadata for class remapping."
+                )
+            class_labels_meta = cls_meta.get("class_labels") or cls_meta.get("original_classes")
+            if not class_labels_meta:
+                raise ValueError(
+                    "Anomaly-only TCN metadata must include 'class_labels' or 'original_classes'."
+                )
+            n_classes = len(class_labels_meta)
+        else:
+            if cls_meta and "n_classes" in cls_meta:
+                n_classes = int(cls_meta["n_classes"])
+            else:
+                n_classes = default_n_classes
     else:
-        n_classes = int(df["Class"].max() + 1)
+        n_classes = default_n_classes
+
+    anomaly_mapping: dict[int, int] | None = None
+    if classifier == "tcn" and tcn_anomaly_only:
+        X_test, y_cls_test, y_pos_test, anomaly_mapping = _remap_anomaly_only_targets(
+            X_test,
+            y_cls_test,
+            y_pos_test,
+            cls_meta or {},
+        )
+        mapping_desc = ", ".join(
+            f"{orig}→{idx}" for orig, idx in sorted(anomaly_mapping.items())
+        )
+        print(f"[INFO] Evaluating anomaly-only TCN with mapping: {mapping_desc}")
+
     seq_len = tst_features.shape[1] if tst_features is not None else X_test.shape[1]
     classifier_model = _load_classifier(
         classifier,
