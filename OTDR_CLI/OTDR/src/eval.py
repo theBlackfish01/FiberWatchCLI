@@ -16,7 +16,7 @@ import base64
 import click
 import json
 import re
-from typing import List, Tuple
+from typing import Any, List, Tuple
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import numpy as np
@@ -37,6 +37,48 @@ import warnings
 
 warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
 client = OpenAI(api_key=cfg.OPENAI_API_KEY)
+
+
+def _extract_response_text(resp: Any) -> str:
+    """Best-effort extraction of text content from the Responses API result."""
+
+    output_text = getattr(resp, "output_text", None)
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text.strip()
+
+    texts: list[str] = []
+    for item in getattr(resp, "output", []) or []:
+        for content in getattr(item, "content", []) or []:
+            text_obj = getattr(content, "text", None)
+            if isinstance(text_obj, str):
+                texts.append(text_obj)
+            else:
+                value = getattr(text_obj, "value", None)
+                if isinstance(value, str):
+                    texts.append(value)
+
+    if texts:
+        return "\n".join(t.strip() for t in texts if t.strip())
+
+    raise RuntimeError("No textual content returned by the Responses API")
+
+
+def _call_responses_api(
+        llm_client: OpenAI,
+        model: str,
+        system_text: str,
+        user_content: list[dict[str, Any]],
+) -> str:
+    """Invoke the modern Responses API for multimodal prompts."""
+
+    resp = llm_client.responses.create(
+        model=model,
+        input=[
+            {"role": "system", "content": [{"type": "text", "text": system_text}]},
+            {"role": "user", "content": user_content},
+        ],
+    )
+    return _extract_response_text(resp)
 
 # --------------------------------------------------
 # Utility helpers
@@ -297,24 +339,17 @@ def _llm_explain_with_self_reflection(
         + fault_classes_block
     )
 
-    user_direct_parts: List[dict] = [
+    user_direct_parts: List[dict[str, Any]] = [
         {"type": "text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
     if shap_text:
         user_direct_parts.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
     user_direct_parts.append({"type": "text", "text": "Selected samples for inspection (images):"})
-    user_direct_parts += [{"type": "image_url", "image_url": {"url": _b64(p)}} for p in img_paths]
-
-    direct_messages = [
-        {"role": "system", "content": system_direct},
-        {"role": "user", "content": user_direct_parts},
+    user_direct_parts += [
+        {"type": "input_image", "image_url": {"url": _b64(p)}} for p in img_paths
     ]
-    direct_resp = client.chat.completions.create(
-        model=openai_model,
-        messages=direct_messages,
-        temperature=0.2,
-    )
-    direct_text = direct_resp.choices[0].message.content.strip()
+
+    direct_text = _call_responses_api(client, openai_model, system_direct, user_direct_parts)
 
     # ---------- SELF-REFLECTION pass ---------------------------------------
     # Provide SAME images so the reviewer can verify visually.
@@ -332,25 +367,18 @@ def _llm_explain_with_self_reflection(
         + fault_classes_block
     )
 
-    reflect_user_content: List[dict] = [
+    reflect_user_content: List[dict[str, Any]] = [
         {"type": "text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
     if shap_text:
         reflect_user_content.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
     reflect_user_content.append({"type": "text", "text": "Images (verify titles with TrueC/PredC and positions):"})
-    reflect_user_content += [{"type": "image_url", "image_url": {"url": _b64(p)}} for p in img_paths]
+    reflect_user_content += [
+        {"type": "input_image", "image_url": {"url": _b64(p)}} for p in img_paths
+    ]
     reflect_user_content.append({"type": "text", "text": "DRAFT explanation to review:\n" + direct_text})
 
-    reflect_messages = [
-        {"role": "system", "content": system_reflect},
-        {"role": "user", "content": reflect_user_content},
-    ]
-    reflect_resp = client.chat.completions.create(
-        model=openai_model,
-        messages=reflect_messages,
-        temperature=0.2,
-    )
-    refined_text = reflect_resp.choices[0].message.content.strip()
+    refined_text = _call_responses_api(client, openai_model, system_reflect, reflect_user_content)
 
     return direct_text, refined_text, rag_flag
 
@@ -410,7 +438,7 @@ def _llm_explain(
     )
 
     # first part: reference snippets (if any) + lead‑in text
-    user_parts: List[dict] = [
+    user_parts: List[dict[str, Any]] = [
         {"type": "text",
          "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
@@ -419,31 +447,21 @@ def _llm_explain(
         user_parts.append({"type": "text", "text": "SHAP attributions per sample:\n" + shap_text})
     user_parts.append({"type": "text", "text": "Here are the selected samples for inspection:"})
     user_parts += [
-                     {  # the images themselves
-                         "type": "image_url",
+                     {
+                         "type": "input_image",
                          "image_url": {"url": _b64(p)},
                      }
                      for p in img_paths
                  ]
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_parts},
-    ]
-
-    # ---------- chat completion -----------------------------------------
-    resp = client.chat.completions.create(
-        model=openai_model,
-        messages=messages,
-        # max_completion_tokens=1000 # limit the response length
-    )
+    resp_text = _call_responses_api(client, openai_model, system_prompt, user_parts)
 
     rag_flag = False
     if retrieved:
         rag_flag = True
         print("RAG retrieval successful, using retrieved snippets in LLM prompt.")
 
-    return resp.choices[0].message.content.strip(), rag_flag
+    return resp_text, rag_flag
 
 
 # --------------------------------------------------
