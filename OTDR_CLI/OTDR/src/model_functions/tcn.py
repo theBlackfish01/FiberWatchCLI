@@ -175,8 +175,8 @@ class TrainConfig:
     epochs: int = 150
     batch_size: int = 128
     lr: float = 1e-3
-    patience: int = 25
-    lambda_loc: float = 0  # weight of localisation MSE
+    patience: int = 10
+    lambda_loc: float = 0.1  # weight of localisation MSE
     step_size: int = 15
     gamma: float = 0.5
     device: torch.device | str | None = None

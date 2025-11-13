@@ -22,16 +22,16 @@ from sklearn.metrics import (
 )
 from sklearn.preprocessing import StandardScaler
 
-from .data_helper import (
+from data_helper import (
     load_raw_dataframe,
     make_splits,
     measurement_columns,
     summarise_feature_layout,
     tensorise_splits,
 )
-from .model_functions.tcn import OTDR_TCN, predict as predict_tcn
-from .model_functions.tcn_binary import OTDR_TCNBinary, predict as predict_tcn_binary
-from .model_functions.tst import TimeSeriesTransformer, predict as predict_tst
+from model_functions.tcn import OTDR_TCN, predict as predict_tcn
+from model_functions.tcn_binary import OTDR_TCNBinary, predict as predict_tcn_binary
+from model_functions.tst import TimeSeriesTransformer, predict as predict_tst
 
 __all__ = [
     "PipelineResult",
