@@ -20,6 +20,10 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import numpy as np
 import shap
+try:
+    from lime.lime_tabular import LimeTabularExplainer
+except ImportError:  # pragma: no cover - optional dependency
+    LimeTabularExplainer = None  # type: ignore[assignment]
 import torch
 from sklearn.metrics import (
     accuracy_score,
@@ -250,7 +254,7 @@ def _make_predict_fn(
     *,
     pos_count: int,
 ):
-    """Wrap the classifier into a numpy → probability function for SHAP."""
+    """Wrap the classifier into a numpy → probability function for explainability."""
 
     def _predict(x: np.ndarray) -> np.ndarray:
         arr = np.asarray(x, dtype=np.float32)
@@ -264,11 +268,56 @@ def _make_predict_fn(
         elif classifier == "tst":
             raise RuntimeError("TST model does not provide classification logits.")
         else:
-            raise ValueError(f"Unsupported classifier '{classifier}' for SHAP analysis.")
+            raise ValueError(f"Unsupported classifier '{classifier}' for explainability analysis.")
         probs = torch.softmax(logits, dim=1)
         return probs.numpy()
 
     return _predict
+
+
+def _describe_feature_space(feature_names: List[str], shape: tuple[int, int] | None = None) -> str:
+    feature_list = ", ".join(feature_names)
+    shape_text = f"({shape[0]}, {shape[1]})" if shape else "(N, F)"
+    return (
+        "Model input is a numpy.ndarray[float32] shaped "
+        f"{shape_text} with ordered features: "
+        f"{feature_list}. Leakage-prone columns (loss / Reflectance) are included only when explicitly enabled."
+    )
+
+
+def _summarise_contributions(
+    method_tag: str,
+    sample_idx: int,
+    pred_cls: int,
+    base_val: float,
+    predicted_prob: float,
+    contrib_vec: np.ndarray,
+    feature_names: List[str],
+) -> str:
+    top_idx = np.argsort(np.abs(contrib_vec))[::-1]
+    top_k = top_idx[:5]
+
+    print(
+        f"[{method_tag}] Sample {sample_idx} → class {pred_cls}: base prob {base_val:.3f}, "
+        f"pred prob {predicted_prob:.3f}."
+    )
+    print("        Top feature contributions (Δprobability):")
+    for rank, j in enumerate(top_k, start=1):
+        direction = "raises" if contrib_vec[j] >= 0 else "lowers"
+        print(
+            f"          #{rank}: {feature_names[j]} {contrib_vec[j]:+.4f} ({direction} class {pred_cls} probability)"
+        )
+
+    shap_contribs = ", ".join(
+        f"#{idx + 1} {feature_names[j]} ({contrib_vec[j]:+.3f})" for idx, j in enumerate(top_k)
+    )
+    pos_total = float(np.sum(contrib_vec[contrib_vec > 0]))
+    neg_total = float(np.sum(contrib_vec[contrib_vec < 0]))
+    summary = (
+        f"Sample {sample_idx} → class {pred_cls} | base prob {base_val:.3f} → predicted {predicted_prob:.3f}. "
+        f"Top drivers: {shap_contribs}. Σpositive={pos_total:+.3f}, Σnegative={neg_total:+.3f}."
+    )
+    return summary
 
 
 def _extract_shap_vector(shap_exp: shap.Explanation, sample_idx: int, class_idx: int) -> np.ndarray:
@@ -323,11 +372,8 @@ def _compute_shap_summaries(
     max_evals = 2 * sample_arr.shape[1] + 2048
     shap_exp = explainer(sample_arr, max_evals=max_evals)
 
-    feature_list = ", ".join(feature_names)
-    dataset_context = (
-        "Model input is a numpy.ndarray[float32] shaped "
-        f"({sample_arr.shape[0]}, {sample_arr.shape[1]}) with ordered features: "
-        f"{feature_list}. Leakage-prone columns (loss / Reflectance) are included only when explicitly enabled."
+    dataset_context = _describe_feature_space(
+        feature_names, (sample_arr.shape[0], sample_arr.shape[1])
     )
     print(f"[SHAP] {dataset_context}")
 
@@ -338,28 +384,89 @@ def _compute_shap_summaries(
         base_val = _extract_base_value(shap_exp, local_idx, pred_cls)
 
         predicted_prob = float(np.clip(base_val + shap_vec.sum(), 0.0, 1.0))
-        top_idx = np.argsort(np.abs(shap_vec))[::-1]
-        top_k = top_idx[:5]
-
-        print(
-            f"[SHAP] Sample {global_idx} → class {pred_cls}: base prob {base_val:.3f}, "
-            f"pred prob {predicted_prob:.3f}."
+        summary = _summarise_contributions(
+            "SHAP",
+            global_idx,
+            pred_cls,
+            base_val,
+            predicted_prob,
+            np.asarray(shap_vec, dtype=np.float32),
+            feature_names,
         )
-        print("        Top feature contributions (Δprobability):")
-        for rank, j in enumerate(top_k, start=1):
-            direction = "raises" if shap_vec[j] >= 0 else "lowers"
-            print(
-                f"          #{rank}: {feature_names[j]} {shap_vec[j]:+.4f} ({direction} class {pred_cls} probability)"
-            )
+        summaries.append(summary)
 
-        shap_contribs = ", ".join(
-            f"#{idx + 1} {feature_names[j]} ({shap_vec[j]:+.3f})" for idx, j in enumerate(top_k)
+    return summaries
+
+
+def _compute_lime_summaries(
+        model,
+        classifier: str,
+        device: torch.device,
+        background: np.ndarray,
+        samples: np.ndarray,
+        sample_indices: List[int],
+        pred_lookup: dict[int, int],
+        feature_names: List[str],
+        *,
+        pos_count: int,
+) -> List[str]:
+    """Compute LIME attributions and return formatted summaries per sample."""
+
+    if LimeTabularExplainer is None:
+        raise RuntimeError("LIME explainability requested but lime package is not installed.")
+
+    if samples.size == 0:
+        return []
+
+    bg = np.asarray(background, dtype=np.float32)
+    if bg.ndim == 1:
+        bg = bg.reshape(1, -1)
+    sample_arr = np.asarray(samples, dtype=np.float32)
+
+    predict_fn = _make_predict_fn(model, classifier, device, pos_count=pos_count)
+    explainer = LimeTabularExplainer(
+        bg,
+        feature_names=feature_names,
+        discretize_continuous=False,
+        mode="classification",
+    )
+
+    dataset_context = _describe_feature_space(
+        feature_names, (sample_arr.shape[0], sample_arr.shape[1])
+    )
+    print(f"[LIME] {dataset_context}")
+
+    summaries: List[str] = [dataset_context]
+    prob_matrix = predict_fn(sample_arr)
+    for local_idx, global_idx in enumerate(sample_indices):
+        pred_cls = int(pred_lookup[int(global_idx)])
+        explanation = explainer.explain_instance(
+            sample_arr[local_idx],
+            predict_fn,
+            top_labels=1,
+            num_features=sample_arr.shape[1],
         )
-        pos_total = float(np.sum(shap_vec[shap_vec > 0]))
-        neg_total = float(np.sum(shap_vec[shap_vec < 0]))
-        summary = (
-            f"Sample {global_idx} → class {pred_cls} | base prob {base_val:.3f} → predicted {predicted_prob:.3f}. "
-            f"Top drivers: {shap_contribs}. Σpositive={pos_total:+.3f}, Σnegative={neg_total:+.3f}."
+        local_exp = explanation.local_exp.get(pred_cls)
+        if not local_exp:
+            print(f"[LIME] No explanation produced for sample {global_idx} class {pred_cls}")
+            continue
+
+        contrib_vec = np.zeros(sample_arr.shape[1], dtype=np.float32)
+        for feat_idx, weight in local_exp:
+            contrib_vec[int(feat_idx)] = float(weight)
+
+        intercepts = getattr(explanation, "intercept", {})
+        base_val = float(intercepts[pred_cls]) if pred_cls in intercepts else 0.0
+        predicted_prob = float(prob_matrix[local_idx, pred_cls])
+
+        summary = _summarise_contributions(
+            "LIME",
+            global_idx,
+            pred_cls,
+            base_val,
+            predicted_prob,
+            contrib_vec,
+            feature_names,
         )
         summaries.append(summary)
 
@@ -369,7 +476,9 @@ def _llm_explain_with_self_reflection(
         img_paths: List[Path],
         classifier_type: str = "tcn",
         openai_model: str = "gpt-4o-mini",
-        shap_summaries: List[str] | None = None,
+        attribution_summaries: List[str] | None = None,
+        *,
+        attribution_method: str = "shap",
 ) -> tuple[str, str, bool] | None:
     """
     DIRECT pass -> SELF-REFLECTION pass with explicit TrueC/PredC handling.
@@ -408,8 +517,9 @@ def _llm_explain_with_self_reflection(
     if rag_flag:
         print("RAG retrieval successful, using retrieved snippets in LLM prompt.")
 
-    # ---------- SHAP text (shared) -----------------------------------------
-    shap_text = "\n".join(shap_summaries) if shap_summaries else ""
+    # ---------- Attribution text (shared) ----------------------------------
+    method_label = attribution_method.upper()
+    attr_text = "\n".join(attribution_summaries) if attribution_summaries else ""
 
     # ---------- DIRECT pass -------------------------------------------------
     # IMPORTANT: disambiguate TrueC vs PredC and force wording when they differ
@@ -426,8 +536,8 @@ def _llm_explain_with_self_reflection(
         "Given the following figures (OTDR amplitude over P-points; titles include TrueC/PredC and positions), "
         f"write a concise explanation for each figure predicted by a {classifier_type} model. "
         "Explain fault type, position, likely causes, and concrete next actions. "
-        "Use the reference snippets and the SHAP feature attributions when available. "
-        "Cite snippets like [1], [2] when used. If SHAP is present, explicitly state which features raised/lowered "
+        f"Use the reference snippets and the {method_label} feature attributions when available. "
+        f"Cite snippets like [1], [2] when used. If {method_label} is present, explicitly state which features raised/lowered "
         "the predicted class probability.\n\n"
         + true_pred_rules
         + fault_classes_block
@@ -436,8 +546,8 @@ def _llm_explain_with_self_reflection(
     user_direct_parts: List[dict[str, Any]] = [
         {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
-    if shap_text:
-        user_direct_parts.append({"type": "input_text", "text": "SHAP attributions per sample:\n" + shap_text})
+    if attr_text:
+        user_direct_parts.append({"type": "input_text", "text": f"{method_label} attributions per sample:\n" + attr_text})
     user_direct_parts.append({"type": "input_text", "text": "Selected samples for inspection (images):"})
     user_direct_parts += [
         {"type": "input_image", "image_url": _b64(p)} for p in img_paths
@@ -450,10 +560,10 @@ def _llm_explain_with_self_reflection(
     # Repeat the TrueC/PredC rule to avoid drift.
     system_reflect = (
         "You are a meticulous QA reviewer for optical-fibre explanations. "
-        "You will receive: (a) the same context (reference snippets, SHAP summaries, and the images), and (b) a DRAFT explanation. "
+        "You will receive: (a) the same context (reference snippets, feature-attribution summaries, and the images), and (b) a DRAFT explanation. "
         "OUTPUT ONLY an improved explanation that:\n"
-        "1) Matches SHAP signs (positive SHAP → increases predicted class probability; negative → decreases).\n"
-        "2) Mentions the top-k absolute SHAP contributors (k≈5) in plain English.\n"
+        f"1) Matches {method_label} signs (positive values → increase predicted class probability; negative → decrease).\n"
+        f"2) Mentions the top-k absolute {method_label} contributors (k≈5) in plain English.\n"
         "3) Grounds standards/definitions with citations [i] that exist in the provided snippet list.\n"
         "4) Avoids hallucinated numbers; if a number isn’t present, use cautious wording or a justified range.\n"
         "5) Keeps the operator section actionable (2–3 steps).\n\n"
@@ -464,8 +574,8 @@ def _llm_explain_with_self_reflection(
     reflect_user_content: List[dict[str, Any]] = [
         {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
-    if shap_text:
-        reflect_user_content.append({"type": "input_text", "text": "SHAP attributions per sample:\n" + shap_text})
+    if attr_text:
+        reflect_user_content.append({"type": "input_text", "text": f"{method_label} attributions per sample:\n" + attr_text})
     reflect_user_content.append({"type": "input_text", "text": "Images (verify titles with TrueC/PredC and positions):"})
     reflect_user_content += [
         {"type": "input_image", "image_url": _b64(p)} for p in img_paths
@@ -630,6 +740,13 @@ def _llm_explain(
     help="Random samples to visualise & explain (0 to skip explainability).",
 )
 @click.option(
+    "--explain-method",
+    type=click.Choice(["shap", "lime"], case_sensitive=False),
+    default="shap",
+    show_default=True,
+    help="Feature attribution method used for sample explainability.",
+)
+@click.option(
     "--extra-feature",
     "extra_features",
     multiple=True,
@@ -669,6 +786,7 @@ def main(
     anomaly_path,
     tst_path,
     num_samples,
+    explain_method,
     out_dir,
     device,
     tcn_anomaly_only,
@@ -684,6 +802,8 @@ def main(
             "--tcn-anomaly-only",
             "The anomaly-only flag is only applicable when --classifier=tcn.",
         )
+
+    explain_method = explain_method.lower()
 
     extras = _dedupe_preserve(extra_features)
     feature_suffix = "_lr" if use_loss_reflectance else ""
@@ -1080,8 +1200,8 @@ def main(
             replace=False,
         )
 
-    # ------------- SHAP explainability ------------- #
-    shap_summaries: List[str] = []
+    # ------------- Feature attribution explainability ------------- #
+    attribution_summaries: List[str] = []
     if preds_cls is not None and chosen.size > 0:
         try:
             idx_eval_cpu = idx_to_eval.detach().cpu()
@@ -1095,20 +1215,35 @@ def main(
                 background = X_test[idx_eval_cpu[:bg_size]].numpy()
                 sample_tensor = torch.as_tensor(chosen, dtype=torch.long)
                 shap_samples = X_test[sample_tensor].numpy()
-                shap_summaries = _compute_shap_summaries(
-                    classifier_model,
-                    classifier,
-                    device,
-                    background,
-                    shap_samples,
-                    chosen.tolist(),
-                    pred_lookup,
-                    meas_cols,
-                    pos_count=pos_count,
-                )
+                if explain_method == "shap":
+                    attribution_summaries = _compute_shap_summaries(
+                        classifier_model,
+                        classifier,
+                        device,
+                        background,
+                        shap_samples,
+                        chosen.tolist(),
+                        pred_lookup,
+                        meas_cols,
+                        pos_count=pos_count,
+                    )
+                elif explain_method == "lime":
+                    attribution_summaries = _compute_lime_summaries(
+                        classifier_model,
+                        classifier,
+                        device,
+                        background,
+                        shap_samples,
+                        chosen.tolist(),
+                        pred_lookup,
+                        meas_cols,
+                        pos_count=pos_count,
+                    )
+                else:
+                    raise ValueError(f"Unsupported explainability method '{explain_method}'.")
         except Exception as exc:  # pragma: no cover - fallback path
-            print(f"[WARN] SHAP computation failed: {exc}")
-            shap_summaries = []
+            print(f"[WARN] {explain_method.upper()} computation failed: {exc}")
+            attribution_summaries = []
 
     img_paths: list[Path] = []
     num_points = pos_count
@@ -1136,7 +1271,8 @@ def main(
             img_paths,
             openai_model="gpt-5",  # keep your configured model string
             classifier_type=classifier,
-            shap_summaries=shap_summaries
+            attribution_summaries=attribution_summaries,
+            attribution_method=explain_method,
         )
 
     classifier_name = classifier.upper()
@@ -1145,15 +1281,16 @@ def main(
 
     if explain_pair:
         direct_text, refined_text, rag_flag = explain_pair
-        explanation_file = llm_dir / "llm_explanation_shap.txt"
+        method_slug = explain_method.lower()
+        explanation_file = llm_dir / f"llm_explanation_{method_slug}.txt"
         i = 1
         while explanation_file.exists():
-            explanation_file = llm_dir / f"llm_explanation_shap_{i}.txt"
+            explanation_file = llm_dir / f"llm_explanation_{method_slug}_{i}.txt"
             i += 1
 
         header = (
             f"LLM explanation for eval subset {'with' if rag_flag else 'without'} RAG "
-            f"for {classifier_name} in {mode} mode:\n\n"
+            f"for {classifier_name} in {mode} mode ({explain_method.upper()} attributions):\n\n"
         )
         combined = (
                 header
