@@ -1,14 +1,12 @@
-# OTDR/src/eval.py
-
 """
 Evaluation script
 
 Two modes:
 
-1. Pipeline – GRU‑AE anomaly detection ➜ selected samples → classifier (TCN/TST)
+1. Pipeline – GRU‑AE anomaly detection ➜ selected samples → classifier (TCN)
 2. Direct – classifier directly on the full test set
 
-LLM explanation of random samples using vision‑capable GPT‑4o‑mini with RAG
+LLM explanation of random samples using vision‑capable GPT‑5 with RAG and XAI (SHAP or LIME)
 """
 
 from __future__ import annotations
@@ -20,10 +18,7 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import numpy as np
 import shap
-try:
-    from lime.lime_tabular import LimeTabularExplainer
-except ImportError:  # pragma: no cover - optional dependency
-    LimeTabularExplainer = None  # type: ignore[assignment]
+from lime.lime_tabular import LimeTabularExplainer
 import torch
 from sklearn.metrics import (
     accuracy_score,
@@ -171,7 +166,7 @@ def _call_responses_api(
         system_text: str,
         user_content: list[dict[str, Any]],
 ) -> str:
-    """Invoke the modern Responses API for multimodal prompts."""
+    """Invoke the Responses API for multimodal prompts."""
 
     resp = llm_client.responses.create(
         model=model,
@@ -585,87 +580,6 @@ def _llm_explain_with_self_reflection(
     refined_text = _call_responses_api(client, openai_model, system_reflect, reflect_user_content)
 
     return direct_text, refined_text, rag_flag
-
-
-
-def _llm_explain(
-        img_paths: List[Path], classifier_type: str = "tcn",
-        openai_model: str = "gpt-4o-mini",
-        shap_summaries: List[str] | None = None,
-) -> tuple[str, bool] | None:
-    """
-    Ask a vision‑capable chat model for a concise explanation of common
-    patterns in the supplied OTDR trace images, **augmented with RAG‑retrieved
-    reference snippets**.
-
-    Returns the explanation text, or None if OPENAI_API_KEY isn’t set.
-    """
-    api_key = cfg.OPENAI_API_KEY
-    if not api_key:
-        print("OPENAI_API_KEY not set – skipping LLM explanation")
-        return None
-
-    client = OpenAI(api_key=api_key)
-
-    # ---------- RAG: retrieve reference snippets -------------------------
-    query = "OTDR fault plots – " + ", ".join(p.stem for p in img_paths)
-    try:
-        retrieved = retrieve(query, k=5)  # ← may raise / be empty
-    except Exception as exc:
-        print(f"RAG retrieval failed. {exc}")
-        retrieved = []
-
-    ref_block = "\n\n".join(f"[{i + 1}] {r['text']}" for i, r in enumerate(retrieved))
-
-    # ---------- build messages ------------------------------------------
-    system_prompt = (
-        "You are an optical-fibre fault-analysis expert. "
-        "Given the following figures (each shows amplitude over P-points with "
-        f"predictions vs ground truth in the title predicted using a {classifier_type} machine learning model), "
-        "write a concise explanation for each figure "
-        "of common patterns you observe, including typical failure modes and "
-        "any misclassifications. Explain the type of fault, position, possible causes "
-        "and possible solutions. Provide brief answers.\n\n"
-        "Use the reference snippets, the SHAP feature attributions, and each image when required, "
-        "citing snippets like [1], [2] where appropriate. When SHAP highlights features, incorporate that evidence in your reasoning. "
-        "Specify the information provided by the SHAP values.\n\n"
-        "Fault Classes are labelled as follows:\n"
-        "id\tfault type\t\t\ttypical signs\n"
-        "0\tnormal / no fault\t\tbaseline trace, loss ≈ 0, position = 0\n"
-        "1\tfiber tapping\t\tlocalized disturbance, moderate loss due to coupler, reflectance can be low/absent\n"
-        "2\tbad splice\t\t\tlocalized event with excess loss, small/possible reflection\n"
-        "3\tbending event\t\tgradual/medium loss, usually no clear reflectance peak\n"
-        "4\tdirty connector\t\tconnector-like event with extra loss and messy/variable reflectance\n"
-        "5\tfiber cut\t\t\tabrupt large loss/end-of-trace, may appear near end position\n"
-        "6\tPC connector\t\tclean connector-type reflective event, expected position\n"
-        "7\treflector\t\t\tstrongly reflective event, high reflectance value\n"
-    )
-
-    # first part: reference snippets (if any) + lead‑in text
-    user_parts: List[dict[str, Any]] = [
-        {"type": "input_text",
-         "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
-    ]
-    if shap_summaries:
-        shap_text = "\n".join(shap_summaries)
-        user_parts.append({"type": "input_text", "text": "SHAP attributions per sample:\n" + shap_text})
-    user_parts.append({"type": "input_text", "text": "Here are the selected samples for inspection:"})
-    user_parts += [
-                     {
-                         "type": "input_image",
-                         "image_url": _b64(p),
-                     }
-                     for p in img_paths
-                 ]
-
-    resp_text = _call_responses_api(client, openai_model, system_prompt, user_parts)
-
-    rag_flag = False
-    if retrieved:
-        rag_flag = True
-        print("RAG retrieval successful, using retrieved snippets in LLM prompt.")
-
-    return resp_text, rag_flag
 
 
 # --------------------------------------------------

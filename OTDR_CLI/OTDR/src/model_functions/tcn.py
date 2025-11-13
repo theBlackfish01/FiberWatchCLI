@@ -2,20 +2,16 @@ from __future__ import annotations
 
 """Temporal Convolutional Network (TCN) multitask classifier for OTDR traces.
 
-Implements the lightweight dilated-TCN you trained in the notebook. It predicts
-both **fault class** (categorical) and **fault position** (regression).
+It predicts both **fault class** (categorical) and **fault position** (regression).
 
-This version treats the first feature (SNR) – and any optional leakage / extra
-scalars – as **global channels** by broadcasting them across the positional
+This version treats SNR (+ Loss and Reflectance)– as **global channels** by broadcasting them across the positional
 trace:
-
     raw row:  [SNR, P1, P2, ... , P30, loss, Reflectance]  ->  (B, F)
     model in: (B, 1 + 1 + extras, 30)
         chan 0 = positions (P1..P30)
         chan 1 = SNR repeated 30 times
         chan 2.. = each extra scalar repeated 30 times
 
-Public API
 ----------
 * ``OTDR_TCN`` – the model definition.
 * ``TrainConfig`` – hyper-parameters for supervised multitask training.
@@ -175,7 +171,7 @@ class TrainConfig:
     epochs: int = 150
     batch_size: int = 128
     lr: float = 1e-3
-    patience: int = 10
+    patience: int = 25
     lambda_loc: float = 0.1  # weight of localisation MSE
     step_size: int = 15
     gamma: float = 0.5

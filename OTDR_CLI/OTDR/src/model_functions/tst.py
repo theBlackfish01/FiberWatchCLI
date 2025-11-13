@@ -5,7 +5,6 @@ from __future__ import annotations
 The TST consumes per-trace sequences where the **class label** is prepended to the
 measurement vector (``[Class, SNR, P0, ..., Pn]``) and predicts the fault position.
 
-Public API
 ----------
 * ``TimeSeriesTransformer`` – model definition.
 * ``TrainConfig`` – hyper‑parameters for localisation training.

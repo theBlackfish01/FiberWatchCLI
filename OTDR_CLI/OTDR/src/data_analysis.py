@@ -1,20 +1,11 @@
 """Utility for exploratory analysis of OTDR datasets.
 
-This module provides a reusable entry point for inspecting tabular OTDR
-measurements. It focuses on helping engineers understand feature
-relationships, feature distributions, and the overall structure of a dataset
-that mirrors the schema used by the machine-learning models in this project.
-
-The main workflow is encapsulated in :func:`analyze_dataset`.  It loads a CSV
-file into a pandas ``DataFrame`` and produces:
-
+Outputs:
 * High-level metadata (row/column counts, numerical feature summaries).
 * Missing-value audits and class-distribution summaries.
 * Correlation matrices and top correlated feature pairs.
 * Visualization artifacts that are saved to disk for offline review.
 
-All heavy lifting is intentionally tucked away in separate helper functions so
-that the analysis can easily be reused from notebooks or other scripts.
 """
 
 from __future__ import annotations
@@ -30,7 +21,6 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-# Default plotting style tweaks for consistency.
 sns.set_theme(style="whitegrid")
 
 

@@ -66,10 +66,8 @@ def measurement_columns(
         in ``df`` and is only added once, preserving the order provided by the
         caller.
     include_loss_reflectance:
-        When ``True`` the leakage-prone columns ``loss``/``Reflectance`` are
-        appended after the positional measurements.  The caller is responsible
-        for ensuring that the downstream models and checkpoints were trained
-        with the same feature configuration.
+        When ``True`` the columns ``loss``/``Reflectance`` are
+        appended after the positional measurements.
     """
 
     pattern = re.compile(r"P\d+")

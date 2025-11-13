@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-"""Binary Temporal Convolutional Network (TCN) classifier for OTDR traces."""
+"""Binary Temporal Convolutional Network (TCN) classifier for OTDR traces.
+
+Classifies as **normal** or **anomaly**.
+Same structure as fault classification TCN.
+"""
 
 from dataclasses import dataclass
 from pathlib import Path

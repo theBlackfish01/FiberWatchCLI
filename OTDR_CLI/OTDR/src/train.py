@@ -3,7 +3,6 @@ from __future__ import annotations
 """
 Training script for OTDR models.
 
-Run examples
 ------------
 # Train GRUAE
 python -m src.train --mode gru_ae
@@ -350,27 +349,17 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
     "--use-loss-reflectance",
     is_flag=True,
     help=(
-        "Append 'loss' and 'Reflectance' to the measurement vector and train models "
-        "with those leakage-prone features."
-    ),
-)
-@click.option(
-    "--extra-feature",
-    "extra_features",
-    multiple=True,
-    help=(
-        "Optional additional feature columns to append to the default measurement "
-        "set (repeat flag for multiple columns)."
+            "Append 'loss' and 'Reflectance' to the measurement vector and train models "
+            "with those leakage-prone features."
     ),
 )
 def main(
-    mode,
-    data_path,
-    out_dir,
-    device,
-    tcn_anomaly_only,
-    use_loss_reflectance,
-    extra_features,
+        mode,
+        data_path,
+        out_dir,
+        device,
+        tcn_anomaly_only,
+        use_loss_reflectance
 ) -> None:
     out_dir = Path(out_dir)
     _ensure_dir(out_dir)
@@ -379,11 +368,9 @@ def main(
     df = load_raw_dataframe(data_path)
     train_df, val_df, test_df = make_splits(df)
 
-    # measurement columns: P1..Pn + SNR (+ optional extras)
-    extras = tuple(dict.fromkeys(extra_features))
+    # measurement columns: P1..Pn + SNR
     measurements = measurement_columns(
         train_df,
-        extras,
         include_loss_reflectance=use_loss_reflectance,
     )
     layout = summarise_feature_layout(measurements)
@@ -392,8 +379,7 @@ def main(
     feature_suffix = "_lr" if use_loss_reflectance else ""
     feature_config = build_feature_config(
         measurements,
-        use_loss_reflectance=use_loss_reflectance,
-        requested_extra_features=extras,
+        use_loss_reflectance=use_loss_reflectance
     )
     scaler = fit_scaler(train_df[measurements].values.astype(np.float32))
     splits = tensorise_splits(
@@ -634,6 +620,7 @@ def main(
             cfg=tst_cfg,
         )
         _evaluate_tst(tst, fault_test.X, fault_test.y_class, fault_test.y_pos)
+
 
 if __name__ == "__main__":
     main()
