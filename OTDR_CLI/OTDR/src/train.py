@@ -624,28 +624,5 @@ def main(
         )
         _evaluate_tst(tst, fault_test.X, fault_test.y_class, fault_test.y_pos)
 
-    # ----------------------------- TabNet ----------------------------------#
-    if mode in {"tab"}:
-        n_classes = int(df["Class"].max() + 1)
-        tabnet_input_dim = int(splits["train"].X.shape[1])
-        tabnet = OTDR_TabNet(n_classes=n_classes, input_dim=tabnet_input_dim)
-        tabnet_name = f"tabnet{feature_suffix}" if feature_suffix else "tabnet"
-        tabnet_cfg = TabNetConfig(
-            save_path=out_dir / f"{tabnet_name}.pt",
-            device=device,
-        )
-        tabnet = train_tabnet(
-            tabnet,
-            splits["train"].X,
-            splits["train"].y_class,
-            splits["train"].y_pos,
-            splits["val"].X,
-            splits["val"].y_class,
-            splits["val"].y_pos,
-            cfg=tabnet_cfg,
-        )
-        _evaluate_tabnet(tabnet, splits["test"].X, splits["test"].y_class, splits["test"].y_pos)
-
-
 if __name__ == "__main__":
     main()
