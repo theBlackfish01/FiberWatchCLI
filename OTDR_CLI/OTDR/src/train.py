@@ -172,13 +172,15 @@ def _evaluate_tcn(
         pos_count: int,
 ) -> Tuple[float, float]:
     logits, pos_hat = predict_tcn(tcn, X_test, pos_count=pos_count)
-    cls_acc = accuracy_score(y_test_cls.numpy(), logits.argmax(1).numpy())
+    preds = logits.argmax(dim=1).detach().cpu().numpy()
+    y_true = y_test_cls.detach().cpu().numpy()
+    cls_acc = accuracy_score(y_true, preds)
     rmse = root_mean_squared_error(
         y_test_pos.numpy().ravel(), pos_hat.numpy()
     )
     print(f"[TCN]    Test Acc={cls_acc:.3f}  RMSE={rmse:.3f}")
     print("\nClassification Report:")
-    print(classification_report(y_test_cls.cpu().numpy(), pos_hat.numpy().round()))
+    print(classification_report(y_true, preds))
     return cls_acc, rmse
 
 
@@ -210,14 +212,23 @@ def _evaluate_tst(
         y_test_pos: torch.Tensor,
 ) -> float:
     pos_hat = predict_tst(tst, X_test)
-    rmse = root_mean_squared_error(
-        y_test_pos.numpy().ravel(), pos_hat.numpy()
-    )
+    y_true_pos = y_test_pos.numpy().ravel()
+    y_pred_pos = pos_hat.numpy().ravel()
+    rmse = root_mean_squared_error(y_true_pos, y_pred_pos)
     classes = torch.unique(y_test_cls).cpu().numpy()
     cls_summary = ", ".join(str(int(c)) for c in classes)
     print(f"[TST]    Test RMSE={rmse:.3f} | Classes={cls_summary}")
-    print("\nClassification Report:")
-    print(classification_report(y_test_cls.cpu().numpy(), pos_hat.numpy().round()))
+    per_class = []
+    class_labels = y_test_cls.cpu().numpy()
+    for cls in classes:
+        mask = class_labels == cls
+        if np.any(mask):
+            cls_rmse = root_mean_squared_error(
+                y_true_pos[mask], y_pred_pos[mask]
+            )
+            per_class.append(f"{int(cls)}: {cls_rmse:.3f}")
+    if per_class:
+        print("Per-class RMSEs: " + ", ".join(per_class))
 
     return rmse
 
