@@ -1,33 +1,444 @@
-"""High-level OTDR training ➜ evaluation pipeline CLI."""
+"""Binary ➜ anomaly-only TCN ➜ TST evaluation pipeline."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Tuple
+from typing import Iterable, Sequence
+
+import json
 
 import click
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from sklearn.metrics import (
+    ConfusionMatrixDisplay,
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    roc_auc_score,
+    root_mean_squared_error,
+)
+from sklearn.preprocessing import StandardScaler
 
-from . import train as train_cli
-from . import eval as eval_cli
+from .data_helper import (
+    load_raw_dataframe,
+    make_splits,
+    measurement_columns,
+    summarise_feature_layout,
+    tensorise_splits,
+)
+from .model_functions.tcn import OTDR_TCN, predict as predict_tcn
+from .model_functions.tcn_binary import OTDR_TCNBinary, predict as predict_tcn_binary
+from .model_functions.tst import TimeSeriesTransformer, predict as predict_tst
+
+__all__ = [
+    "PipelineResult",
+    "Stage1Result",
+    "Stage2Result",
+    "Stage3Result",
+    "load_classifier",
+    "load_classifier_meta",
+    "remap_anomaly_only_targets",
+    "run_cascade",
+]
 
 
-def _checkpoint_path(out_dir: Path, classifier: str, anomaly_only: bool) -> Path:
-    if classifier == "tcn":
-        name = "tcn_anomaly.pt" if anomaly_only else "tcn_full.pt"
-    elif classifier == "tcn_binary":
-        name = "tcn_binary.pt"
-    elif classifier == "tab":
-        name = "tabnet.pt"
+@dataclass
+class Stage1Result:
+    accuracy: float
+    auc: float | None
+    predicted_faults: int
+    total_samples: int
+    truth_faults: int
+    predictions: torch.Tensor
+    probabilities: torch.Tensor
+
+
+@dataclass
+class Stage2Result:
+    predictions: dict[int, int]
+    accuracy: float | None
+    evaluated_samples: int
+
+
+@dataclass
+class Stage3Result:
+    rmse: float | None
+    evaluated_samples: int
+
+
+@dataclass
+class PipelineResult:
+    stage1: Stage1Result
+    stage2: Stage2Result
+    stage3: Stage3Result
+    summary_lines: list[str]
+    confusion_matrix: np.ndarray
+    confusion_matrix_path: Path
+    classification_report: str
+    final_predictions: torch.Tensor
+
+
+def _unique_paths(paths: Iterable[Path]) -> list[Path]:
+    seen: set[Path] = set()
+    ordered: list[Path] = []
+    for p in paths:
+        p = p.resolve()
+        if p not in seen:
+            ordered.append(p)
+            seen.add(p)
+    return ordered
+
+
+def _resolve_device(preferred: str | None) -> torch.device:
+    if preferred is None:
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+
+    try:
+        return torch.device(preferred)
+    except (RuntimeError, ValueError) as exc:  # pragma: no cover - defensive path
+        raise click.BadParameter(f"Invalid device specification: {preferred}") from exc
+
+
+def load_classifier(
+    kind: str,
+    cls_path: Path,
+    *,
+    seq_len: int,
+    n_classes: int,
+    device: torch.device,
+    input_channels: int | None = None,
+):
+    if kind == "tcn":
+        model = OTDR_TCN(n_classes=n_classes, in_ch=input_channels or 2)
+    elif kind == "tcn_binary":
+        model = OTDR_TCNBinary(in_ch=input_channels or 2)
+    elif kind == "tst":
+        model = TimeSeriesTransformer(seq_len=seq_len)
+    else:  # pragma: no cover - guarded by CLI choices
+        raise ValueError("classifier kind must be 'tcn', 'tcn_binary' or 'tst'")
+    model.load_state_dict(torch.load(cls_path, map_location=device))
+    return model.eval().to(device)
+
+
+def load_classifier_meta(cls_path: Path) -> dict[str, object] | None:
+    meta_path = cls_path.with_suffix(".json")
+    if not meta_path.exists():
+        return None
+    return json.loads(meta_path.read_text())
+
+
+def remap_anomaly_only_targets(
+    X: torch.Tensor,
+    y_cls: torch.Tensor,
+    y_pos: torch.Tensor,
+    meta: dict[str, object],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[int, int], torch.Tensor]:
+    mapping_raw = meta.get("class_index_map")
+    if mapping_raw is not None:
+        mapping = {int(k): int(v) for k, v in mapping_raw.items()}
     else:
-        name = "tst.pt"
-    return out_dir / name
+        original_classes = meta.get("original_classes")
+        if not original_classes:
+            raise ValueError(
+                "Anomaly-only TCN metadata must include 'class_index_map' or 'original_classes'."
+            )
+        mapping = {int(orig): idx for idx, orig in enumerate(original_classes)}
+
+    mask = torch.zeros_like(y_cls, dtype=torch.bool)
+    for orig in mapping:
+        mask |= y_cls == int(orig)
+
+    selected = torch.nonzero(mask, as_tuple=True)[0]
+    if selected.numel() == 0:
+        raise ValueError(
+            "No samples with the anomaly classes required by the anomaly-only TCN were found."
+        )
+
+    X_sel = X[selected]
+    y_pos_sel = y_pos[selected]
+    y_cls_sel = y_cls[selected]
+
+    remapped = torch.empty_like(y_cls_sel)
+    for orig, idx in mapping.items():
+        remapped[y_cls_sel == int(orig)] = int(idx)
+
+    return X_sel, remapped.to(dtype=torch.long), y_pos_sel, mapping, selected
+
+
+def _load_scaler_metadata(
+    *,
+    checkpoint_dirs: Sequence[Path],
+    use_loss_reflectance: bool,
+) -> tuple[StandardScaler, list[str] | None]:
+    scaler = StandardScaler()
+    suffix = "_lr" if use_loss_reflectance else ""
+    candidates: list[Path] = []
+    for base in _unique_paths(checkpoint_dirs):
+        if suffix:
+            candidates.append(base / f"scaler{suffix}.json")
+        candidates.append(base / "scaler.json")
+
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        meta = json.loads(candidate.read_text())
+        mean = meta.get("mean") or meta.get("scaler_mean")
+        scale = meta.get("scale") or meta.get("scaler_scale")
+        if mean is None or scale is None:
+            continue
+        scaler.mean_ = np.asarray(mean, dtype=np.float32)
+        scaler.scale_ = np.asarray(scale, dtype=np.float32)
+        meta_use_lr = meta.get("use_loss_reflectance")
+        if meta_use_lr is not None and bool(meta_use_lr) != use_loss_reflectance:
+            raise ValueError(
+                "Scaler metadata was generated with a different loss/reflectance configuration."
+            )
+        scaler.var_ = scaler.scale_ ** 2
+        scaler.n_features_in_ = scaler.mean_.shape[0]
+        features = meta.get("feature_names") or meta.get("active_features")
+        return scaler, list(features) if features is not None else None
+
+    raise FileNotFoundError(
+        "Could not locate scaler metadata (expected scaler.json alongside checkpoints)."
+    )
+
+
+def run_cascade(
+    *,
+    X_test: torch.Tensor,
+    y_cls_test: torch.Tensor,
+    y_pos_test: torch.Tensor,
+    device: torch.device,
+    out_dir: Path,
+    binary_path: Path,
+    anomaly_path: Path,
+    tst_path: Path,
+    default_n_classes: int,
+    pos_count: int,
+    input_channels: int,
+) -> PipelineResult:
+    total_samples = int(X_test.size(0))
+    actual_anomalies = int((y_cls_test != 0).sum().item())
+
+    # ---------- Stage 1: binary anomaly filter ---------- #
+    binary_meta = load_classifier_meta(binary_path) or {}
+    meta_pos = binary_meta.get("pos_count")
+    if meta_pos is not None and int(meta_pos) != pos_count:
+        raise ValueError("Binary TCN checkpoint expects a different number of position columns.")
+    meta_channels = binary_meta.get("input_channels")
+    if meta_channels is not None and int(meta_channels) != input_channels:
+        raise ValueError("Binary TCN checkpoint expects a different input channel arrangement.")
+
+    binary_model = load_classifier(
+        "tcn_binary",
+        binary_path,
+        seq_len=X_test.shape[1],
+        n_classes=2,
+        device=device,
+        input_channels=input_channels,
+    )
+    binary_logits = predict_tcn_binary(
+        binary_model,
+        X_test,
+        device=device,
+        pos_count=pos_count,
+    )
+    binary_probs = torch.softmax(binary_logits, dim=1)
+    binary_preds = binary_probs.argmax(1)
+    binary_truth = (y_cls_test != 0).to(dtype=torch.long)
+
+    binary_acc = accuracy_score(
+        binary_truth.cpu().numpy(),
+        binary_preds.cpu().numpy(),
+    )
+    binary_auc: float | None = None
+    if torch.unique(binary_truth).numel() == 2:
+        try:
+            binary_auc = roc_auc_score(
+                binary_truth.cpu().numpy(),
+                binary_probs[:, 1].cpu().numpy(),
+            )
+        except ValueError:  # pragma: no cover - degenerate class distribution
+            binary_auc = None
+
+    anomaly_indices = torch.nonzero(binary_preds == 1, as_tuple=True)[0]
+
+    stage1 = Stage1Result(
+        accuracy=binary_acc,
+        auc=binary_auc,
+        predicted_faults=int(anomaly_indices.numel()),
+        total_samples=total_samples,
+        truth_faults=actual_anomalies,
+        predictions=binary_preds,
+        probabilities=binary_probs,
+    )
+
+    # ---------- Stage 2: anomaly-only multi-class TCN ---------- #
+    anomaly_meta = load_classifier_meta(anomaly_path)
+    if anomaly_meta is None:
+        raise ValueError(
+            "Anomaly-only TCN checkpoint metadata is required for the orchestrated pipeline."
+        )
+    meta_pos = anomaly_meta.get("pos_count")
+    if meta_pos is not None and int(meta_pos) != pos_count:
+        raise ValueError("Anomaly TCN checkpoint expects a different number of position columns.")
+    meta_channels = anomaly_meta.get("input_channels")
+    if meta_channels is not None and int(meta_channels) != input_channels:
+        raise ValueError("Anomaly TCN checkpoint expects a different input channel arrangement.")
+
+    _, _, _, mapping, _ = remap_anomaly_only_targets(
+        X_test,
+        y_cls_test,
+        y_pos_test,
+        anomaly_meta,
+    )
+    inv_mapping = {int(v): int(k) for k, v in mapping.items()}
+    anomaly_n_classes = len(mapping)
+
+    anomaly_model = load_classifier(
+        "tcn",
+        anomaly_path,
+        seq_len=X_test.shape[1],
+        n_classes=anomaly_n_classes,
+        device=device,
+        input_channels=input_channels,
+    )
+
+    stage2_pred_lookup: dict[int, int] = {}
+    stage2_accuracy: float | None = None
+    stage2_eval_count = 0
+    if anomaly_indices.numel() > 0:
+        stage2_logits, _ = predict_tcn(
+            anomaly_model,
+            X_test[anomaly_indices],
+            device=device,
+            pos_count=pos_count,
+        )
+        stage2_preds_remap = stage2_logits.argmax(1).cpu()
+        stage2_preds_orig = [inv_mapping[int(cls.item())] for cls in stage2_preds_remap]
+        stage2_pred_lookup = {
+            int(idx.item()): int(stage2_preds_orig[pos])
+            for pos, idx in enumerate(anomaly_indices.cpu())
+        }
+
+        # Accuracy only on samples whose ground-truth class belongs to the anomaly mapping
+        stage2_truth: list[int] = []
+        stage2_preds_eval: list[int] = []
+        for idx in anomaly_indices.cpu().tolist():
+            true_cls = int(y_cls_test[idx].item())
+            if true_cls in mapping:
+                stage2_truth.append(true_cls)
+                stage2_preds_eval.append(stage2_pred_lookup[idx])
+        stage2_eval_count = len(stage2_truth)
+        if stage2_truth:
+            stage2_accuracy = accuracy_score(stage2_truth, stage2_preds_eval)
+
+    stage2 = Stage2Result(
+        predictions=stage2_pred_lookup,
+        accuracy=stage2_accuracy,
+        evaluated_samples=stage2_eval_count,
+    )
+
+    # ---------- Stage 3: TST localisation ---------- #
+    stage3_rmse: float | None = None
+    stage3_count = 0
+    if anomaly_indices.numel() > 0:
+        class_feature = torch.tensor(
+            [float(stage2_pred_lookup.get(int(idx.item()), 0)) for idx in anomaly_indices],
+            dtype=X_test.dtype,
+        ).unsqueeze(1)
+        tst_input = torch.cat([class_feature, X_test[anomaly_indices]], dim=1)
+        tst_model = load_classifier(
+            "tst",
+            tst_path,
+            seq_len=tst_input.shape[1],
+            n_classes=default_n_classes,
+            device=device,
+        )
+        pos_hat = predict_tst(tst_model, tst_input, device=device)
+        stage3_count = int(pos_hat.size(0))
+        if stage3_count > 0:
+            stage3_rmse = root_mean_squared_error(
+                y_pos_test[anomaly_indices].cpu().numpy(),
+                pos_hat.cpu().numpy(),
+            )
+
+    stage3 = Stage3Result(
+        rmse=stage3_rmse,
+        evaluated_samples=stage3_count,
+    )
+
+    # ---------- Aggregate predictions ---------- #
+    final_preds = torch.zeros_like(y_cls_test)
+    for idx, pred_cls in stage2_pred_lookup.items():
+        final_preds[idx] = int(pred_cls)
+
+    y_true_np = y_cls_test.cpu().numpy()
+    y_pred_np = final_preds.cpu().numpy()
+
+    report = classification_report(y_true_np, y_pred_np, digits=3)
+    cm = confusion_matrix(y_true_np, y_pred_np)
+    ConfusionMatrixDisplay(cm).plot(include_values=True, cmap="Blues", colorbar=False)
+    plt.title("Confusion Matrix – Binary➜TCN➜TST pipeline")
+    plt.tight_layout()
+    cm_path = out_dir / "confusion_matrix_pipeline.png"
+    plt.savefig(cm_path, dpi=150)
+    plt.close()
+
+    summary_lines = [
+        (
+            "Stage 1 – Binary anomaly filter: "
+            f"accuracy={stage1.accuracy:.3f}, auc={stage1.auc:.3f if stage1.auc is not None else 'N/A'}, "
+            f"predicted {stage1.predicted_faults}/{stage1.total_samples} traces as faulty ("
+            f"ground-truth faults: {stage1.truth_faults})."
+        ),
+    ]
+
+    if stage2.predictions:
+        acc_str = f"{stage2.accuracy:.3f}" if stage2.accuracy is not None else "N/A"
+        summary_lines.append(
+            "Stage 2 – Anomaly-only TCN: "
+            f"accuracy={acc_str} over {stage2.evaluated_samples} mapped faults; "
+            f"issued predictions for {len(stage2.predictions)} traces."
+        )
+    else:
+        summary_lines.append(
+            "Stage 2 – Anomaly-only TCN: no anomaly predictions received from the binary filter."
+        )
+
+    if stage3.evaluated_samples > 0:
+        rmse_str = f"{stage3.rmse:.3f}" if stage3.rmse is not None else "N/A"
+        summary_lines.append(
+            "Stage 3 – Time-series transformer localisation: "
+            f"RMSE={rmse_str} m over {stage3.evaluated_samples} traces."
+        )
+    else:
+        summary_lines.append(
+            "Stage 3 – Time-series transformer localisation: skipped (no anomaly candidates)."
+        )
+
+    summary_lines.append("Confusion matrix (rows=true, cols=pred):\n" + np.array2string(cm))
+    summary_lines.append("Overall – chained prediction classification report:\n" + report)
+
+    return PipelineResult(
+        stage1=stage1,
+        stage2=stage2,
+        stage3=stage3,
+        summary_lines=summary_lines,
+        confusion_matrix=cm,
+        confusion_matrix_path=cm_path,
+        classification_report=report,
+        final_predictions=final_preds,
+    )
 
 
 @click.command(context_settings=dict(help_option_names=["-h", "--help"]))
-@click.option(
-    "--full-run",
-    is_flag=True,
-    help="Train all OTDR models and immediately evaluate the GRU-AE pipeline.",
-)
 @click.option(
     "--data",
     "data_path",
@@ -37,36 +448,35 @@ def _checkpoint_path(out_dir: Path, classifier: str, anomaly_only: bool) -> Path
     help="Path to the cleaned OTDR dataset (CSV or Parquet).",
 )
 @click.option(
+    "--binary-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Checkpoint for the binary TCN anomaly detector.",
+)
+@click.option(
+    "--anomaly-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Checkpoint for the anomaly-only multi-class TCN.",
+)
+@click.option(
+    "--tst-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Checkpoint for the TST localisation model.",
+)
+@click.option(
     "--out-dir",
     type=str,
-    default="models",
+    default="pipeline_eval",
     show_default=True,
-    help="Directory where training checkpoints and metadata will be written.",
+    help="Folder under outputs/ where pipeline artifacts will be written.",
 )
 @click.option(
     "--device",
     type=str,
     default=None,
     help="cuda | cuda:0 | mps | cpu | leave empty for auto-detect.",
-)
-@click.option(
-    "--classifier",
-    type=click.Choice(["tcn", "tcn_binary", "tst", "tab"], case_sensitive=False),
-    default="tcn",
-    show_default=True,
-    help="Classifier checkpoint to evaluate after training completes.",
-)
-@click.option(
-    "--eval-dir",
-    type=str,
-    default=None,
-    help="Optional outputs/ subfolder for evaluation artifacts (defaults to pipeline_<out-dir>).",
-)
-@click.option(
-    "--tcn-anomaly-only/--tcn-all-data",
-    "tcn_anomaly_only",
-    default=False,
-    help="Train and evaluate the anomaly-only TCN variant (Class != 0).",
 )
 @click.option(
     "--extra-feature",
@@ -78,65 +488,130 @@ def _checkpoint_path(out_dir: Path, classifier: str, anomaly_only: bool) -> Path
     ),
 )
 @click.option(
-    "--num-samples",
-    type=click.IntRange(0, None),
-    default=0,
-    show_default=True,
-    help="Random evaluation samples to visualise/explain; 0 skips explainability.",
-)
-@click.option(
-    "--orchestrate-tst",
+    "--use-loss-reflectance",
     is_flag=True,
-    help="Chain binary ➜ anomaly-only TCN ➜ TST during evaluation (requires trained checkpoints).",
+    help=(
+        "Append 'loss' and 'Reflectance' to the measurement vector and load models "
+        "trained with those leakage-prone features."
+    ),
 )
 def main(
-    full_run: bool,
     data_path: Path,
+    binary_path: Path | None,
+    anomaly_path: Path | None,
+    tst_path: Path | None,
     out_dir: str,
     device: str | None,
-    classifier: str,
-    eval_dir: str | None,
-    tcn_anomaly_only: bool,
-    extra_features: Tuple[str, ...],
-    num_samples: int,
-    orchestrate_tst: bool,
+    extra_features: Sequence[str],
+    use_loss_reflectance: bool,
 ) -> None:
-    """Run ``src.train`` and ``src.eval`` sequentially with shared configuration."""
+    """Run the binary➜anomaly➜TST inference cascade end-to-end."""
 
-    if not full_run:
-        raise click.UsageError("Specify --full-run to launch the training/evaluation pipeline.")
+    out_dir_path = Path("outputs") / out_dir
+    out_dir_path.mkdir(parents=True, exist_ok=True)
 
-    out_dir_path = Path(out_dir)
-    eval_dir_name = eval_dir or f"pipeline_{out_dir_path.name}"
     extras = tuple(dict.fromkeys(extra_features))
+    feature_suffix = "_lr" if use_loss_reflectance else ""
 
-    click.echo("[PIPELINE] Starting training phase (mode=all)...")
-    train_cli.main.callback(
-        mode="all",
-        data_path=data_path,
-        out_dir=str(out_dir_path),
-        device=device,
-        tcn_anomaly_only=tcn_anomaly_only,
-        extra_features=extras,
+    df = load_raw_dataframe(data_path)
+    _, _, test_df = make_splits(df)
+
+    scaler, feature_names_meta = _load_scaler_metadata(
+        checkpoint_dirs=[
+            Path(binary_path).parent if binary_path else Path("models"),
+            Path(anomaly_path).parent if anomaly_path else Path("models"),
+            Path(tst_path).parent if tst_path else Path("models"),
+        ],
+        use_loss_reflectance=use_loss_reflectance,
     )
 
-    detector_path = out_dir_path / "gru_ae.pt"
-    cls_path = _checkpoint_path(out_dir_path, classifier, tcn_anomaly_only)
+    try:
+        requested_cols = measurement_columns(
+            test_df,
+            extras,
+            include_loss_reflectance=use_loss_reflectance,
+        )
+    except KeyError as exc:
+        raise click.BadOptionUsage("--extra-feature", str(exc)) from exc
 
-    click.echo("[PIPELINE] Launching evaluation phase (mode=pipeline)...")
-    eval_cli.main.callback(
-        mode="pipeline",
-        classifier=classifier,
-        data_path=data_path,
-        detector=detector_path,
-        cls_path=cls_path,
-        num_samples=num_samples,
-        out_dir=eval_dir_name,
-        device=device,
-        tcn_anomaly_only=tcn_anomaly_only,
-        orchestrate_tst=orchestrate_tst,
-        extra_features=extras,
+    if feature_names_meta:
+        meas_cols = list(feature_names_meta)
+        missing_cols = [c for c in meas_cols if c not in test_df.columns]
+        if missing_cols:
+            raise ValueError(
+                "Dataset is missing feature columns required by the scaler metadata: "
+                + ", ".join(missing_cols)
+            )
+        if meas_cols != requested_cols:
+            raise ValueError(
+                "Requested feature configuration does not match the saved scaler metadata."
+            )
+    else:
+        meas_cols = requested_cols
+
+    if len(meas_cols) != scaler.n_features_in_:
+        raise ValueError(
+            "Scaler metadata dimensionality does not match selected measurement columns."
+        )
+
+    layout = summarise_feature_layout(meas_cols)
+    pos_count = int(layout["pos_count"])
+    extra_scalar_count = len(layout["extra_features"])
+    input_channels = 1 + 1 + extra_scalar_count
+
+    if pos_count <= 0:
+        raise ValueError("No positional measurement columns (P*) were detected in the dataset.")
+
+    splits = tensorise_splits(
+        test_df,
+        test_df,
+        test_df,
+        scaler,
+        measurement_override=meas_cols,
     )
+    X_test = splits["test"].X
+    y_cls_test = splits["test"].y_class
+    y_pos_test = splits["test"].y_pos
+
+    default_n_classes = int(df["Class"].max() + 1)
+
+    binary_default = Path("models") / (
+        f"tcn_binary{feature_suffix}.pt" if feature_suffix else "tcn_binary.pt"
+    )
+    anomaly_default = Path("models") / (
+        f"tcn_anomaly{feature_suffix}.pt" if feature_suffix else "tcn_anomaly.pt"
+    )
+    tst_default = Path("models") / (
+        f"tst{feature_suffix}.pt" if feature_suffix else "tst.pt"
+    )
+
+    binary_path = Path(binary_path) if binary_path else binary_default
+    anomaly_path = Path(anomaly_path) if anomaly_path else anomaly_default
+    tst_path = Path(tst_path) if tst_path else tst_default
+
+    for chk in (binary_path, anomaly_path, tst_path):
+        if not chk.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {chk}")
+
+    resolved_device = _resolve_device(device)
+    click.echo(f"[PIPELINE] Using device: {resolved_device}")
+
+    result = run_cascade(
+        X_test=X_test,
+        y_cls_test=y_cls_test,
+        y_pos_test=y_pos_test,
+        device=resolved_device,
+        out_dir=out_dir_path,
+        binary_path=binary_path,
+        anomaly_path=anomaly_path,
+        tst_path=tst_path,
+        default_n_classes=default_n_classes,
+        pos_count=pos_count,
+        input_channels=input_channels,
+    )
+
+    click.echo("\n".join(result.summary_lines))
+    click.echo(f"Confusion matrix saved to {result.confusion_matrix_path}")
 
 
 if __name__ == "__main__":
