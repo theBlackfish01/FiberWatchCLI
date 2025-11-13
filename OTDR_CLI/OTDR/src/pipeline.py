@@ -391,10 +391,12 @@ def run_cascade(
     plt.savefig(cm_path, dpi=150)
     plt.close()
 
+    auc_str = f"{stage1.auc:.3f}" if stage1.auc is not None else "N/A"
+
     summary_lines = [
         (
             "Stage 1 – Binary anomaly filter: "
-            f"accuracy={stage1.accuracy:.3f}, auc={stage1.auc:.3f if stage1.auc is not None else 'N/A'}, "
+            f"accuracy={stage1.accuracy:.3f}, auc={auc_str}, "
             f"predicted {stage1.predicted_faults}/{stage1.total_samples} traces as faulty ("
             f"ground-truth faults: {stage1.truth_faults})."
         ),
