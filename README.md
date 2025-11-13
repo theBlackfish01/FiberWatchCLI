@@ -145,6 +145,22 @@ cd OTDR_CLI/OTDR
 python -m src.pipeline --data data/OTDR_DATA.csv
 ```
 
+**OTDR training (standard features):**
+
+```bash
+cd OTDR_CLI/OTDR
+python -m src.train --mode all --data data/OTDR_DATA.csv
+```
+
+**OTDR training with loss/Reflectance inputs:**
+
+```bash
+cd OTDR_CLI/OTDR
+python -m src.train --mode all --use-loss-reflectance --data data/OTDR_DATA.csv
+```
+
+Both commands persist a `feature_config` block in the emitted metadata. When the loss/Reflectance flag is enabled the scaler and checkpoints receive a `_lr` suffix; evaluation automatically targets those filenames when `--use-loss-reflectance` is provided and will refuse to run if the requested feature signature diverges from the checkpoint metadata.
+
 Key flags:
 
 * `--binary-path / --anomaly-path / --tst-path` – swap in specific checkpoints for each cascade stage.

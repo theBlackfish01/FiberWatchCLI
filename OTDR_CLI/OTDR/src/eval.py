@@ -35,6 +35,7 @@ from data_helper import (
     tensorise_splits,
     measurement_columns,
     summarise_feature_layout,
+    build_feature_config,
 )
 from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import predict as predict_tcn
@@ -55,6 +56,85 @@ import warnings
 
 warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
 client = OpenAI(api_key=cfg.OPENAI_API_KEY)
+
+
+def _dedupe_preserve(seq):
+    """Remove duplicates while preserving the original order."""
+
+    return tuple(dict.fromkeys(seq))
+
+
+def _validate_feature_config(
+    meta_cfg: dict[str, Any],
+    expected_cfg: dict[str, Any],
+    context: str,
+) -> None:
+    """Ensure metadata feature configuration aligns with the requested one."""
+
+    expected_columns = list(expected_cfg.get("columns", []))
+    expected_use_lr = bool(expected_cfg.get("use_loss_reflectance", False))
+    expected_requested = list(expected_cfg.get("requested_extras", []))
+
+    meta_sig = meta_cfg.get("signature")
+    expected_sig = expected_cfg.get("signature")
+    if meta_sig and expected_sig and meta_sig == expected_sig:
+        return
+
+    meta_columns = [str(c) for c in meta_cfg.get("columns") or []]
+    if meta_columns and meta_columns != expected_columns:
+        raise ValueError(
+            f"{context} expects measurement columns {meta_columns}, "
+            f"but the requested configuration is {expected_columns}."
+        )
+
+    meta_use_lr = meta_cfg.get("use_loss_reflectance")
+    if meta_use_lr is not None and bool(meta_use_lr) != expected_use_lr:
+        raise ValueError(
+            f"{context} was trained with use_loss_reflectance={bool(meta_use_lr)}, "
+            f"but the flag is set to {expected_use_lr}."
+        )
+
+    meta_requested = meta_cfg.get("requested_extras")
+    if meta_requested is not None:
+        meta_requested_list = [str(c) for c in meta_requested]
+        if meta_requested_list != expected_requested:
+            raise ValueError(
+                f"{context} expects additional features {meta_requested_list}, "
+                f"but {expected_requested} were requested."
+            )
+
+
+def _validate_metadata_features(
+    meta: dict[str, Any] | None,
+    expected_cfg: dict[str, Any],
+    context: str,
+) -> None:
+    """Compare legacy and modern metadata payloads against the requested features."""
+
+    if not meta:
+        return
+
+    cfg = meta.get("feature_config")
+    if cfg:
+        _validate_feature_config(cfg, expected_cfg, context)
+        return
+
+    expected_columns = list(expected_cfg.get("columns", []))
+    expected_use_lr = bool(expected_cfg.get("use_loss_reflectance", False))
+
+    meta_columns = meta.get("active_features") or meta.get("feature_names")
+    if meta_columns and list(meta_columns) != expected_columns:
+        raise ValueError(
+            f"{context} expects measurement columns {list(meta_columns)}, "
+            f"but the requested configuration is {expected_columns}."
+        )
+
+    meta_use_lr = meta.get("use_loss_reflectance")
+    if meta_use_lr is not None and bool(meta_use_lr) != expected_use_lr:
+        raise ValueError(
+            f"{context} was trained with use_loss_reflectance={bool(meta_use_lr)}, "
+            f"but the flag is set to {expected_use_lr}."
+        )
 
 
 def _extract_response_text(resp: Any) -> str:
@@ -605,7 +685,7 @@ def main(
             "The anomaly-only flag is only applicable when --classifier=tcn.",
         )
 
-    extras = tuple(extra_features)
+    extras = _dedupe_preserve(extra_features)
     feature_suffix = "_lr" if use_loss_reflectance else ""
     detector_path = (
         Path(detector)
@@ -633,6 +713,7 @@ def main(
     scaler = StandardScaler()
     feature_names_meta: list[str] | None = None
     scaler_meta: dict[str, Any] | None = None
+    detector_meta: dict[str, Any] | None = None
     scaler_candidates: list[Path] = []
     candidate_dirs = [detector_path.parent, binary_ckpt.parent, anomaly_ckpt.parent, tst_ckpt.parent]
     seen_dirs: set[Path] = set()
@@ -645,35 +726,35 @@ def main(
             scaler_candidates.append(base / f"scaler{feature_suffix}.json")
         scaler_candidates.append(base / "scaler.json")
     for candidate in scaler_candidates:
-        if candidate.exists():
-            scaler_meta = json.loads(candidate.read_text())
+        if not candidate.exists():
+            continue
+        scaler_meta = json.loads(candidate.read_text())
+        feature_cfg = scaler_meta.get("feature_config")
+        if feature_cfg and feature_cfg.get("columns"):
+            feature_names_meta = list(feature_cfg["columns"])
+        else:
             feature_names_meta = (
                 scaler_meta.get("feature_names")
                 or scaler_meta.get("active_features")
+                or feature_names_meta
             )
-            scaler.mean_ = np.asarray(scaler_meta["mean"], dtype=np.float32)
-            scaler.scale_ = np.asarray(scaler_meta["scale"], dtype=np.float32)
-            meta_use_lr = scaler_meta.get("use_loss_reflectance")
-            if meta_use_lr is not None and bool(meta_use_lr) != use_loss_reflectance:
-                raise ValueError(
-                    "Scaler metadata was generated with a different loss/reflectance configuration."
-                )
-            break
+        scaler.mean_ = np.asarray(scaler_meta["mean"], dtype=np.float32)
+        scaler.scale_ = np.asarray(scaler_meta["scale"], dtype=np.float32)
+        break
 
     if scaler_meta is None:
         detector_meta_path = detector_path.with_suffix(".json")
         detector_meta = json.loads(detector_meta_path.read_text())
-        feature_names_meta = (
-            detector_meta.get("feature_names")
-            or detector_meta.get("active_features")
-        )
+        feature_cfg = detector_meta.get("feature_config")
+        if feature_cfg and feature_cfg.get("columns"):
+            feature_names_meta = list(feature_cfg["columns"])
+        else:
+            feature_names_meta = (
+                detector_meta.get("feature_names")
+                or detector_meta.get("active_features")
+            )
         scaler.mean_ = np.asarray(detector_meta["scaler_mean"], dtype=np.float32)
         scaler.scale_ = np.asarray(detector_meta["scaler_scale"], dtype=np.float32)
-        meta_use_lr = detector_meta.get("use_loss_reflectance")
-        if meta_use_lr is not None and bool(meta_use_lr) != use_loss_reflectance:
-            raise ValueError(
-                "Detector metadata was generated with a different loss/reflectance configuration."
-            )
 
     scaler.var_ = scaler.scale_ ** 2
     scaler.n_features_in_ = scaler.mean_.shape[0]
@@ -686,6 +767,15 @@ def main(
         )
     except KeyError as exc:
         raise click.BadOptionUsage("--extra-feature", str(exc)) from exc
+
+    expected_feature_config = build_feature_config(
+        requested_cols,
+        use_loss_reflectance=use_loss_reflectance,
+        requested_extra_features=extras,
+    )
+
+    _validate_metadata_features(scaler_meta, expected_feature_config, "Scaler metadata")
+    _validate_metadata_features(detector_meta, expected_feature_config, "Detector metadata")
 
     if feature_names_meta:
         meas_cols = list(feature_names_meta)
@@ -701,7 +791,7 @@ def main(
                 "(did you train with --use-loss-reflectance?)."
             )
     else:
-        meas_cols = requested_cols
+        meas_cols = list(requested_cols)
 
     if len(meas_cols) != scaler.n_features_in_:
         raise ValueError(
@@ -777,6 +867,7 @@ def main(
     cls_path = Path(cls_path) if cls_path else Path("models") / default_cls_name
 
     cls_meta = load_classifier_meta(cls_path)
+    _validate_metadata_features(cls_meta, expected_feature_config, "Classifier metadata")
 
     if cls_meta:
         meta_features = cls_meta.get("active_features") or cls_meta.get("feature_names")
@@ -808,6 +899,14 @@ def main(
         for chk in (binary_ckpt, anomaly_ckpt, tst_ckpt):
             if not chk.exists():
                 raise FileNotFoundError(f"Checkpoint not found: {chk}")
+
+        for label, chk in (
+            ("Binary TCN", binary_ckpt),
+            ("Anomaly-only TCN", anomaly_ckpt),
+            ("TST", tst_ckpt),
+        ):
+            meta = load_classifier_meta(chk)
+            _validate_metadata_features(meta, expected_feature_config, f"{label} metadata")
 
         pipeline_result = run_cascade(
             X_test=X_test,
