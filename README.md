@@ -164,7 +164,6 @@ Both commands persist a `feature_config` block in the emitted metadata. When the
 Key flags:
 
 * `--binary-path / --anomaly-path / --tst-path` – swap in specific checkpoints for each cascade stage.
-* `--extra-feature Reflectance` – append extra dataset columns to the model inputs (repeat for multiple columns).
 * `--use-loss-reflectance` – include the leakage-prone `loss`/`Reflectance` scalars. Trained checkpoints and scalers gain a `_lr` suffix and evaluation will look for those files automatically when the flag is set.
 
 The legacy individual commands (`python -m src.train` / `python -m src.eval`) still work if you prefer manual control.

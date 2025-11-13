@@ -481,15 +481,6 @@ def run_cascade(
     help="cuda | cuda:0 | mps | cpu | leave empty for auto-detect.",
 )
 @click.option(
-    "--extra-feature",
-    "extra_features",
-    multiple=True,
-    help=(
-        "Optional additional feature columns to append to the default measurement "
-        "set (repeat flag for multiple columns)."
-    ),
-)
-@click.option(
     "--use-loss-reflectance",
     is_flag=True,
     help=(
@@ -504,7 +495,6 @@ def main(
     tst_path: Path | None,
     out_dir: str,
     device: str | None,
-    extra_features: Sequence[str],
     use_loss_reflectance: bool,
 ) -> None:
     """Run the binary➜anomaly➜TST inference cascade end-to-end."""
@@ -512,7 +502,6 @@ def main(
     out_dir_path = Path("outputs") / out_dir
     out_dir_path.mkdir(parents=True, exist_ok=True)
 
-    extras = tuple(dict.fromkeys(extra_features))
     feature_suffix = "_lr" if use_loss_reflectance else ""
 
     df = load_raw_dataframe(data_path)
@@ -530,11 +519,10 @@ def main(
     try:
         requested_cols = measurement_columns(
             test_df,
-            extras,
             include_loss_reflectance=use_loss_reflectance,
         )
     except KeyError as exc:
-        raise click.BadOptionUsage("--extra-feature", str(exc)) from exc
+        raise click.BadOptionUsage("--use-loss-reflectance", str(exc)) from exc
 
     if feature_names_meta:
         meas_cols = list(feature_names_meta)
