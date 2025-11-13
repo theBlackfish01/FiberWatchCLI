@@ -72,7 +72,7 @@ Both tracks include **visual diagnostics** and an optional **LLM explainability*
 ### OTDR 
 
 * **TCN**: Acc ≈ 0.885; **TST**: Acc ≈ 0.881
-* **GRU-AE → TST pipeline**: Acc ≈ **0.958**, with strong anomaly recall; localization MSE \~ **5 cm** scale.
+* **Binary TCN → anomaly-only TCN → TST pipeline**: high anomaly recall with \~**5 cm** localisation RMSE when the cascade triggers (binary filter → fault type → localisation input augmented with predicted class).
 
 ### Φ-OTDR — **TFT**
 
@@ -138,19 +138,18 @@ python PHI-OTDR/src/eval.py eval --model tcn --skip-llm   # or --model tft | cnn
 python PHI-OTDR/src/eval.py eval --model tft              # runs LLM if key is set
 ```
 
-**OTDR one-shot pipeline:**
+**OTDR inference pipeline:**
 
 ```bash
 cd OTDR_CLI/OTDR
-python -m src.pipeline --full-run
+python -m src.pipeline --data data/OTDR_DATA.csv
 ```
 
 Key flags:
 
-* `--tcn-anomaly-only` – train the anomaly-only TCN variant and evaluate it in the pipeline.
+* `--binary-path / --anomaly-path / --tst-path` – swap in specific checkpoints for each cascade stage.
 * `--extra-feature Reflectance` – append extra dataset columns to the model inputs (repeat for multiple columns).
 * `--use-loss-reflectance` – include the leakage-prone `loss`/`Reflectance` scalars. Trained checkpoints and scalers gain a `_lr` suffix and evaluation will look for those files automatically when the flag is set.
-* `--num-samples 0` – skip SHAP/LLM explainability during the evaluation hop.
 
 The legacy individual commands (`python -m src.train` / `python -m src.eval`) still work if you prefer manual control.
 

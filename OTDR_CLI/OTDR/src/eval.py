@@ -37,9 +37,15 @@ from data_helper import (
     summarise_feature_layout,
 )
 from model_functions.gruae import VectorGRUAE, reconstruction_error
-from model_functions.tcn import OTDR_TCN, predict as predict_tcn
-from model_functions.tcn_binary import OTDR_TCNBinary, predict as predict_tcn_binary
-from model_functions.tst import TimeSeriesTransformer, predict as predict_tst
+from model_functions.tcn import predict as predict_tcn
+from model_functions.tcn_binary import predict as predict_tcn_binary
+from model_functions.tst import predict as predict_tst
+from pipeline import (
+    load_classifier,
+    load_classifier_meta,
+    remap_anomaly_only_targets,
+    run_cascade,
+)
 import config.config as cfg
 from pathlib import Path
 from rag import retrieve
@@ -120,80 +126,6 @@ def _load_gru_ae(det_path: Path, device: torch.device) -> Tuple[VectorGRUAE, flo
     ae.load_state_dict(torch.load(det_path, map_location=device))
     ae.eval().to(device)
     return ae, threshold, scaler_mean, scaler_scale
-
-
-def _load_classifier(
-    kind: str,
-    cls_path: Path,
-    seq_len: int,
-    n_classes: int,
-    device: torch.device,
-    *,
-    input_channels: int | None = None,
-):
-    if kind == "tcn":
-        model = OTDR_TCN(n_classes=n_classes, in_ch=input_channels or 2)
-        model.load_state_dict(torch.load(cls_path, map_location=device))
-    elif kind == "tcn_binary":
-        model = OTDR_TCNBinary(in_ch=input_channels or 2)
-        model.load_state_dict(torch.load(cls_path, map_location=device))
-    elif kind == "tst":
-        model = TimeSeriesTransformer(seq_len=seq_len)
-        model.load_state_dict(torch.load(cls_path, map_location=device))
-    else:
-        raise ValueError("classifier kind must be 'tcn', 'tcn_binary' or 'tst'")
-    return model.eval().to(device)
-
-
-def _load_classifier_meta(cls_path: Path) -> dict[str, Any] | None:
-    meta_path = cls_path.with_suffix(".json")
-    if not meta_path.exists():
-        return None
-    return json.loads(meta_path.read_text())
-
-
-def _remap_anomaly_only_targets(
-    X: torch.Tensor,
-    y_cls: torch.Tensor,
-    y_pos: torch.Tensor,
-    meta: dict[str, Any],
-) -> tuple[
-    torch.Tensor,
-    torch.Tensor,
-    torch.Tensor,
-    dict[int, int],
-    torch.Tensor,
-]:
-    mapping_raw = meta.get("class_index_map")
-    if mapping_raw is not None:
-        mapping = {int(k): int(v) for k, v in mapping_raw.items()}
-    else:
-        original_classes = meta.get("original_classes")
-        if not original_classes:
-            raise ValueError(
-                "Anomaly-only TCN metadata must include 'class_index_map' or 'original_classes'."
-            )
-        mapping = {int(orig): idx for idx, orig in enumerate(original_classes)}
-
-    mask = torch.zeros_like(y_cls, dtype=torch.bool)
-    for orig in mapping:
-        mask |= y_cls == int(orig)
-
-    selected = torch.nonzero(mask, as_tuple=True)[0]
-    if selected.numel() == 0:
-        raise ValueError(
-            "No samples with the anomaly classes required by the anomaly-only TCN were found."
-        )
-
-    X_sel = X[selected]
-    y_pos_sel = y_pos[selected]
-    y_cls_sel = y_cls[selected]
-
-    remapped = torch.empty_like(y_cls_sel)
-    for orig, idx in mapping.items():
-        remapped[y_cls_sel == int(orig)] = int(idx)
-
-    return X_sel, remapped.to(dtype=torch.long), y_pos_sel, mapping, selected
 
 
 def _visualise_sample(
@@ -593,6 +525,24 @@ def _llm_explain(
     help="Optional path to classifier weights; defaults by --classifier.",
 )
 @click.option(
+    "--binary-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional override for the binary TCN checkpoint (pipeline mode).",
+)
+@click.option(
+    "--anomaly-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional override for the anomaly-only TCN checkpoint (pipeline mode).",
+)
+@click.option(
+    "--tst-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Optional override for the TST localisation checkpoint (pipeline mode).",
+)
+@click.option(
     "--num-samples",
     type=click.IntRange(0, None),
     default=4,
@@ -635,6 +585,9 @@ def main(
     data_path,
     detector,
     cls_path,
+    binary_path,
+    anomaly_path,
+    tst_path,
     num_samples,
     out_dir,
     device,
@@ -659,6 +612,19 @@ def main(
         if detector is not None
         else Path("models") / (f"gru_ae{feature_suffix}.pt" if feature_suffix else "gru_ae.pt")
     )
+    binary_default = Path("models") / (
+        f"tcn_binary{feature_suffix}.pt" if feature_suffix else "tcn_binary.pt"
+    )
+    anomaly_default = Path("models") / (
+        f"tcn_anomaly{feature_suffix}.pt" if feature_suffix else "tcn_anomaly.pt"
+    )
+    tst_default = Path("models") / (
+        f"tst{feature_suffix}.pt" if feature_suffix else "tst.pt"
+    )
+
+    binary_ckpt = Path(binary_path) if binary_path else binary_default
+    anomaly_ckpt = Path(anomaly_path) if anomaly_path else anomaly_default
+    tst_ckpt = Path(tst_path) if tst_path else tst_default
 
     # ---------- data ---------- #
     df = load_raw_dataframe(data_path)
@@ -668,9 +634,16 @@ def main(
     feature_names_meta: list[str] | None = None
     scaler_meta: dict[str, Any] | None = None
     scaler_candidates: list[Path] = []
-    if feature_suffix:
-        scaler_candidates.append(detector_path.parent / f"scaler{feature_suffix}.json")
-    scaler_candidates.append(detector_path.parent / "scaler.json")
+    candidate_dirs = [detector_path.parent, binary_ckpt.parent, anomaly_ckpt.parent, tst_ckpt.parent]
+    seen_dirs: set[Path] = set()
+    for base in candidate_dirs:
+        base = base.resolve()
+        if base in seen_dirs:
+            continue
+        seen_dirs.add(base)
+        if feature_suffix:
+            scaler_candidates.append(base / f"scaler{feature_suffix}.json")
+        scaler_candidates.append(base / "scaler.json")
     for candidate in scaler_candidates:
         if candidate.exists():
             scaler_meta = json.loads(candidate.read_text())
@@ -803,7 +776,7 @@ def main(
     default_cls_name = f"{cls_base}{feature_suffix}.pt" if feature_suffix else f"{cls_base}.pt"
     cls_path = Path(cls_path) if cls_path else Path("models") / default_cls_name
 
-    cls_meta = _load_classifier_meta(cls_path)
+    cls_meta = load_classifier_meta(cls_path)
 
     if cls_meta:
         meta_features = cls_meta.get("active_features") or cls_meta.get("feature_names")
@@ -825,32 +798,32 @@ def main(
 
     default_n_classes = int(df["Class"].max() + 1)
 
-    if orchestrate_tst:
+    if orchestrate_tst and mode != "pipeline":
         if classifier != "tst":
             raise click.BadOptionUsage(
                 "--orchestrate-tst",
                 "The chained orchestrator is only available when --classifier=tst.",
             )
 
-        model_dir = cls_path.parent
-        binary_name = f"tcn_binary{feature_suffix}.pt" if feature_suffix else "tcn_binary.pt"
-        anomaly_name = f"tcn_anomaly{feature_suffix}.pt" if feature_suffix else "tcn_anomaly.pt"
-        binary_path = model_dir / binary_name
-        anomaly_path = model_dir / anomaly_name
+        for chk in (binary_ckpt, anomaly_ckpt, tst_ckpt):
+            if not chk.exists():
+                raise FileNotFoundError(f"Checkpoint not found: {chk}")
 
-        _run_tst_orchestrator(
+        pipeline_result = run_cascade(
             X_test=X_test,
             y_cls_test=y_cls_test,
             y_pos_test=y_pos_test,
             device=device,
             out_dir=out_dir,
-            binary_path=binary_path,
-            anomaly_path=anomaly_path,
-            tst_path=cls_path,
+            binary_path=binary_ckpt,
+            anomaly_path=anomaly_ckpt,
+            tst_path=tst_ckpt,
             default_n_classes=default_n_classes,
             pos_count=pos_count,
             input_channels=input_channels,
         )
+        print("\n".join(pipeline_result.summary_lines))  # noqa: T201
+        print(f"Confusion matrix saved to {pipeline_result.confusion_matrix_path}")  # noqa: T201
         return
 
     if classifier == "tcn_binary":
@@ -892,9 +865,31 @@ def main(
     else:
         n_classes = default_n_classes
 
+    if mode == "pipeline":
+        for chk in (binary_ckpt, anomaly_ckpt, tst_ckpt):
+            if not chk.exists():
+                raise FileNotFoundError(f"Checkpoint not found: {chk}")
+
+        pipeline_result = run_cascade(
+            X_test=X_test,
+            y_cls_test=y_cls_test,
+            y_pos_test=y_pos_test,
+            device=device,
+            out_dir=out_dir,
+            binary_path=binary_ckpt,
+            anomaly_path=anomaly_ckpt,
+            tst_path=tst_ckpt,
+            default_n_classes=default_n_classes,
+            pos_count=pos_count,
+            input_channels=input_channels,
+        )
+        print("\n".join(pipeline_result.summary_lines))  # noqa: T201
+        print(f"Confusion matrix saved to {pipeline_result.confusion_matrix_path}")  # noqa: T201
+        return
+
     anomaly_mapping: dict[int, int] | None = None
     if classifier == "tcn" and tcn_anomaly_only:
-        X_test, y_cls_test, y_pos_test, anomaly_mapping, _ = _remap_anomaly_only_targets(
+        X_test, y_cls_test, y_pos_test, anomaly_mapping, _ = remap_anomaly_only_targets(
             X_test,
             y_cls_test,
             y_pos_test,
@@ -906,7 +901,7 @@ def main(
         print(f"[INFO] Evaluating anomaly-only TCN with mapping: {mapping_desc}")
 
     seq_len = tst_features.shape[1] if tst_features is not None else X_test.shape[1]
-    classifier_model = _load_classifier(
+    classifier_model = load_classifier(
         classifier,
         cls_path,
         seq_len=seq_len,
@@ -915,16 +910,7 @@ def main(
         input_channels=input_channels,
     )
 
-    if mode == "pipeline":
-        ae, threshold, _, _ = _load_gru_ae(detector_path, device)
-        errs = reconstruction_error(ae, X_test, device=device)
-        is_fault = errs > threshold
-        # if all healthy, fallback to sample of test
-        idx_to_eval = torch.nonzero(is_fault).squeeze(-1)
-        if idx_to_eval.numel() == 0:
-            idx_to_eval = torch.arange(0, min(1000, X_test.size(0)))
-    else:  # direct
-        idx_to_eval = torch.arange(X_test.size(0))
+    idx_to_eval = torch.arange(X_test.size(0))
 
     # ------------- inference ------------- #
     pos_hat = None
@@ -1084,211 +1070,6 @@ def main(
         print(f"LLM explanation (direct + self-reflection) saved to {explanation_file.name}")  # noqa: T201
 
 
-def _run_tst_orchestrator(
-        *,
-        X_test: torch.Tensor,
-        y_cls_test: torch.Tensor,
-        y_pos_test: torch.Tensor,
-        device: torch.device,
-        out_dir: Path,
-        binary_path: Path,
-        anomaly_path: Path,
-        tst_path: Path,
-        default_n_classes: int,
-        pos_count: int,
-        input_channels: int,
-) -> None:
-    """Evaluate the chained Binary-TCN ➜ anomaly-TCN ➜ TST pipeline."""
-
-    total_samples = int(X_test.size(0))
-    actual_anomalies = int((y_cls_test != 0).sum().item())
-
-    # ---------- Stage 1: binary anomaly filter ---------- #
-    binary_meta = _load_classifier_meta(binary_path) or {}
-    meta_pos = binary_meta.get("pos_count")
-    if meta_pos is not None and int(meta_pos) != pos_count:
-        raise ValueError("Binary TCN checkpoint expects a different number of position columns.")
-    meta_channels = binary_meta.get("input_channels")
-    if meta_channels is not None and int(meta_channels) != input_channels:
-        raise ValueError("Binary TCN checkpoint expects a different input channel arrangement.")
-
-    binary_model = _load_classifier(
-        "tcn_binary",
-        binary_path,
-        seq_len=X_test.shape[1],
-        n_classes=2,
-        device=device,
-        input_channels=input_channels,
-    )
-    binary_logits = predict_tcn_binary(
-        binary_model,
-        X_test,
-        device=device,
-        pos_count=pos_count,
-    )
-    binary_probs = torch.softmax(binary_logits, dim=1)
-    binary_preds = binary_probs.argmax(1)
-    binary_truth = (y_cls_test != 0).to(dtype=torch.long)
-
-    binary_acc = accuracy_score(
-        binary_truth.cpu().numpy(),
-        binary_preds.cpu().numpy(),
-    )
-    binary_auc: float | None = None
-    if torch.unique(binary_truth).numel() == 2:
-        try:
-            binary_auc = roc_auc_score(
-                binary_truth.cpu().numpy(),
-                binary_probs[:, 1].cpu().numpy(),
-            )
-        except ValueError:
-            binary_auc = None
-
-    anomaly_indices = torch.nonzero(binary_preds == 1, as_tuple=True)[0]
-    anomaly_count = int(anomaly_indices.numel())
-
-    # ---------- Stage 2: anomaly-only multi-class TCN ---------- #
-    anomaly_meta = _load_classifier_meta(anomaly_path)
-    if anomaly_meta is None:
-        raise ValueError(
-            "Anomaly-only TCN checkpoint metadata is required for the orchestrated pipeline."
-        )
-    meta_pos = anomaly_meta.get("pos_count")
-    if meta_pos is not None and int(meta_pos) != pos_count:
-        raise ValueError("Anomaly TCN checkpoint expects a different number of position columns.")
-    meta_channels = anomaly_meta.get("input_channels")
-    if meta_channels is not None and int(meta_channels) != input_channels:
-        raise ValueError("Anomaly TCN checkpoint expects a different input channel arrangement.")
-
-    _, _remapped_truth, _, mapping, _ = _remap_anomaly_only_targets(
-        X_test,
-        y_cls_test,
-        y_pos_test,
-        anomaly_meta,
-    )
-    inv_mapping = {int(v): int(k) for k, v in mapping.items()}
-    anomaly_n_classes = len(mapping)
-
-    anomaly_model = _load_classifier(
-        "tcn",
-        anomaly_path,
-        seq_len=X_test.shape[1],
-        n_classes=anomaly_n_classes,
-        device=device,
-        input_channels=input_channels,
-    )
-
-    stage2_pred_lookup: dict[int, int] = {}
-    stage2_accuracy: float | None = None
-    stage2_eval_count = 0
-    if anomaly_indices.numel() > 0:
-        stage2_logits, _ = predict_tcn(
-            anomaly_model,
-            X_test[anomaly_indices],
-            device=device,
-            pos_count=pos_count,
-        )
-        stage2_preds_remap = stage2_logits.argmax(1).cpu()
-        stage2_preds_orig = [inv_mapping[int(cls.item())] for cls in stage2_preds_remap]
-        stage2_pred_lookup = {
-            int(idx.item()): int(stage2_preds_orig[pos])
-            for pos, idx in enumerate(anomaly_indices.cpu())
-        }
-
-        # Accuracy only on samples whose ground-truth class belongs to the anomaly mapping
-        stage2_truth: list[int] = []
-        stage2_preds_eval: list[int] = []
-        for idx in anomaly_indices.cpu().tolist():
-            true_cls = int(y_cls_test[idx].item())
-            if true_cls in mapping:
-                stage2_truth.append(true_cls)
-                stage2_preds_eval.append(stage2_pred_lookup[idx])
-        stage2_eval_count = len(stage2_truth)
-        if stage2_truth:
-            stage2_accuracy = accuracy_score(stage2_truth, stage2_preds_eval)
-
-    # ---------- Stage 3: TST localisation ---------- #
-    stage3_rmse: float | None = None
-    stage3_count = 0
-    if anomaly_indices.numel() > 0:
-        class_feature = torch.tensor(
-            [float(stage2_pred_lookup.get(int(idx.item()), 0)) for idx in anomaly_indices],
-            dtype=X_test.dtype,
-        ).unsqueeze(1)
-        tst_input = torch.cat([class_feature, X_test[anomaly_indices]], dim=1)
-        tst_model = _load_classifier(
-            "tst",
-            tst_path,
-            seq_len=tst_input.shape[1],
-            n_classes=default_n_classes,
-            device=device,
-        )
-        pos_hat = predict_tst(tst_model, tst_input, device=device)
-        stage3_count = int(pos_hat.size(0))
-        if stage3_count > 0:
-            stage3_rmse = root_mean_squared_error(
-                y_pos_test[anomaly_indices].cpu().numpy(),
-                pos_hat.cpu().numpy(),
-            )
-
-    # ---------- Aggregate predictions ---------- #
-    final_preds = torch.zeros_like(y_cls_test)
-    for idx, pred_cls in stage2_pred_lookup.items():
-        final_preds[idx] = int(pred_cls)
-
-    y_true_np = y_cls_test.cpu().numpy()
-    y_pred_np = final_preds.cpu().numpy()
-
-    report = classification_report(y_true_np, y_pred_np, digits=3)
-    cm = confusion_matrix(y_true_np, y_pred_np)
-    ConfusionMatrixDisplay(cm).plot(include_values=True, cmap="Blues", colorbar=False)
-    plt.title("Confusion Matrix – Binary➜TCN➜TST pipeline")
-    plt.tight_layout()
-    cm_path = out_dir / "confusion_matrix_orchestrator.png"
-    plt.savefig(cm_path, dpi=150)
-    plt.close()
-
-    # ---------- Textual summary ---------- #
-    summary_lines = [
-        (
-            "Stage 1 – Binary anomaly filter: "
-            f"accuracy={binary_acc:.3f}, auc={binary_auc:.3f if binary_auc is not None else 'N/A'}, "
-            f"predicted {anomaly_count}/{total_samples} traces as faulty (ground-truth faults: {actual_anomalies})."
-        ),
-    ]
-
-    if stage2_pred_lookup:
-        acc_str = f"{stage2_accuracy:.3f}" if stage2_accuracy is not None else "N/A"
-        summary_lines.append(
-            "Stage 2 – Anomaly-only TCN: "
-            f"accuracy={acc_str} over {stage2_eval_count} mapped faults; "
-            f"issued predictions for {len(stage2_pred_lookup)} traces."
-        )
-    else:
-        summary_lines.append(
-            "Stage 2 – Anomaly-only TCN: no anomaly predictions received from the binary filter."
-        )
-
-    if stage3_count > 0:
-        rmse_str = f"{stage3_rmse:.3f}" if stage3_rmse is not None else "N/A"
-        summary_lines.append(
-            "Stage 3 – Time-series transformer localisation: "
-            f"RMSE={rmse_str} m over {stage3_count} traces."
-        )
-    else:
-        summary_lines.append(
-            "Stage 3 – Time-series transformer localisation: skipped (no anomaly candidates)."
-        )
-
-    summary_lines.append(
-        "Confusion matrix (rows=true, cols=pred):\n" + np.array2string(cm)
-    )
-    summary_lines.append(
-        "Overall – chained prediction classification report:\n" + report
-    )
-
-    print("\n".join(summary_lines))  # noqa: T201
-    print(f"Confusion matrix saved to {cm_path}")  # noqa: T201
 
 if __name__ == "__main__":
     main()
