@@ -855,9 +855,7 @@ def main(
     print("[INFO] Using device:", device)
 
     # ---------- load models ---------- #
-    if classifier == "tab":
-        cls_base = "tabnet"
-    elif classifier == "tcn":
+    if classifier == "tcn":
         cls_base = "tcn_anomaly" if tcn_anomaly_only else "tcn_full"
     elif classifier == "tcn_binary":
         cls_base = "tcn_binary"
