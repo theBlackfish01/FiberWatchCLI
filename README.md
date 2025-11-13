@@ -69,10 +69,23 @@ Both tracks include **visual diagnostics** and an optional **LLM explainability*
 
 ## Results (high level)
 
-### OTDR 
+### OTDR
 
-* **TCN**: Acc ≈ 0.885; **TST**: Acc ≈ 0.881
-* **Binary TCN → anomaly-only TCN → TST pipeline**: high anomaly recall with \~**5 cm** localisation RMSE when the cascade triggers (binary filter → fault type → localisation input augmented with predicted class).
+**Pipeline (binary anomaly filter → anomaly-only TCN → localisation TST)**
+
+* **Loss/reflectance augmented inputs (`--use-loss-reflectance`)**
+  * Binary filter: **accuracy 1.000**, **AUC 1.000**; flagged **5,490 / 6,292** traces as faulty (ground-truth: 5,490).
+  * Anomaly-only TCN: **accuracy 1.000** on the mapped faults (5,490 / 5,490 predictions).
+  * Localisation TST: **RMSE 0.015 m** across 5,490 traces.
+  * Overall chained classifier: **accuracy 1.000**, macro **precision / recall / F1 = 1.000 / 1.000 / 1.000** (supports per class: 802, 800, 800, 800, 800, 693, 800, 797).
+
+* **Standard inputs**
+  * Binary filter: **accuracy 0.953**, **AUC 0.993**; flagged **5,230 / 6,292** traces as faulty (ground-truth: 5,490).
+  * Anomaly-only TCN: **accuracy 0.958** on 5,213 mapped faults (predictions issued for 5,230 traces).
+  * Localisation TST: **RMSE 0.019 m** across 5,230 traces.
+  * Overall chained classifier: **accuracy 0.919**, macro **precision / recall / F1 = 0.929 / 0.919 / 0.920**.
+
+Historical standalone model baselines (pre-pipeline): **TCN** accuracy ≈ 0.885; **TST** accuracy ≈ 0.881.
 
 ### Φ-OTDR — **TFT**
 
