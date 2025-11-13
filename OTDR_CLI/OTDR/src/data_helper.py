@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Tuple, Sequence
+import hashlib
+import json
 import re
 
 import numpy as np
@@ -21,6 +23,7 @@ __all__ = [
     "make_dataloaders",
     "measurement_columns",
     "summarise_feature_layout",
+    "build_feature_config",
 ]
 
 # ---------------------------------------------------------------------------
@@ -115,6 +118,50 @@ def summarise_feature_layout(feature_names: Sequence[str]) -> Dict[str, object]:
         "extra_features": extras,
         "pos_count": len(position_cols),
         "extra_scalar_count": len(extras),
+    }
+
+
+def _feature_signature(
+    columns: Sequence[str],
+    *,
+    use_loss_reflectance: bool,
+    requested_extras: Sequence[str],
+) -> str:
+    """Stable hash describing the active measurement configuration."""
+
+    payload = {
+        "columns": list(columns),
+        "requested_extras": list(requested_extras),
+        "use_loss_reflectance": bool(use_loss_reflectance),
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha1(encoded).hexdigest()
+
+
+def build_feature_config(
+    columns: Sequence[str],
+    *,
+    use_loss_reflectance: bool,
+    requested_extra_features: Sequence[str] | None = None,
+) -> Dict[str, object]:
+    """Encode the active feature set for metadata emission."""
+
+    requested = list(requested_extra_features or [])
+    layout = summarise_feature_layout(columns)
+    signature = _feature_signature(
+        columns,
+        use_loss_reflectance=use_loss_reflectance,
+        requested_extras=requested,
+    )
+
+    return {
+        "version": 1,
+        "columns": list(columns),
+        "use_loss_reflectance": bool(use_loss_reflectance),
+        "requested_extras": requested,
+        "effective_extras": list(layout["extra_features"]),
+        "pos_count": int(layout["pos_count"]),
+        "signature": signature,
     }
 
 

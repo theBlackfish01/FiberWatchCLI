@@ -37,6 +37,7 @@ from data_helper import (
     tensorise_splits,
     measurement_columns,
     summarise_feature_layout,
+    build_feature_config,
 )
 
 from model_functions.gruae import (
@@ -368,7 +369,7 @@ def main(
     train_df, val_df, test_df = make_splits(df)
 
     # measurement columns: P1..Pn + SNR (+ optional extras)
-    extras = tuple(extra_features)
+    extras = tuple(dict.fromkeys(extra_features))
     measurements = measurement_columns(
         train_df,
         extras,
@@ -378,6 +379,11 @@ def main(
     pos_count = int(layout["pos_count"])
     extra_scalar_count = int(layout["extra_scalar_count"])
     feature_suffix = "_lr" if use_loss_reflectance else ""
+    feature_config = build_feature_config(
+        measurements,
+        use_loss_reflectance=use_loss_reflectance,
+        requested_extra_features=extras,
+    )
     scaler = fit_scaler(train_df[measurements].values.astype(np.float32))
     splits = tensorise_splits(
         train_df,
@@ -400,6 +406,8 @@ def main(
         "source_data": str(data_path),
         "active_features": measurements,
         "use_loss_reflectance": bool(use_loss_reflectance),
+        "feature_config": feature_config,
+        "feature_config_signature": feature_config["signature"],
     }
     scaler_name = f"scaler{feature_suffix}.json" if feature_suffix else "scaler.json"
     with open(out_dir / scaler_name, "w") as fp:
@@ -451,6 +459,8 @@ def main(
         gru_meta["active_features"] = measurements
         gru_meta["use_loss_reflectance"] = bool(use_loss_reflectance)
         gru_meta["feature_suffix"] = feature_suffix
+        gru_meta["feature_config"] = feature_config
+        gru_meta["feature_config_signature"] = feature_config["signature"]
         with open(ae_path.with_suffix(".json"), "w") as fp:
             json.dump(gru_meta, fp, indent=2)
 
@@ -523,6 +533,8 @@ def main(
             "extra_scalar_count": extra_scalar_count,
             "input_channels": in_channels,
             "feature_suffix": feature_suffix,
+            "feature_config": feature_config,
+            "feature_config_signature": feature_config["signature"],
         }
         if tcn_anomaly_only:
             if not anomaly_classes_list:
@@ -582,6 +594,8 @@ def main(
             "extra_scalar_count": extra_scalar_count,
             "input_channels": in_channels,
             "feature_suffix": feature_suffix,
+            "feature_config": feature_config,
+            "feature_config_signature": feature_config["signature"],
         }
         with open(tcn_binary_path.with_suffix(".json"), "w") as fp:
             json.dump(tcn_binary_meta, fp, indent=2)
