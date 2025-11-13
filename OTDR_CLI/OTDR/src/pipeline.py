@@ -16,6 +16,7 @@ from sklearn.metrics import (
     accuracy_score,
     classification_report,
     confusion_matrix,
+    mean_absolute_error,
     roc_auc_score,
     root_mean_squared_error,
 )
@@ -41,6 +42,7 @@ __all__ = [
     "load_classifier_meta",
     "remap_anomaly_only_targets",
     "run_cascade",
+    "run_full_tcn_pipeline",
 ]
 
 
@@ -65,7 +67,11 @@ class Stage2Result:
 @dataclass
 class Stage3Result:
     rmse: float | None
+    mae: float | None
+    median_ae: float | None
+    bias: float | None
     evaluated_samples: int
+    plot_paths: dict[str, Path]
 
 
 @dataclass
@@ -169,6 +175,89 @@ def remap_anomaly_only_targets(
         remapped[y_cls_sel == int(orig)] = int(idx)
 
     return X_sel, remapped.to(dtype=torch.long), y_pos_sel, mapping, selected
+
+
+def _run_tst_localisation(
+    *,
+    class_feature: torch.Tensor,
+    candidates: torch.Tensor,
+    tst_path: Path,
+    device: torch.device,
+    default_n_classes: int,
+    out_dir: Path,
+    true_positions: torch.Tensor,
+) -> Stage3Result:
+    if candidates.size(0) == 0:
+        return Stage3Result(
+            rmse=None,
+            mae=None,
+            median_ae=None,
+            bias=None,
+            evaluated_samples=0,
+            plot_paths={},
+        )
+
+    tst_input = torch.cat([class_feature, candidates], dim=1)
+    tst_model = load_classifier(
+        "tst",
+        tst_path,
+        seq_len=tst_input.shape[1],
+        n_classes=default_n_classes,
+        device=device,
+    )
+    pos_hat = predict_tst(tst_model, tst_input, device=device)
+    evaluated = int(pos_hat.size(0))
+    pos_true = true_positions.cpu().numpy()
+    pos_pred = pos_hat.cpu().numpy()
+
+    rmse = root_mean_squared_error(pos_true, pos_pred) if evaluated > 0 else None
+    mae = mean_absolute_error(pos_true, pos_pred) if evaluated > 0 else None
+    median_ae = float(np.median(np.abs(pos_pred - pos_true))) if evaluated > 0 else None
+    bias = float(np.mean(pos_pred - pos_true)) if evaluated > 0 else None
+
+    plot_paths: dict[str, Path] = {}
+    if evaluated > 0:
+        scatter_path = out_dir / "tst_localisation_scatter.png"
+        fig, ax = plt.subplots()
+        ax.scatter(pos_true, pos_pred, alpha=0.6, edgecolor="none")
+        diag_min = float(min(pos_true.min(), pos_pred.min()))
+        diag_max = float(max(pos_true.max(), pos_pred.max()))
+        ax.plot(
+            [diag_min, diag_max],
+            [diag_min, diag_max],
+            linestyle="--",
+            color="tab:red",
+            label="Ideal",
+        )
+        ax.set_xlabel("True fault position (m)")
+        ax.set_ylabel("Predicted fault position (m)")
+        ax.set_title("TST localisation – predictions vs. ground truth")
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(scatter_path, dpi=150)
+        plt.close(fig)
+        plot_paths["scatter"] = scatter_path
+
+        error_path = out_dir / "tst_localisation_error_hist.png"
+        fig, ax = plt.subplots()
+        errors = pos_pred - pos_true
+        ax.hist(errors, bins=20, color="tab:blue", alpha=0.75)
+        ax.set_xlabel("Prediction error (m)")
+        ax.set_ylabel("Count")
+        ax.set_title("TST localisation – error distribution")
+        fig.tight_layout()
+        fig.savefig(error_path, dpi=150)
+        plt.close(fig)
+        plot_paths["error_hist"] = error_path
+
+    return Stage3Result(
+        rmse=rmse,
+        mae=mae,
+        median_ae=median_ae,
+        bias=bias,
+        evaluated_samples=evaluated,
+        plot_paths=plot_paths,
+    )
 
 
 def _load_scaler_metadata(
@@ -346,32 +435,18 @@ def run_cascade(
     )
 
     # ---------- Stage 3: TST localisation ---------- #
-    stage3_rmse: float | None = None
-    stage3_count = 0
-    if anomaly_indices.numel() > 0:
-        class_feature = torch.tensor(
-            [float(stage2_pred_lookup.get(int(idx.item()), 0)) for idx in anomaly_indices],
-            dtype=X_test.dtype,
-        ).unsqueeze(1)
-        tst_input = torch.cat([class_feature, X_test[anomaly_indices]], dim=1)
-        tst_model = load_classifier(
-            "tst",
-            tst_path,
-            seq_len=tst_input.shape[1],
-            n_classes=default_n_classes,
-            device=device,
-        )
-        pos_hat = predict_tst(tst_model, tst_input, device=device)
-        stage3_count = int(pos_hat.size(0))
-        if stage3_count > 0:
-            stage3_rmse = root_mean_squared_error(
-                y_pos_test[anomaly_indices].cpu().numpy(),
-                pos_hat.cpu().numpy(),
-            )
-
-    stage3 = Stage3Result(
-        rmse=stage3_rmse,
-        evaluated_samples=stage3_count,
+    class_feature = torch.tensor(
+        [float(stage2_pred_lookup.get(int(idx.item()), 0)) for idx in anomaly_indices],
+        dtype=X_test.dtype,
+    ).unsqueeze(1)
+    stage3 = _run_tst_localisation(
+        class_feature=class_feature,
+        candidates=X_test[anomaly_indices],
+        tst_path=tst_path,
+        device=device,
+        default_n_classes=default_n_classes,
+        out_dir=out_dir,
+        true_positions=y_pos_test[anomaly_indices],
     )
 
     # ---------- Aggregate predictions ---------- #
@@ -416,13 +491,181 @@ def run_cascade(
 
     if stage3.evaluated_samples > 0:
         rmse_str = f"{stage3.rmse:.3f}" if stage3.rmse is not None else "N/A"
+        mae_str = f"{stage3.mae:.3f}" if stage3.mae is not None else "N/A"
+        med_str = f"{stage3.median_ae:.3f}" if stage3.median_ae is not None else "N/A"
+        bias_str = f"{stage3.bias:.3f}" if stage3.bias is not None else "N/A"
         summary_lines.append(
             "Stage 3 – Time-series transformer localisation: "
-            f"RMSE={rmse_str} m over {stage3.evaluated_samples} traces."
+            f"RMSE={rmse_str} m, MAE={mae_str} m, median |error|={med_str} m, "
+            f"bias={bias_str} m over {stage3.evaluated_samples} traces."
         )
+        if stage3.plot_paths:
+            summary_lines.append(
+                "Stage 3 – Visualisations: "
+                + ", ".join(f"{name}={path}" for name, path in stage3.plot_paths.items())
+            )
     else:
         summary_lines.append(
             "Stage 3 – Time-series transformer localisation: skipped (no anomaly candidates)."
+        )
+
+    summary_lines.append("Confusion matrix (rows=true, cols=pred):\n" + np.array2string(cm))
+    summary_lines.append("Overall – chained prediction classification report:\n" + report)
+
+    return PipelineResult(
+        stage1=stage1,
+        stage2=stage2,
+        stage3=stage3,
+        summary_lines=summary_lines,
+        confusion_matrix=cm,
+        confusion_matrix_path=cm_path,
+        classification_report=report,
+        final_predictions=final_preds,
+    )
+
+
+def run_full_tcn_pipeline(
+    *,
+    X_test: torch.Tensor,
+    y_cls_test: torch.Tensor,
+    y_pos_test: torch.Tensor,
+    device: torch.device,
+    out_dir: Path,
+    full_tcn_path: Path,
+    tst_path: Path,
+    default_n_classes: int,
+    pos_count: int,
+    input_channels: int,
+) -> PipelineResult:
+    total_samples = int(X_test.size(0))
+    actual_anomalies = int((y_cls_test != 0).sum().item())
+
+    full_meta = load_classifier_meta(full_tcn_path) or {}
+    meta_pos = full_meta.get("pos_count")
+    if meta_pos is not None and int(meta_pos) != pos_count:
+        raise ValueError("Full TCN checkpoint expects a different number of position columns.")
+    meta_channels = full_meta.get("input_channels")
+    if meta_channels is not None and int(meta_channels) != input_channels:
+        raise ValueError("Full TCN checkpoint expects a different input channel arrangement.")
+    meta_classes = full_meta.get("n_classes")
+    n_classes = int(meta_classes) if meta_classes is not None else default_n_classes
+
+    full_model = load_classifier(
+        "tcn",
+        full_tcn_path,
+        seq_len=X_test.shape[1],
+        n_classes=n_classes,
+        device=device,
+        input_channels=input_channels,
+    )
+
+    logits, _ = predict_tcn(
+        full_model,
+        X_test,
+        device=device,
+        pos_count=pos_count,
+    )
+    probs = torch.softmax(logits, dim=1)
+    preds = logits.argmax(1)
+
+    overall_acc = accuracy_score(
+        y_cls_test.cpu().numpy(),
+        preds.cpu().numpy(),
+    )
+
+    stage1 = Stage1Result(
+        accuracy=overall_acc,
+        auc=None,
+        predicted_faults=int((preds != 0).sum().item()),
+        total_samples=total_samples,
+        truth_faults=actual_anomalies,
+        predictions=preds,
+        probabilities=probs,
+    )
+
+    anomaly_mask = y_cls_test != 0
+    anomaly_indices = torch.nonzero(preds != 0, as_tuple=True)[0]
+    stage2_lookup = {
+        int(idx): int(preds[idx].item())
+        for idx in anomaly_indices.cpu().tolist()
+    }
+    stage2_accuracy: float | None = None
+    anomaly_eval = int(anomaly_mask.sum().item())
+    if anomaly_eval > 0:
+        stage2_accuracy = accuracy_score(
+            y_cls_test[anomaly_mask].cpu().numpy(),
+            preds[anomaly_mask].cpu().numpy(),
+        )
+
+    stage2 = Stage2Result(
+        predictions=stage2_lookup,
+        accuracy=stage2_accuracy,
+        evaluated_samples=anomaly_eval,
+    )
+
+    class_feature = preds[anomaly_indices].to(dtype=X_test.dtype).unsqueeze(1)
+    stage3 = _run_tst_localisation(
+        class_feature=class_feature,
+        candidates=X_test[anomaly_indices],
+        tst_path=tst_path,
+        device=device,
+        default_n_classes=default_n_classes,
+        out_dir=out_dir,
+        true_positions=y_pos_test[anomaly_indices],
+    )
+
+    final_preds = preds.clone()
+
+    y_true_np = y_cls_test.cpu().numpy()
+    y_pred_np = final_preds.cpu().numpy()
+
+    report = classification_report(y_true_np, y_pred_np, digits=3)
+    cm = confusion_matrix(y_true_np, y_pred_np)
+    ConfusionMatrixDisplay(cm).plot(include_values=True, cmap="Blues", colorbar=False)
+    plt.title("Confusion Matrix – Full TCN➜TST pipeline")
+    plt.tight_layout()
+    cm_path = out_dir / "confusion_matrix_pipeline.png"
+    plt.savefig(cm_path, dpi=150)
+    plt.close()
+
+    summary_lines = [
+        (
+            "Stage 1 – Full multi-class TCN: "
+            f"accuracy={stage1.accuracy:.3f}, predicted {stage1.predicted_faults}/{stage1.total_samples} "
+            f"traces as faulty (ground-truth faults: {stage1.truth_faults})."
+        )
+    ]
+
+    if stage2.evaluated_samples > 0:
+        acc_str = f"{stage2.accuracy:.3f}" if stage2.accuracy is not None else "N/A"
+        summary_lines.append(
+            "Stage 2 – Anomaly subset evaluation: "
+            f"accuracy={acc_str} across {stage2.evaluated_samples} ground-truth anomaly traces; "
+            f"issued predictions for {len(stage2.predictions)} traces."
+        )
+    else:
+        summary_lines.append(
+            "Stage 2 – Anomaly subset evaluation: skipped (no ground-truth anomalies present)."
+        )
+
+    if stage3.evaluated_samples > 0:
+        rmse_str = f"{stage3.rmse:.3f}" if stage3.rmse is not None else "N/A"
+        mae_str = f"{stage3.mae:.3f}" if stage3.mae is not None else "N/A"
+        med_str = f"{stage3.median_ae:.3f}" if stage3.median_ae is not None else "N/A"
+        bias_str = f"{stage3.bias:.3f}" if stage3.bias is not None else "N/A"
+        summary_lines.append(
+            "Stage 3 – Time-series transformer localisation: "
+            f"RMSE={rmse_str} m, MAE={mae_str} m, median |error|={med_str} m, "
+            f"bias={bias_str} m over {stage3.evaluated_samples} traces."
+        )
+        if stage3.plot_paths:
+            summary_lines.append(
+                "Stage 3 – Visualisations: "
+                + ", ".join(f"{name}={path}" for name, path in stage3.plot_paths.items())
+            )
+    else:
+        summary_lines.append(
+            "Stage 3 – Time-series transformer localisation: skipped (no anomaly predictions)."
         )
 
     summary_lines.append("Confusion matrix (rows=true, cols=pred):\n" + np.array2string(cm))
@@ -468,6 +711,19 @@ def run_cascade(
     help="Checkpoint for the TST localisation model.",
 )
 @click.option(
+    "--use-full-tcn",
+    is_flag=True,
+    help=(
+        "Run the full multi-class TCN➜TST pipeline (bypasses the binary and anomaly-only cascade)."
+    ),
+)
+@click.option(
+    "--full-tcn-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Checkpoint for the full multi-class TCN (used with --use-full-tcn).",
+)
+@click.option(
     "--out-dir",
     type=str,
     default="pipeline_eval",
@@ -493,11 +749,13 @@ def main(
     binary_path: Path | None,
     anomaly_path: Path | None,
     tst_path: Path | None,
+    use_full_tcn: bool,
+    full_tcn_path: Path | None,
     out_dir: str,
     device: str | None,
     use_loss_reflectance: bool,
 ) -> None:
-    """Run the binary➜anomaly➜TST inference cascade end-to-end."""
+    """Run the inference pipeline (binary➜anomaly➜TST or full TCN➜TST)."""
 
     out_dir_path = Path("outputs") / out_dir
     out_dir_path.mkdir(parents=True, exist_ok=True)
@@ -507,12 +765,42 @@ def main(
     df = load_raw_dataframe(data_path)
     _, _, test_df = make_splits(df)
 
+    if full_tcn_path is not None and not use_full_tcn:
+        raise click.BadOptionUsage(
+            "--full-tcn-path",
+            "--full-tcn-path can only be used together with --use-full-tcn.",
+        )
+
+    binary_default = Path("models") / (
+        f"tcn_binary{feature_suffix}.pt" if feature_suffix else "tcn_binary.pt"
+    )
+    anomaly_default = Path("models") / (
+        f"tcn_anomaly{feature_suffix}.pt" if feature_suffix else "tcn_anomaly.pt"
+    )
+    tst_default = Path("models") / (
+        f"tst{feature_suffix}.pt" if feature_suffix else "tst.pt"
+    )
+    full_tcn_default = Path("models") / (
+        f"tcn_full{feature_suffix}.pt" if feature_suffix else "tcn_full.pt"
+    )
+
+    resolved_tst_path = Path(tst_path) if tst_path else tst_default
+
+    if use_full_tcn:
+        resolved_full_tcn = Path(full_tcn_path) if full_tcn_path else full_tcn_default
+        checkpoint_dirs = [resolved_full_tcn.parent, resolved_tst_path.parent]
+    else:
+        resolved_binary = Path(binary_path) if binary_path else binary_default
+        resolved_anomaly = Path(anomaly_path) if anomaly_path else anomaly_default
+        resolved_full_tcn = None
+        checkpoint_dirs = [
+            resolved_binary.parent,
+            resolved_anomaly.parent,
+            resolved_tst_path.parent,
+        ]
+
     scaler, feature_names_meta = _load_scaler_metadata(
-        checkpoint_dirs=[
-            Path(binary_path).parent if binary_path else Path("models"),
-            Path(anomaly_path).parent if anomaly_path else Path("models"),
-            Path(tst_path).parent if tst_path else Path("models"),
-        ],
+        checkpoint_dirs=checkpoint_dirs,
         use_loss_reflectance=use_loss_reflectance,
     )
 
@@ -565,40 +853,49 @@ def main(
 
     default_n_classes = int(df["Class"].max() + 1)
 
-    binary_default = Path("models") / (
-        f"tcn_binary{feature_suffix}.pt" if feature_suffix else "tcn_binary.pt"
-    )
-    anomaly_default = Path("models") / (
-        f"tcn_anomaly{feature_suffix}.pt" if feature_suffix else "tcn_anomaly.pt"
-    )
-    tst_default = Path("models") / (
-        f"tst{feature_suffix}.pt" if feature_suffix else "tst.pt"
-    )
-
-    binary_path = Path(binary_path) if binary_path else binary_default
-    anomaly_path = Path(anomaly_path) if anomaly_path else anomaly_default
-    tst_path = Path(tst_path) if tst_path else tst_default
-
-    for chk in (binary_path, anomaly_path, tst_path):
-        if not chk.exists():
-            raise FileNotFoundError(f"Checkpoint not found: {chk}")
+    if use_full_tcn:
+        if not resolved_full_tcn.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {resolved_full_tcn}")
+        if not resolved_tst_path.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {resolved_tst_path}")
+    else:
+        if not resolved_binary.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {resolved_binary}")
+        if not resolved_anomaly.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {resolved_anomaly}")
+        if not resolved_tst_path.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {resolved_tst_path}")
 
     resolved_device = _resolve_device(device)
     click.echo(f"[PIPELINE] Using device: {resolved_device}")
 
-    result = run_cascade(
-        X_test=X_test,
-        y_cls_test=y_cls_test,
-        y_pos_test=y_pos_test,
-        device=resolved_device,
-        out_dir=out_dir_path,
-        binary_path=binary_path,
-        anomaly_path=anomaly_path,
-        tst_path=tst_path,
-        default_n_classes=default_n_classes,
-        pos_count=pos_count,
-        input_channels=input_channels,
-    )
+    if use_full_tcn:
+        result = run_full_tcn_pipeline(
+            X_test=X_test,
+            y_cls_test=y_cls_test,
+            y_pos_test=y_pos_test,
+            device=resolved_device,
+            out_dir=out_dir_path,
+            full_tcn_path=resolved_full_tcn,
+            tst_path=resolved_tst_path,
+            default_n_classes=default_n_classes,
+            pos_count=pos_count,
+            input_channels=input_channels,
+        )
+    else:
+        result = run_cascade(
+            X_test=X_test,
+            y_cls_test=y_cls_test,
+            y_pos_test=y_pos_test,
+            device=resolved_device,
+            out_dir=out_dir_path,
+            binary_path=resolved_binary,
+            anomaly_path=resolved_anomaly,
+            tst_path=resolved_tst_path,
+            default_n_classes=default_n_classes,
+            pos_count=pos_count,
+            input_channels=input_channels,
+        )
 
     click.echo("\n".join(result.summary_lines))
     click.echo(f"Confusion matrix saved to {result.confusion_matrix_path}")
