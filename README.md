@@ -134,6 +134,33 @@ You’ll find the generated text under `outputs/llm_output/…` alongside the sa
 
 ---
 
+## Preparing the OTDR RAG corpus
+
+1. **Chunk the curated OTDR references** into `docs.json`:
+
+   ```bash
+   cd OTDR_CLI/OTDR/src
+   python -m corpus.scripts.make_chunks \\
+       --raw-dir corpus/raw \\
+       --output corpus/docs.json
+   ```
+
+   This writes token-friendly snippets (≈200 words each) inside the OTDR module tree so they can be versioned alongside the codebase.
+
+2. **Sync the chunks to Pinecone** (uses the same `text-embedding-3-large` model as runtime RAG):
+
+   ```bash
+   cd OTDR_CLI/OTDR/src
+   python -m corpus.scripts.sync_pinecone \\
+       --docs-path corpus/docs.json
+   ```
+
+   The helper will create the `fiberwatch` index if it is missing, embed in batches with OpenAI, and upsert chunk metadata (`text`, `source`, and `chunk_index`). Use `--raw-dir` if you prefer to regenerate chunks on the fly or `--batch-size` / `--limit-words` to tune ingestion. Both ingestion and retrieval default to the namespace defined by `PINECONE_NAMESPACE` (ships as `otdr-prod`); override the flag/env var when you want to test another namespace.
+
+   > **Heads up:** the sync helper validates that the destination index dimension matches the 3,072-d vectors emitted by `text-embedding-3-large`. If you previously created `fiberwatch` with another embedding model, delete or rename the index (or change `PINECONE_INDEX_NAME`) before running the upload.
+
+---
+
 ## Minimal “how to run” (for context)
 
 > Full CLIs already exist; this is just a tiny cheat-sheet.
