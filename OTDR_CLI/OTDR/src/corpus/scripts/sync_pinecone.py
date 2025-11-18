@@ -47,16 +47,45 @@ def _index_names(pc: Pinecone) -> set[str]:
     return names
 
 
-def ensure_index(pc: Pinecone) -> None:
-    if _INDEX_NAME in _index_names(pc):
-        return
-    print(f"[pinecone] Creating index {_INDEX_NAME} ...")
-    pc.create_index(
-        name=_INDEX_NAME,
-        dimension=_EMBED_DIM,
-        metric="cosine",
-        spec=ServerlessSpec(cloud="aws", region="us-west-2"),
-    )
+def _extract_dimension(description: object) -> int | None:
+    """Best effort extraction of the index dimension."""
+
+    candidates: list[object | None] = [description]
+    if hasattr(description, "to_dict"):
+        try:
+            candidates.append(description.to_dict())
+        except Exception:  # pragma: no cover - defensive
+            pass
+    if hasattr(description, "model_dump"):
+        try:
+            candidates.append(description.model_dump())
+        except Exception:  # pragma: no cover - defensive
+            pass
+
+    while candidates:
+        current = candidates.pop()
+        if current is None:
+            continue
+        if isinstance(current, dict):
+            dim = current.get("dimension")
+            if dim is not None:
+                return int(dim)
+            config = current.get("config") or current.get("index_config")
+            if config:
+                candidates.append(config)
+            continue
+        if hasattr(current, "dimension"):
+            try:
+                return int(getattr(current, "dimension"))
+            except (TypeError, ValueError):
+                pass
+        for attr in ("config", "index_config"):
+            if hasattr(current, attr):
+                candidates.append(getattr(current, attr))
+    return None
+
+
+def _wait_for_index_ready(pc: Pinecone) -> None:
     while True:
         desc = pc.describe_index(_INDEX_NAME)
         status = getattr(desc, "status", {})
@@ -65,6 +94,31 @@ def ensure_index(pc: Pinecone) -> None:
             break
         time.sleep(5)
     print(f"[pinecone] Index {_INDEX_NAME} ready")
+
+
+def ensure_index(pc: Pinecone) -> None:
+    names = _index_names(pc)
+    if _INDEX_NAME in names:
+        desc = pc.describe_index(_INDEX_NAME)
+        dimension = _extract_dimension(desc)
+        if dimension == _EMBED_DIM:
+            return
+        print(
+            f"[pinecone] Index {_INDEX_NAME} has dimension {dimension} but {_EMBED_DIM} required. "
+            "Recreating index ..."
+        )
+        pc.delete_index(_INDEX_NAME)
+        while _INDEX_NAME in _index_names(pc):
+            time.sleep(2)
+
+    print(f"[pinecone] Creating index {_INDEX_NAME} ...")
+    pc.create_index(
+        name=_INDEX_NAME,
+        dimension=_EMBED_DIM,
+        metric="cosine",
+        spec=ServerlessSpec(cloud="aws", region="us-west-2"),
+    )
+    _wait_for_index_ready(pc)
 
 
 def chunk_iterator(args: argparse.Namespace) -> List[dict]:
