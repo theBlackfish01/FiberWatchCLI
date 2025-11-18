@@ -11,6 +11,7 @@ LLM explanation of random samples using vision‑capable GPT‑5 with RAG and XA
 
 from __future__ import annotations
 import base64
+import os
 import click
 import json
 from typing import Any, List, Tuple
@@ -20,6 +21,7 @@ import numpy as np
 import shap
 from lime.lime_tabular import LimeTabularExplainer
 import torch
+import wandb
 from sklearn.metrics import (
     accuracy_score,
     root_mean_squared_error,
@@ -55,6 +57,25 @@ import warnings
 
 warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
 client = OpenAI(api_key=cfg.OPENAI_API_KEY)
+
+LLM_SAMPLE_TARGET = 18
+
+
+def _init_wandb_run(config: dict[str, Any]) -> wandb.sdk.wandb_run.Run | None:
+    """Initialise a Weights & Biases run when the API key is available."""
+
+    api_key = cfg.WANDB_API_KEY
+    if not api_key:
+        print("[WARN] WANDB_API_KEY not set – skipping WANDB logging.")
+        return None
+
+    os.environ.setdefault("WANDB_API_KEY", api_key)
+    try:
+        wandb.login(key=api_key, relogin=True, force=True)
+        return wandb.init(project="OTDR_Eval", config=config, reinit=True)
+    except Exception as exc:  # pragma: no cover - WANDB optional
+        print(f"[WARN] Unable to initialise WANDB logging: {exc}")
+        return None
 
 
 def _dedupe_preserve(seq):
@@ -232,6 +253,105 @@ def _visualise_sample(
     plt.savefig(fname, dpi=150)
     plt.close()
     return fname
+
+
+def _plot_radial_class_accuracy(
+        y_true: np.ndarray,
+        y_pred: np.ndarray,
+        class_ids: List[int],
+        out_path: Path,
+) -> Path | None:
+    """Create a radial polar bar chart of per-class accuracy."""
+
+    if y_true.size == 0 or y_pred.size == 0 or not class_ids:
+        return None
+
+    angles = np.linspace(0, 2 * np.pi, len(class_ids), endpoint=False)
+    width = (2 * np.pi) / max(len(class_ids), 1)
+    accuracies = []
+    supports = []
+    for cls in class_ids:
+        mask = y_true == cls
+        supports.append(int(mask.sum()))
+        accuracies.append(float((y_pred[mask] == cls).mean()) if mask.any() else 0.0)
+
+    fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(8, 8))
+    bars = ax.bar(
+        angles,
+        accuracies,
+        width=width * 0.9,
+        bottom=0.0,
+        color=plt.cm.viridis(np.clip(accuracies, 0, 1)),
+        alpha=0.85,
+    )
+    ax.set_theta_direction(-1)
+    ax.set_theta_offset(np.pi / 2.0)
+    ax.set_title("Per-class Accuracy (radial view)")
+    ax.set_ylim(0, 1.05)
+    for bar, cls, support in zip(bars, class_ids, supports):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.05,
+            f"{cls}\n(n={support})",
+            ha="center",
+            va="center",
+            fontsize=9,
+        )
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    plt.close(fig)
+    return out_path
+
+
+def _plot_localisation_vs_snr(
+        X: torch.Tensor,
+        idx_to_eval: torch.Tensor,
+        scaler: StandardScaler,
+        y_pos: torch.Tensor,
+        pos_hat: torch.Tensor | None,
+        out_path: Path,
+) -> Path | None:
+    """Scatter plot of predicted localisation vs SNR coloured by localisation error."""
+
+    if pos_hat is None or idx_to_eval.numel() == 0:
+        return None
+
+    snr_scaled = X[idx_to_eval, 0].detach().cpu().numpy()
+    snr = snr_scaled * scaler.scale_[0] + scaler.mean_[0]
+    pred_pos = pos_hat.detach().cpu().numpy()
+    true_pos = y_pos[idx_to_eval].detach().cpu().numpy()
+    error = pred_pos - true_pos
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sc = ax.scatter(
+        snr,
+        pred_pos,
+        c=error,
+        cmap="coolwarm",
+        s=45,
+        alpha=0.85,
+        edgecolors="k",
+        linewidths=0.2,
+        label="Predicted position",
+    )
+    ax.scatter(
+        snr,
+        true_pos,
+        c="black",
+        s=10,
+        alpha=0.3,
+        label="True position",
+    )
+    ax.set_xlabel("SNR (dB)")
+    ax.set_ylabel("Position (m)")
+    ax.set_title("Localisation vs SNR (error-coloured)")
+    ax.legend(loc="upper right")
+    cbar = plt.colorbar(sc, ax=ax)
+    cbar.set_label("Prediction error (m)")
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    plt.close(fig)
+    return out_path
 
 
 def _b64(path: Path) -> str:
@@ -474,10 +594,10 @@ def _llm_explain_with_self_reflection(
         attribution_summaries: List[str] | None = None,
         *,
         attribution_method: str = "shap",
-) -> tuple[str, str, bool] | None:
+) -> tuple[str, str, str, bool] | None:
     """
-    DIRECT pass -> SELF-REFLECTION pass with explicit TrueC/PredC handling.
-    Returns (direct_text, refined_text, rag_used_flag) or None if no API key.
+    DIRECT pass -> SELF-REFLECTION pass -> OPS DIGEST pass with explicit TrueC/PredC handling.
+    Returns (direct_text, refined_text, digest_text, rag_used_flag) or None if no API key.
     """
     api_key = cfg.OPENAI_API_KEY
     if not api_key:
@@ -579,7 +699,24 @@ def _llm_explain_with_self_reflection(
 
     refined_text = _call_responses_api(client, openai_model, system_reflect, reflect_user_content)
 
-    return direct_text, refined_text, rag_flag
+    # ---------- FIELD OPS DIGEST pass -------------------------------------
+    system_digest = (
+        "You lead field operations for a fibre network."
+        " Convert the improved explanation into a 3-section incident digest:"
+        "\n1) \"Key Findings\" (bullet list)."
+        "\n2) \"Impact vs SNR\" (describe confidence level relative to SNR trends in the figures)."
+        "\n3) \"Next Actions\" (2–3 concrete steps)."
+        " Tie any localisation statements to metre positions, and flag uncertain ones."
+    )
+    digest_content: List[dict[str, Any]] = [
+        {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
+    ]
+    if attr_text:
+        digest_content.append({"type": "input_text", "text": f"{method_label} attributions:\n" + attr_text})
+    digest_content.append({"type": "input_text", "text": "Improved explanation to convert:\n" + refined_text})
+    digest_text = _call_responses_api(client, openai_model, system_digest, digest_content)
+
+    return direct_text, refined_text, digest_text, rag_flag
 
 
 # --------------------------------------------------
@@ -649,16 +786,19 @@ def _llm_explain_with_self_reflection(
 @click.option(
     "--num-samples",
     type=click.IntRange(0, None),
-    default=4,
+    default=18,
     show_default=True,
-    help="Random samples to visualise & explain (0 to skip explainability).",
+    help=(
+        "Random samples to visualise & explain. The script automatically ensures that up to "
+        f"{LLM_SAMPLE_TARGET} unique samples are analysed for the LLM explanations."
+    ),
 )
 @click.option(
     "--explain-method",
-    type=click.Choice(["shap", "lime"], case_sensitive=False),
-    default="shap",
+    type=click.Choice(["shap", "lime", "both"], case_sensitive=False),
+    default="both",
     show_default=True,
-    help="Feature attribution method used for sample explainability.",
+    help="Feature attribution method used for sample explainability (both runs SHAP + LIME).",
 )
 @click.option(
     "--extra-feature",
@@ -720,6 +860,23 @@ def main(
     explain_method = explain_method.lower()
 
     extras = _dedupe_preserve(extra_features)
+    if explain_method == "both":
+        explain_methods = ("shap", "lime")
+    else:
+        explain_methods = (explain_method,)
+
+    wandb_run = _init_wandb_run(
+        {
+            "mode": mode,
+            "classifier": classifier,
+            "requested_methods": ",".join(explain_methods),
+            "num_samples": num_samples,
+            "tcn_anomaly_only": tcn_anomaly_only,
+            "orchestrate_tst": orchestrate_tst,
+            "use_loss_reflectance": use_loss_reflectance,
+            "extra_features": list(extras),
+        }
+    )
     feature_suffix = "_lr" if use_loss_reflectance else ""
     detector_path = (
         Path(detector)
@@ -955,6 +1112,8 @@ def main(
         )
         print("\n".join(pipeline_result.summary_lines))  # noqa: T201
         print(f"Confusion matrix saved to {pipeline_result.confusion_matrix_path}")  # noqa: T201
+        if wandb_run:
+            wandb_run.finish()
         return
 
     if classifier == "tcn_binary":
@@ -1070,6 +1229,12 @@ def main(
     else:
         rmse = None
 
+    acc = None
+    auc_val = None
+    cm_path: Path | None = None
+    y_true: np.ndarray | None = None
+    y_pred: np.ndarray | None = None
+
     if preds_cls is not None:
         acc = accuracy_score(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
         if rmse is not None:
@@ -1103,99 +1268,137 @@ def main(
                 f"Eval subset size = {idx_to_eval.size(0)} | RMSE = {rmse:.3f}"
             )  # noqa: T201
 
-    # ------------- random visualisations ------------- #
-    rng = np.random.default_rng(42)
-    if num_samples <= 0 or idx_to_eval.size(0) == 0:
-        chosen = np.empty(0, dtype=int)
-    else:
-        chosen = rng.choice(
-            idx_to_eval.numpy(),
-            size=min(num_samples, idx_to_eval.size(0)),
-            replace=False,
+    radial_path: Path | None = None
+    if y_true is not None and y_pred is not None:
+        radial_path = _plot_radial_class_accuracy(
+            y_true,
+            y_pred,
+            list(range(n_classes)),
+            out_dir / "radial_class_accuracy.png",
         )
 
+    localisation_path = _plot_localisation_vs_snr(
+        X_test,
+        idx_to_eval,
+        scaler,
+        y_pos_test,
+        pos_hat,
+        out_dir / "localisation_vs_snr.png",
+    )
+
+    # ------------- random visualisations ------------- #
+    rng = np.random.default_rng(42)
+    available_idx = idx_to_eval.numpy()
+    if num_samples <= 0 or available_idx.size == 0:
+        chosen = np.empty(0, dtype=int)
+    else:
+        sample_goal = min(max(num_samples, LLM_SAMPLE_TARGET), available_idx.size)
+        chosen = rng.choice(
+            available_idx,
+            size=sample_goal,
+            replace=False,
+        )
+    llm_target = min(LLM_SAMPLE_TARGET, chosen.size)
+    llm_indices = chosen[:llm_target] if llm_target > 0 else np.empty(0, dtype=int)
+
+    idx_eval_cpu = idx_to_eval.detach().cpu()
+    pred_lookup: dict[int, int] = {}
+    if preds_cls is not None:
+        preds_cpu = preds_cls.detach().cpu()
+        pred_lookup = {
+            int(idx_eval_cpu[i].item()): int(preds_cpu[i].item())
+            for i in range(idx_eval_cpu.size(0))
+        }
+    pos_lookup: dict[int, float] = {}
+    if pos_hat is not None:
+        pos_cpu = pos_hat.detach().cpu()
+        pos_lookup = {
+            int(idx_eval_cpu[i].item()): float(pos_cpu[i].item())
+            for i in range(idx_eval_cpu.size(0))
+        }
+
     # ------------- Feature attribution explainability ------------- #
-    attribution_summaries: List[str] = []
-    if preds_cls is not None and chosen.size > 0:
+    attr_summary_map: dict[str, List[str]] = {method: [] for method in explain_methods}
+    if preds_cls is not None and llm_indices.size > 0:
         try:
-            idx_eval_cpu = idx_to_eval.detach().cpu()
-            preds_cpu = preds_cls.detach().cpu()
-            pred_lookup = {
-                int(idx_eval_cpu[i].item()): int(preds_cpu[i].item())
-                for i in range(idx_eval_cpu.size(0))
-            }
             bg_size = min(50, idx_eval_cpu.size(0))
             if bg_size > 0:
                 background = X_test[idx_eval_cpu[:bg_size]].numpy()
-                sample_tensor = torch.as_tensor(chosen, dtype=torch.long)
-                shap_samples = X_test[sample_tensor].numpy()
-                if explain_method == "shap":
-                    attribution_summaries = _compute_shap_summaries(
-                        classifier_model,
-                        classifier,
-                        device,
-                        background,
-                        shap_samples,
-                        chosen.tolist(),
-                        pred_lookup,
-                        meas_cols,
-                        pos_count=pos_count,
-                    )
-                elif explain_method == "lime":
-                    attribution_summaries = _compute_lime_summaries(
-                        classifier_model,
-                        classifier,
-                        device,
-                        background,
-                        shap_samples,
-                        chosen.tolist(),
-                        pred_lookup,
-                        meas_cols,
-                        pos_count=pos_count,
-                    )
-                else:
-                    raise ValueError(f"Unsupported explainability method '{explain_method}'.")
+                sample_tensor = torch.as_tensor(llm_indices, dtype=torch.long)
+                sample_block = X_test[sample_tensor].numpy()
+                for method in explain_methods:
+                    if method == "shap":
+                        attr_summary_map[method] = _compute_shap_summaries(
+                            classifier_model,
+                            classifier,
+                            device,
+                            background,
+                            sample_block,
+                            llm_indices.tolist(),
+                            pred_lookup,
+                            meas_cols,
+                            pos_count=pos_count,
+                        )
+                    elif method == "lime":
+                        attr_summary_map[method] = _compute_lime_summaries(
+                            classifier_model,
+                            classifier,
+                            device,
+                            background,
+                            sample_block,
+                            llm_indices.tolist(),
+                            pred_lookup,
+                            meas_cols,
+                            pos_count=pos_count,
+                        )
+                    else:
+                        raise ValueError(f"Unsupported explainability method '{method}'.")
         except Exception as exc:  # pragma: no cover - fallback path
-            print(f"[WARN] {explain_method.upper()} computation failed: {exc}")
-            attribution_summaries = []
+            print(f"[WARN] Explainability computation failed: {exc}")
 
     img_paths: list[Path] = []
     num_points = pos_count
-    for idx in chosen:
-        amp_scaled = X_test[idx][1 : 1 + num_points].numpy()
-        amp = amp_scaled * scaler.scale_[1 : 1 + num_points] + scaler.mean_[1 : 1 + num_points]
-        snr_scaled = X_test[idx][0].item()
-        snr = float(snr_scaled * scaler.scale_[0] + scaler.mean_[0])
-        t_cls = int(y_cls_test[idx].item())
-        if preds_cls is None:
-            p_cls = None
-        else:
-            p_cls = int(preds_cls[idx_to_eval == idx][0].item())
-        t_pos = float(y_pos_test[idx].item())
-        if pos_hat is None:
-            p_pos = None
-        else:
-            p_pos = float(pos_hat[idx_to_eval == idx][0].item())
-        img_paths.append(_visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, int(idx), out_dir))
-
-    explain_pair: tuple[str, str, bool] | None = None
-    if img_paths:
-        # ------------- LLM explanation (direct + self-reflection) ------------- #
-        explain_pair = _llm_explain_with_self_reflection(
-            img_paths,
-            openai_model="gpt-5",  # keep your configured model string
-            classifier_type=classifier,
-            attribution_summaries=attribution_summaries,
-            attribution_method=explain_method,
+    for idx in llm_indices:
+        idx_int = int(idx)
+        amp_scaled = X_test[idx_int][1 : 1 + num_points].detach().cpu().numpy()
+        amp = (
+            amp_scaled * scaler.scale_[1 : 1 + num_points]
+            + scaler.mean_[1 : 1 + num_points]
         )
+        snr_scaled = X_test[idx_int][0].item()
+        snr = float(snr_scaled * scaler.scale_[0] + scaler.mean_[0])
+        t_cls = int(y_cls_test[idx_int].item())
+        p_cls = pred_lookup.get(idx_int)
+        t_pos = float(y_pos_test[idx_int].item())
+        p_pos = pos_lookup.get(idx_int)
+        img_paths.append(
+            _visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, idx_int, out_dir)
+        )
+
+    explain_outputs: dict[str, tuple[str, str, str, bool]] = {}
+    if img_paths:
+        for method in explain_methods:
+            try:
+                explain_pair = _llm_explain_with_self_reflection(
+                    img_paths,
+                    openai_model="gpt-5",  # keep your configured model string
+                    classifier_type=classifier,
+                    attribution_summaries=attr_summary_map.get(method),
+                    attribution_method=method,
+                )
+            except Exception as exc:  # pragma: no cover - API errors
+                print(f"[WARN] LLM explanation ({method}) failed: {exc}")
+                continue
+            if explain_pair:
+                explain_outputs[method] = explain_pair
 
     classifier_name = classifier.upper()
     llm_dir = Path("outputs/llm_output")
     llm_dir.mkdir(parents=True, exist_ok=True)
 
-    if explain_pair:
-        direct_text, refined_text, rag_flag = explain_pair
-        method_slug = explain_method.lower()
+    for method, explain_tuple in explain_outputs.items():
+        direct_text, refined_text, digest_text, rag_flag = explain_tuple
+        method_slug = method.lower()
         explanation_file = llm_dir / f"llm_explanation_{method_slug}.txt"
         i = 1
         while explanation_file.exists():
@@ -1204,18 +1407,56 @@ def main(
 
         header = (
             f"LLM explanation for eval subset {'with' if rag_flag else 'without'} RAG "
-            f"for {classifier_name} in {mode} mode ({explain_method.upper()} attributions):\n\n"
+            f"for {classifier_name} in {mode} mode ({method.upper()} attributions)"
+            f" covering {len(llm_indices)} samples:\n\n"
         )
         combined = (
-                header
-                + "=== DIRECT ===\n"
-                + direct_text.strip()
-                + "\n\n=== SELF-REFLECTION (REVISED) ===\n"
-                + refined_text.strip()
-                + "\n"
+            header
+            + "=== DIRECT ===\n"
+            + direct_text.strip()
+            + "\n\n=== SELF-REFLECTION (REVISED) ===\n"
+            + refined_text.strip()
+            + "\n\n=== FIELD OPS DIGEST ===\n"
+            + digest_text.strip()
+            + "\n"
         )
         explanation_file.write_text(combined, encoding="utf-8")
-        print(f"LLM explanation (direct + self-reflection) saved to {explanation_file.name}")  # noqa: T201
+        print(
+            f"LLM explanation (direct + self-reflection + ops digest) saved to {explanation_file.name}"
+        )  # noqa: T201
+        if wandb_run:
+            wandb_run.log({f"llm_{method_slug}": wandb.Html(combined)})
+
+    if wandb_run:
+        metrics_payload: dict[str, float] = {}
+        if acc is not None:
+            metrics_payload["accuracy"] = float(acc)
+        if rmse is not None:
+            metrics_payload["rmse"] = float(rmse)
+        if auc_val is not None:
+            metrics_payload["auc"] = float(auc_val)
+        if metrics_payload:
+            wandb_run.log(metrics_payload)
+
+        if cm_path and cm_path.exists():
+            wandb_run.log({"confusion_matrix": wandb.Image(str(cm_path))})
+        if radial_path and radial_path.exists():
+            wandb_run.log({"radial_accuracy": wandb.Image(str(radial_path))})
+        if localisation_path and localisation_path.exists():
+            wandb_run.log({"localisation_vs_snr": wandb.Image(str(localisation_path))})
+        if img_paths:
+            wandb_run.log({
+                "sample_traces": [wandb.Image(str(path)) for path in img_paths],
+            })
+        for method, summaries in attr_summary_map.items():
+            if summaries:
+                table = wandb.Table(columns=["summary"])
+                for summary in summaries:
+                    table.add_data(summary)
+                wandb_run.log({f"{method}_summaries": table})
+
+    if wandb_run:
+        wandb_run.finish()
 
 
 
