@@ -134,6 +134,30 @@ You’ll find the generated text under `outputs/llm_output/…` alongside the sa
 
 ---
 
+## Preparing the OTDR RAG corpus
+
+1. **Chunk the curated OTDR references** into `docs.json`:
+
+   ```bash
+   python OTDR_CLI/OTDR/src/corpus/scripts/make_chunks.py \\
+       --raw-dir OTDR_CLI/OTDR/src/corpus/raw \\
+       --output OTDR_CLI/OTDR/src/corpus/docs.json
+   ```
+
+   This writes token-friendly snippets (≈200 words each) inside the OTDR module tree so they can be versioned alongside the codebase.
+
+2. **Sync the chunks to Pinecone** (uses the same `text-embedding-3-large` model as runtime RAG):
+
+   ```bash
+   python OTDR_CLI/OTDR/src/corpus/scripts/sync_pinecone.py \\
+       --docs-path OTDR_CLI/OTDR/src/corpus/docs.json \\
+       --namespace otdr-prod
+   ```
+
+   The helper will create the `fiberwatch` index if it is missing, embed in batches with OpenAI, and upsert chunk metadata (`text`, `source`, and `chunk_index`). Use `--raw-dir` if you prefer to regenerate chunks on the fly or `--batch-size` / `--limit-words` to tune ingestion.
+
+---
+
 ## Minimal “how to run” (for context)
 
 > Full CLIs already exist; this is just a tiny cheat-sheet.
