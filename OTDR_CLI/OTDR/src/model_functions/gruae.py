@@ -48,7 +48,7 @@ class VectorGRUAE(nn.Module):
         hidden: int = 128,
         latent: int = 64,
         layers: int = 1,
-        bidir: bool = False,
+        bidir: bool = True,
         dropout: float = 0.1,
     ) -> None:
         super().__init__()
@@ -171,10 +171,10 @@ class VectorGRUAE(nn.Module):
 
 @dataclass
 class TrainConfig:
-    epochs: int = 120
+    epochs: int = 180
     batch_size: int = 256
     lr: float = 1e-3
-    patience: int = 10
+    patience: int = 20
     lr_patience: int = 5
     lr_factor: float = 0.5
     min_lr: float = 1e-5

@@ -1,0 +1,102 @@
+Explanation of Reflection Features in OTDR Measurement Traces
+
+WP1281
+Issued: September 2023
+Supersedes: November 2015
+Author: Ian Davis ISO 9001 Registered
+Background & Summary
+Starting with the basics of how optical time domain reflectometer (OTDR) fiber measurements are made and interpreted, this White Paper explains how reflection features are sometimes observed in optical fibers, how these features may be characterized by OTDR measurements and, if present, how they can be verified to conform to optical return loss (ORL) specifications (and satisfy all relevant international standards and system performance requirements).
+Fiber factory measurements require a relatively long OTDR pulse width (typically 1000 ns) to achieve sufficient dynamic range for continuous lengths that may exceed 50 kilometers. In this regime, reflections occasionally appear on the trace with a much smaller amplitude (height) than when they are subsequently measured in cable lengths of few kilometers using a shorter pulse width (typically  100 ns). Although concern may result from the sharp, pointed appearance of these reflections using a short pulse width, small and passing reflections generated from within the fiber do not pose any risk to transmission capability or mechanical reliability. For this reason, small reflection events are not systematically removed from the fiber following detection in the fiber factory. It is not considered cost effective, or advantageous from a performance or reliability perspective, to actively seek and remove sections of fiber or cable that include these small reflection features.
+Introduction: OTDR - Measurement Interpretation Basics
+To understand how features in fibers are detected by an OTDR and how the results should be interpreted, it is first necessary to understand the basics of how a fiber measurement is made using an OTDR. In very simple terms, an OTDR consists of a laser light source and an optical detector, together with electronic and software driven controls in the same piece of measurement hardware. The OTDR injects an accurately timed light pulse into the fiber and the optical detector determines the power of the small proportion of light that is reflected backwards (backscattered) as the forward propagating pulse travels along the fiber. The amount of light that is backscattered is a tiny fraction of the input pulse, typically less than one millionth (< 0.000001% or <-79 dB). The amplitude of the reflected light determined by the OTDR detector, together with the corresponding time delay (from when the input pulse was triggered), is recorded and the time delay is converted into distance travelled using the known speed with which the light travels along the fiber. The OTDR is pre-programmed with the fiber effective index of refraction (EIOR) to enable the OTDR to calculate and display the length and position of any events (observed as regions of higher or lower levels of backscattered
+light) as the measurement pulse propagates through the fiber. The specific EIOR value used depends on fiber type and measurement wavelength (EIOR values are generally provided in the fiber product information sheets available from the Corning web site).
+ 
+Figure 1 shows how light travelling along a single-mode fiber may be reflected back towards the OTDR detector due to:
+a) Rayleigh Scattering due to non-homogeneous structural changes at the molecular level, b) Reflections due to localized changes in the refractive index of the glass, c) mode field diameter (MFD) variations caused by glass geometrical changes/ differences or d) Fresnel peaks, where there is a sudden change between media of different optical density, e.g. from glass- to-air transitions at near-perpendicular cleaved fiber ends. In field-deployed cabled fibers, OTDRs can be used to locate other extrinsic events such as splices, cable joints, and connectors.
+
+(1a)	(1b)	(1c)	(1d)
+Figure 1. OTDR trace interpretation of features or events in an optical fiber path.
+Characterization of Reflections
+Measurement of optical fiber by OTDR and interpretation of OTDR traces are detailed in the standard IEC 60793-1-40 Annex C [1] while measurement of reflections is detailed in the standard TIA-455-8, FOTP-8 [2]. Some reflections are associated with loss, other reflections are free from loss (figure 1b). Because the reflection height is dependent on OTDR pulse width, the height/ magnitude of any reflective feature is not suitable for fiber specification. The point discontinuity specification is sometimes erroneously invoked to declare a reflective feature is outside specification based on the reflection height. This is incorrect; reflections are measured and specified according to the ORL that will be described later in this paper. If the reflection is associated with loss, the point discontinuity specification is used to satisfy the power loss from either side of the reflection.
+A small reflection is caused by a localized refractive index change in the light carrying region of the fiber. The propagating light signal experiences a small instantaneous change in the refractive index, resulting in a change to the proportion of light that is backscattered to the OTDR detector. Another possibility is that the feature is the result of a small void in the light carrying region. In either case, reflective features have been investigated extensively by Corning and the global technical community, concluding that these events do not represent either an optical performance or mechanical strength risk.
+Fundamentally, the OTDR only represents light that is back-scattered from the light-carrying region of the glass. The property that generates the reflection is physically locked into the core of the glass and therefore is stable. Optically, the ORL specification ensures that the low amount of power that is backscattered is not sufficient to disrupt transmission.
+Mechanically, the strength properties of optical fiber are determined only by flaws at the surface of the cladding. Fatigue is the process whereby flaws on the cladding surface grow in the presence of stress and moisture until the induced stress is larger than the flaw strength - flaws do not grow in the other direction (i.e. from the inside of the glass to the surface, due to the absence of moisture). Since all Corning fiber is proof tested to at least 100 kpsi, customers can be assured that any flaws below this strength have been removed during the fiber manufacturing process.
+ 
+Explanation of “Gainers”
+The phenomenon of “gainers” (figure 1c) is a related feature that also causes common confusion in interpreting OTDR
+traces [3]. The proportion of backscattered light from any point on the fiber is inversely proportional to the square of the MFD at that location. A fiber with a smaller MFD carries a larger optical power density in the core and an OTDR detector will see proportionally more backscattered light than a larger MFD fiber;
+
+ 
+Backscatter Level 
+ 
+incident power MFD2
+ 
+When passing across a splice from a larger to a smaller MFD, the change in the backscatter capture fraction leads to an apparent “jump” in the OTDR trace, known as a “gainer”. The effect is the opposite when transmitting from smaller to larger MFD and results in an apparently “exaggerated loss.” When measuring splice loss, it is recommended to take the average of OTDR traces from each direction to account for possible MFD variances between different sections of fiber.
+Reflectance & ORL Specifications
+The ORL or reflectance specification of the fiber ensures that the magnitude of the reflected light is sufficiently small not to interfere with the forward propagating light signal or laser-based transmitters and other optical modulation devices that may otherwise cause impairment in practical systems.
+ORL is defined by the equation
+ORL(dB) = 10•log10	 incident power 
+reflected power
+The result is a positive value where a larger amount of reflected power is undesirable and leads to a lower ORL. Corning’s single-mode specification is ORL  60 dB. The property may also be expressed as reflectance, which has the same absolute magnitude but is expressed as a negative value (e.g. a sufficiently small feature that passes the specification may be expressed as ORL = 70 dB or Reflectance = -70 dB).
+ORL (dB) is a measure of the magnitude of the light reflected by a feature that is independent of the pulse width employed. This approach addresses the concern that specification of reflection amplitude is impractical since fiber factories require long pulse widths to support long length measurements whereas cable measurements of a few kilometers may be supported by shorter pulse widths that magnify the reflection amplitude.
+
+
+Figure 2. Determination of ORL value of a reflection feature using an OTDR measurement trace.
+ 
+The ORL value for a reflection feature may be calculated from the height of a reflection detected by an OTDR (figure 2);
+
+ 
+ORL(dB) = B _ 10•log10
+ 
+A
+105 _ 1 • D
+ 
+
+(1)
+ 
+
+Where:
+B = Rayleigh backscatter coefficient (in dB) of the fiber under test (see table 1)
+A = Reflection amplitude (in dB), as measured by the OTDR
+D = OTDR measurement pulse width (in nanoseconds)
+
+Table 1. Typical Rayleigh Backscatter and ORL values for Corning fibers
+
+Rayleigh Backscatter Coefficient, B (dB)
+Product Type	1310 nm	1550 nm	Corning ORL specification (dB)
+SMF-28e+® fiber	77	82	 60
+SMF-28® Ultra fiber	77	82	 60
+SMF 28® Contour Pro fiber	77	82	 60
+SMF 28® Contour Fit fiber	77	82	 60
+ClearCurve® LBL fiber	77	82	 60
+ClearCurve® ZBL fiber	77	82	 60
+SMF-28® ULL fiber	77	83	 60
+LEAF® fiber		81	 60
+TXF® fiber		85	 60
+
+Table 2 shows how reflections meeting the 60 dB ORL threshold in single-mode fiber may appear larger in amplitude when OTDR measurements are taken using shorter pulse widths. A small reflection, with peak amplitude of  0.05 dB observed during OTDR inspection using a narrow pulse width of 100 ns or lower, can be misinterpreted as failing fiber attenuation specifications. However, as shown in table 2 below, the peak amplitude resulting from a threshold 60 dB ORL specification feature is pulse width dependent with an amplitude of up to 2.06 dB at 1550 nm allowed for a 100 ns pulse width, as calculated using (1) above. Figure 3 also shows how the amplitude of a reflection feature is dependent on pulse width and a peak amplitude of 0.1 dB at 1550 nm, measured with a 100 ns pulse in single-mode fiber >70 dB ORL.
+Table 2. Reflection Height for ORL = 60 dB with OTDR Pulse Width (SMF-28e+® fiber)
+
+OTDR
+Pulse duration (ns)	OTDR
+Pulse width (meters)	Reflection height, 1310 nm (dB)	Reflection height, 1550 nm (dB)
+100	10	≤ 0.88	≤ 2.06
+200	20	≤ 0.49	≤ 1.27
+500	50	≤ 0.21	≤ 0.60
+1,000	100	≤ 0.11	≤ 0.32
+ 
+ 
+Figure 3. Graphical relationship between; OTDR trace reflection height, pulse width & ORL.
+ORL Requirements for Practical Transmission Systems
+The Corning specification of ORL (absolute value) is  60 dB for all single-mode fiber types, which is more stringent than the published ITU-T transmission standards requirements for reflectance of -27 dB [4] and -32 dB [5] for single-mode based transmission systems. The tightest requirement for reflectance amongst prominent regional standards and specifications is -55 dB included in the Telcordia standard for fiber and cable performance [6]
+Conclusion
+Reflections meeting Corning’s ORL specification are considered benign (non-harmful) to the fiber strength or optical transmission properties. Fiber regions containing reflections smaller than the threshold specification are not actively removed during fiber production. Shorter OTDR pulse widths, often used during cable manufacturing or deployment inspection, cause the amplitude of the reflection to appear larger, which can lead to concerns which are unfounded. Corning’s ORL calculation and specification accounts for the OTDR pulse width and complements Corning’s additional specifications for attenuation point discontinuities. Corning specifies fiber ORL requirements that exceed prominent international and regional standards which ensure that reflection features remain non-functional relative to practical optical fiber transmission demands. In summary, small reflections are cosmetic features as viewed on an OTDR trace and do not represent a functional concern with the fiber.
+References
+[1]	“Measurement methods and test procedures - Attenuation (Requirements specific to method C - Backscattering)”, IEC 60793-1-40.
+[2]	FOTP-8 Measurement of Splice or Connector Loss and Reflectance Using an OTDR, TIA-455-8.
+[3]	Guidance for OTDR Assessment of Fusion Spliced Single-mode Fibers, Corning Application Note, AN3060, March 2014, published on the Corning website: www.corning.com
+[4]	Optical interfaces for equipment and systems relating to the synchronous digital hierarchy, ITU-T Recommendation G.957, Published April 2006.
+[5]	Broadband optical access systems based on Passive Optical Networks (PON), ITU-T Recommendation G.983.2, Published January 2005.
+[6]	General Requirements for Optical Fiber and Optical Fiber Cable, GR-20-CORE, July 2013.
+
+ 

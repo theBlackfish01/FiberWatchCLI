@@ -1,0 +1,165 @@
+Fundamentals of an OTDR
+By Jimmy Gagnon, Product Specialist, Optical Business Unit
+
+
+ 
+To ensure quality of service (QoS), network constructors, service providers and operators need to accurately pinpoint existing and potential problems, making test and measurement equipment vital. There are a number of test tools available that address the different testing needs at various stages of the network, such as fiber commissioning. Used to reveal the total loss, optical return loss (ORL) and the fiber length, such tests can be performed either on a single fiber or on a complete network. Additionally, a closer examination of the different elements that make up the link under test may be required. Whether to characterize each component of the link, to pinpoint a potential problem with the fiber or to find a fault on your network, the use of an optical time domain reflectometer (OTDR) is inevitable—from fiber network commissioning to troubleshooting and maintenance, an OTDR is the tool of choice. This application note explores the fundamental OTDR principles that are key to understanding the specifications of this instrument.
+
+WHAT IS AN OTDR?
+The basics
+An OTDR combines a laser source and a detector to provide an inside view of the fiber link. The laser source sends a signal into the fiber where the detector receives the light reflected from the different elements of the link. This produces a trace on a graph made in accordance with the signal received, and a post-analysis event table that contains detailed information on each identified network component is then generated. The signal sent is a short pulse that carries a certain amount of energy. A clock then precisely calculates the time of flight of the pulse, and time is converted into distance— knowing the properties of this fiber. As the pulse travels along the fiber, a small portion of the pulse’s energy returns to the detector due to the reflection of the connections and the fiber itself. When the pulse has entirely returned to the detector, another pulse is sent—until the acquisition time is complete. Therefore, many acquisitions will be performed and averaged in a second to provide a clear picture of the link’s components. After the acquisition has been completed, signal processing is performed to calculate the distance, loss and reflection of each event, in addition to calculating the total link length, total link loss, ORL and fiber attenuation. The main advantage of using an OTDR is the single-ended test—requiring only one operator and instrument to qualify the link or find a fault in a network. Figure 1 below illustrates the block diagram of an OTDR.
+ 
+Reflection is key
+As previously examined, the OTDR provides a view of the link by reading the level of light that returns from the pulse which was sent. Note that there are two types of light levels: a constant low level created by the fiber called Rayleigh backscattering and a high- reflection peak at the connection points called Fresnel reflection. Rayleigh backscattering is used to calculate the level of attenuation in the fiber as a function of distance (expressed in dB/km), which is shown by a straight slope in an OTDR trace. This phenomenon comes from the natural reflection and absorption of impurities inside optical fiber. When hit, some particles redirect the light in different directions, creating both signal attenuation and backscattering. Higher wavelengths are less attenuated than shorter ones and, therefore, require less power to travel over the same distance in a standard fiber. Figure 2 below illustrates Rayleigh backscattering.
+
+Figure 2. Rayleigh backscattering
+
+Rayleigh backscattering detects physical non-reflective events from a sudden decrease in the signal level. It appears as a discontinuity in the downward slope of the trace signal. This event is often caused by fusion splices, macrobends or microbends in the fiber. To properly discriminate a physical bend from a fusion splice in the fiber, a dual- wavelength test is required. Macrobends will typically display higher loss at higher wavelength, while a fusion splice loss level would be almost wavelength independent. Figure 3 illustrates dual-wavelength traces of different non-reflective events.
+ 
+
+ 
+
+SIGNAL PROCESSING AND TRACE ANALYSIS
+
+-	IOR
+-	Pulse width
+-	Acquisition time
+-	Wavelength
+-	Distance range
+-	Helix factor
+ 
+
+PULSE GENERATOR
+ 
+
+LASER
+ 
+
+DIRECTIONAL COUPLER
+ 
+
+
+
+
+
+OTDR PORT
+ 
+
+CONVERTER DIGITAL
+ANALOG
+
+Figure 1. Block diagram of an OTDR
+ 
+
+AMPLIFIER
+ 
+
+AVALANCHE PHOTODIODE
+ 
+
+
+
+Figure 3. Raleigh backscattering drop from fusion splice (event 4) and macrobend (event 5)
+ 
+
+ 
+The second type of reflection used by an OTDR—Fresnel reflection— detects physical events along the link. When the light hits an abrupt change in index of refraction (e.g., from glass to air) a higher amount of light is reflected back, creating Fresnel reflection, which can be thousands of times bigger than the Rayleigh backscattering. Fresnel reflection is identifiable by the spikes in an OTDR trace. Examples of such reflections are connectors, mechanical splices, bulkheads, fiber breaks or opened connectors. Figure 4 below illustrates different connections that create Fresnel reflections.
+
+
+Figure 4. Fresnel reflections created by (1) mechanical splice, (2) bulkhead and (3) opened connection
+
+
+What are dead zones?
+Fresnel reflections lead to an important OTDR specification known as dead zones. There exist two types of dead zones: event and attenuation. Both originate from Fresnel reflections and are expressed in distance (meters) that vary according to the power of those reflections. A dead zone is defined as the length of time during which the detector is temporary blinded by a high amount of reflected light, until it recovers and can read light again—think of when you drive a car at night and you cross another car in the opposite direction; your eyes are blinded for a short period of time. In the OTDR world, time is converted into distance; therefore, more reflection causes the detector to take more time to recover, resulting in a longer dead zone. Most manufacturers specify dead zones at the shortest available pulse width and on a -45 dB reflection for singlemode fibers and -35 dB for multimode fibers. For this reason, it is important to read the specification sheet footnotes since manufacturers use different testing conditions to measure the dead zones—pay particular attention to the pulse width and the reflection value. For instance, a -55 dB reflection for singlemode fiber provides more optimistic specifications of a shorter dead zone than using -45 dB, simply because -55 dB is a lower reflection and the detector recovers faster. Also, using different methods to calculate the distance could also return a shorter dead zone than what it really is.
+ 
+Event dead zone
+The event dead zone is the minimum distance after a Fresnel reflection where an OTDR can detect another event. In other words, it is the minimum length of fiber needed between two reflective events. Still using the car example mentioned above, when your eyes are blinded by another car, after a few seconds you could notice an object on the road without being able to properly identify it. In the case of an OTDR, the consecutive event is detected, but the loss cannot be measured (see Figure 5). The OTDR merges the consecutive events and returns a global reflection and loss for all merged events. To establish specifications, the most common industry method is to measure the distance at -1.5 dB from each side of the reflective peak (see Figure 6). Another method that measured the distance from the beginning of the event until the reflection level falls to -1.5 dB from its peak has also been used; this method returns a longer dead zone, but it is not often used by manufacturers.
+
+Figure 5. Merged event from a long dead zone
+
+
+Figure 6. Measuring event dead zone
+
+The importance of having the shortest-possible event dead zone allows the OTDR to detect closely spaced events in the link. For example, testing in premises networks requires an OTDR with short event dead zones since the patchcords that link the various data centers are extremely short. If the dead zones are too long, some connectors may be missed and will not be identified by the technicians, which makes it harder to locate a potential problem.
+ 
+
+ 
+Attenuation dead zones
+The attenuation dead zone is the minimum distance after a Fresnel reflection where an OTDR can accurately measure the loss of a consecutive event. Still using the car example previously mentioned, after a longer time, your eyes will have recovered enough to identify and analyze the nature of the object on the road. As illustrated in Figure 7 below, the detector has enough time to recover so that it can detect and measure the loss of the consecutive event. The minimum required distance is measured from the beginning of a reflective event until the reflection is back to 0.5 dB over the fiber’s backscattering level, as illustrated in Figure 8.
+
+Figure 7. Attenuation dead zone
+
+
+Figure 8. Measuring attenuation dead zone
+
+
+Importance of dead zones
+Short attenuation dead zones enable the OTDR not only to detect a consecutive event but also to return the loss of closely spaced events. For instance, the loss of a short patchcord within a network can now be known, which helps technicians to have a clear picture of what is inside the link.
+Dead zones are also influenced by another factor: the pulse width. Specifications use the shortest pulse width in order to provide the shortest dead zones. However, dead zones are not always the same
+ 
+Dynamic range
+An important OTDR parameter is the dynamic range. This parameter reveals the maximum optical loss an OTDR can analyze from the backscattering level at the OTDR port down to a specific noise level. In other words, it is the maximum length of fiber that the longest pulse can reach. Therefore, the bigger the dynamic range (in dB), the longer the distance reached. Evidently, the maximum distance varies from one application to another since the loss of the link under test is different. Connectors, splices and splitters are some of the factors that reduce the maximum length of an OTDR. Therefore, averaging for a longer period of time and using the proper distance range is the key to increasing the maximum measurable distance. Most of the dynamic range specifications are given using the longest pulse width at a three-minute averaging time, signal-to-noise ratio (SNR) = 1 (averaged level of the root mean square (RMS) noise value). Once again, note that it is important to read the footnotes of a specification for detailed testing conditions.
+A good rule of thumb is to choose an OTDR that has a dynamic range that is 5 to 8 dB higher than the maximum loss that will be encountered. For example, a singlemode OTDR with a dynamic range of 35 dB has a usable dynamic range of approximately 30 dB. Assuming typical fiber attenuation of 0.20 dB/km at 1550 nm and splices every 2 km (loss of 0.1 dB per splice), a unit such as this one will be able to accurately certify distances of up to 120 km. The maximum distance could be approximately calculated by dividing the attenuation of the fiber to the dynamic range of the OTDR. This helps determine which dynamic range will enable the unit to reach the end of the fiber. Keep in mind that the more loss there is in the network, the more dynamic range will be required. Note that a high dynamic range specified at 20 μs does not guarantee a high dynamic range at short pulses—excessive trace filtration could artificially boost dynamic range at all pulses at the cost of a bad fault-finding resolution.
+
+PULSE WIDTH
+What is pulse width?
+The pulse width is actually the time during which the laser is on. As we know, time is converted into distance so that the pulse width has a length. In an OTDR, the pulse carries the energy required to create the backreflection for link characterization. The shorter the pulse, the less energy it carries and the shorter the distance it travels due to the loss along the link (i.e., attenuation, connectors, splices, etc.). A long pulse carries much more energy for use in extremely long fibers. Figure 9 below illustrates the pulse width as a function of time.
+
+Power
+
+
+carried energy		carried energy	
+ 
+length; they stretch as the pulse width increases. Using the longest possible pulse width results in extremely long dead zones, yet this has a different use, as will be examined further on.
+ 
+short pulse short dead zone low energy
+
+Figure 9. Short pulse vs. long pulse
+ 
+long pulse long dead zone
+high energy
+ 
+Time
+ 
+
+ 
+If the pulse is too short, it loses its energy before the fiber end, causing the backscattering level to become low to the point where the information is lost at the noise floor level. This results in an inability to reach the end of the fiber. Therefore, it is not possible to measure the complete link since the returned end of fiber distance is much shorter than the actual length of the fiber. Another symptom is when the trace becomes too noisy near the fiber end; the OTDR can no longer proceed with the signal analysis and the measurements may be faulty.
+
+Dealing with pulse width
+When the trace becomes noisy, there are two easy ways to obtain a cleaner trace. First, the acquisition time can be increased, which results in a considerable improvement (increase) in SNR, while maintaining the good resolution of the short pulse. However, increasing the averaging time has its limits, as it does not improve SNR indefinitely. If the trace is still not sufficiently smooth, then we move on to the second method, which is to use the next available higher pulse (more energy). However, keep in mind that dead zones extend along with the pulse width. Fortunately, most OTDRs on the market have an Auto mode that selects the most appropriate pulse width for the fiber under test; this option is very convenient when the length or loss of the fiber under test is unknown and will provide the best trade-off for a single pulse width acquisition.
+When characterizing a network or a fiber, it is critical to select the right pulse width for the link under test. Short pulse width, short dead zone and low power are used to test short links where events are closely spaced, while a long pulse width, long dead zone and high power are used to reach further distances for longer networks or high-loss networks. However, an optimal characterization of each element of a link would involve taking multiple traces, selecting the right pulse for each section of a link and analyzing the link from multiple traces (at the expense of higher testing time, more complex post-processing analysis and trace file management).
+
+Sampling resolution and sampling points
+The ability for an OTDR to pinpoint the right distance of an event relies on a combination of different parameters—among them are the sampling resolution and the sampling points. Sampling resolution is defined as “the minimum distance between two consecutive sampling points acquired by the instrument”. This parameter is crucial, as it defines the ultimate distance accuracy and fault-finding capability of the OTDR. Depending on the selected pulse width and distance range, this value could vary from 4 cm up to a few meters. Consequently, there must be a high number of sampling points taken during an acquisition to maintain the best possible resolution. Figures 10a and 10b illustrate the role that high resolution plays in fault-finding:
+ 
+A
+ 
+B
+ 
+
+Figure 10. Resolution vs. fault-finding efficiency: (a) 5-meter resolution (higher resolution). (b) 15-meter resolution (lower resolution)
+
+As illustrated above, having a high number of points results in a higher resolution (short distance between points), which is the ultimate condition for finding faults.
+
+CONCLUSION
+There are numerous OTDR models available on the market that address different test and measurement needs—from basic fault finders to advanced instruments. To make the right choice, fundamental parameters must be considered when purchasing an OTDR, since selecting a unit only based on overall performance and price will lead to problems if the model selected is inappropriate for the application. An OTDR has complex specifications, and most of them entail trade-offs. A solid understanding of these parameters and how to verify them will help buyers make the right choice for their needs—maximizing productivity and cost efficiency.
+ 
+
+
+
+
+
+
+
+
+EXFO Headquarters > Tel.: +1 418 683-0211 | Toll-free: +1 800 663-3936 (USA and Canada) | Fax: +1 418 683-2170 | info@EXFO.com | www.EXFO.com
+EXFO serves over 2000 customers in more than 100 countries. To find your local office contact details, please go to www.EXFO.com/contact.
+
+
+
+
+
+
+
+
+APNOTE194.2AN	© 2017 EXFO Inc. All rights reserved.	Printed in Canada 17/03

@@ -15,7 +15,7 @@ _INDEX = faiss.read_index(str(_CDIR / "faiss.index"))
 _DOCS: List[dict] = json.loads((_CDIR / "docs.json").read_text(encoding="utf-8"))
 _EMB_MODEL = "text-embedding-3-small"
 
-_client = OpenAI(api_key=cfg.OPENAI_API_KEY)                 # picks up OPENAI_API_KEY from env
+_client = OpenAI(api_key=cfg.OPENAI_API_KEY)
 
 
 def retrieve(query: str, k: int = 5) -> List[dict]:
