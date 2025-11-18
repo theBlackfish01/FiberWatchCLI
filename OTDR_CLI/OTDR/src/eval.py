@@ -48,7 +48,7 @@ from pipeline import (
 )
 import config.config as cfg
 from pathlib import Path
-from rag import retrieve
+from rag import build_reference_block, retrieve
 from openai import OpenAI
 import warnings
 
@@ -507,7 +507,7 @@ def _llm_explain_with_self_reflection(
     except Exception as exc:
         print(f"RAG retrieval failed. {exc}")
         retrieved = []
-    ref_block = "\n\n".join(f"[{i + 1}] {r['text']}" for i, r in enumerate(retrieved))
+    ref_block = build_reference_block(retrieved, max_context_tokens=1600)
     rag_flag = bool(retrieved)
     if rag_flag:
         print("RAG retrieval successful, using retrieved snippets in LLM prompt.")
