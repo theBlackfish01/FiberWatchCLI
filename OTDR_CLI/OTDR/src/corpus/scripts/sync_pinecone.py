@@ -10,8 +10,10 @@ from typing import List, Sequence
 from openai import OpenAI
 from pinecone import Pinecone, ServerlessSpec
 
-import config.config as cfg
+from config import config as cfg
 from corpus.scripts.make_chunks import generate_chunks
+
+
 
 _INDEX_NAME = "fiberwatch"
 _EMBED_MODEL = "text-embedding-3-large"

@@ -1,4 +1,5 @@
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,5 +19,6 @@ if PINECONE_API_KEY is None:
     )
 
 if WANDB_API_KEY is None:
-    # WANDB is optional – only warn so RAG and inference can run without it.
-    print("[config] WANDB_API_KEY not set; WANDB logging will be disabled.")
+    raise ValueError(
+        "WANDB_API_KEY environment variable is not set. Please set it in your .env file."
+    )
