@@ -193,12 +193,12 @@ def _evaluate_tcn_binary(
     logits = predict_tcn_binary(tcn, X_test, pos_count=pos_count)
     preds = logits.argmax(1).numpy()
     probs = torch.softmax(logits, dim=1)[:, 1].numpy()
-    y_true = y_test_cls.numpy()
+    y_true = (y_test_cls != 0).numpy().astype(int)
     acc = accuracy_score(y_true, preds)
     auc = roc_auc_score(y_true, probs)
     print(f"[TCN-B]  Test Acc={acc:.3f}  AUC={auc:.3f}")
     print("\nClassification Report:")
-    print(classification_report(y_test_cls.numpy(), preds))
+    print(classification_report(y_true, preds))
     return acc, auc
 
 
