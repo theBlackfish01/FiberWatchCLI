@@ -85,6 +85,8 @@ class PipelineResult:
     summary_lines: list[str]
     confusion_matrix: np.ndarray
     confusion_matrix_path: Path
+    binary_confusion_matrix: np.ndarray | None = None
+    binary_confusion_matrix_path: Path | None = None
     classification_report: str
     final_predictions: torch.Tensor
 
@@ -148,6 +150,19 @@ def remap_anomaly_only_targets(
     y_pos: torch.Tensor,
     meta: dict[str, object],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[int, int], torch.Tensor]:
+    return remap_anomaly_only_targets_with_options(
+        X, y_cls, y_pos, meta, validate_presence=True
+    )
+
+
+def remap_anomaly_only_targets_with_options(
+    X: torch.Tensor,
+    y_cls: torch.Tensor,
+    y_pos: torch.Tensor,
+    meta: dict[str, object],
+    *,
+    validate_presence: bool,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, dict[int, int], torch.Tensor]:
     mapping_raw = meta.get("class_index_map")
     if mapping_raw is not None:
         mapping = {int(k): int(v) for k, v in mapping_raw.items()}
@@ -164,7 +179,7 @@ def remap_anomaly_only_targets(
         mask |= y_cls == int(orig)
 
     selected = torch.nonzero(mask, as_tuple=True)[0]
-    if selected.numel() == 0:
+    if validate_presence and selected.numel() == 0:
         raise ValueError(
             "No samples with the anomaly classes required by the anomaly-only TCN were found."
         )
@@ -173,11 +188,11 @@ def remap_anomaly_only_targets(
     y_pos_sel = y_pos[selected]
     y_cls_sel = y_cls[selected]
 
-    remapped = torch.empty_like(y_cls_sel)
+    remapped = torch.empty_like(y_cls_sel, dtype=torch.long)
     for orig, idx in mapping.items():
         remapped[y_cls_sel == int(orig)] = int(idx)
 
-    return X_sel, remapped.to(dtype=torch.long), y_pos_sel, mapping, selected
+    return X_sel, remapped, y_pos_sel, mapping, selected
 
 
 def _run_tst_localisation(
@@ -371,6 +386,19 @@ def run_cascade(
         probabilities=binary_probs,
     )
 
+    binary_truth_np = binary_truth.cpu().numpy()
+    binary_pred_np = binary_preds.cpu().numpy()
+    binary_report = classification_report(binary_truth_np, binary_pred_np, digits=3)
+    binary_cm = confusion_matrix(binary_truth_np, binary_pred_np)
+    ConfusionMatrixDisplay(binary_cm).plot(
+        include_values=True, cmap="Blues", colorbar=False
+    )
+    plt.title("Confusion Matrix – Stage 1 binary filter")
+    plt.tight_layout()
+    binary_cm_path = out_dir / "confusion_matrix_binary.png"
+    plt.savefig(binary_cm_path, dpi=150)
+    plt.close()
+
     # ---------- Stage 2: anomaly-only multi-class TCN ---------- #
     anomaly_meta = load_classifier_meta(anomaly_path)
     if anomaly_meta is None:
@@ -384,11 +412,12 @@ def run_cascade(
     if meta_channels is not None and int(meta_channels) != input_channels:
         raise ValueError("Anomaly TCN checkpoint expects a different input channel arrangement.")
 
-    _, _, _, mapping, _ = remap_anomaly_only_targets(
+    _, _, _, mapping, _ = remap_anomaly_only_targets_with_options(
         X_test,
         y_cls_test,
         y_pos_test,
         anomaly_meta,
+        validate_presence=False,
     )
     inv_mapping = {int(v): int(k) for k, v in mapping.items()}
     anomaly_n_classes = len(mapping)
@@ -478,6 +507,8 @@ def run_cascade(
             f"predicted {stage1.predicted_faults}/{stage1.total_samples} traces as faulty ("
             f"ground-truth faults: {stage1.truth_faults})."
         ),
+        "Stage 1 – Binary confusion matrix saved to: " + str(binary_cm_path),
+        "Stage 1 – Binary classification report:\n" + binary_report,
     ]
 
     if stage2.predictions:
@@ -522,6 +553,8 @@ def run_cascade(
         summary_lines=summary_lines,
         confusion_matrix=cm,
         confusion_matrix_path=cm_path,
+        binary_confusion_matrix=binary_cm,
+        binary_confusion_matrix_path=binary_cm_path,
         classification_report=report,
         final_predictions=final_preds,
     )
@@ -681,6 +714,8 @@ def run_full_tcn_pipeline(
         summary_lines=summary_lines,
         confusion_matrix=cm,
         confusion_matrix_path=cm_path,
+        binary_confusion_matrix=None,
+        binary_confusion_matrix_path=None,
         classification_report=report,
         final_predictions=final_preds,
     )
