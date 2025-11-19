@@ -56,6 +56,7 @@ import warnings
 
 
 warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
+
 client = OpenAI(api_key=cfg.OPENAI_API_KEY)
 
 LLM_SAMPLE_TARGET = 18
@@ -229,6 +230,7 @@ def _load_gru_ae(det_path: Path, device: torch.device) -> Tuple[VectorGRUAE, flo
 
 
 def _visualise_sample(
+        classifier: str,
         amps: np.ndarray,
         snr: float,
         true_cls: int,
@@ -245,6 +247,7 @@ def _visualise_sample(
     plt.title(
         f"Sample #{idx} | TrueC={true_cls} PredC={pred_label} | "
         f"TruePos={true_pos:.3f}m  PredPos={pred_pos_str}m | SNR={snr:.2f}"
+        f"Model - {classifier}"
     )
     plt.xlabel("P-index")
     plt.ylabel("Amplitude")
@@ -259,22 +262,63 @@ def _plot_radial_class_accuracy(
         y_true: np.ndarray,
         y_pred: np.ndarray,
         class_ids: List[int],
-        out_path: Path,
-) -> Path | None:
-    """Create a radial polar bar chart of per-class accuracy."""
+        out_dir: Path,
+        *,
+        y_pos_true: np.ndarray | None = None,
+        y_pos_pred: np.ndarray | None = None,
+) -> dict[str, Path]:
+    """
+    Create multiple per-class diagnostic plots:
+    - Radial polar bar chart of per-class accuracy.
+    - Bar chart of per-class accuracy (Cartesian).
+    - Per-class localisation error (MAE) when localisation is available.
+
+    Returns a dict mapping plot name -> saved Path.
+    """
+
+    artifacts: dict[str, Path] = {}
 
     if y_true.size == 0 or y_pred.size == 0 or not class_ids:
-        return None
+        return artifacts
+
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+
+    has_loc = y_pos_true is not None and y_pos_pred is not None
+    if has_loc:
+        y_pos_true = np.asarray(y_pos_true, dtype=np.float32)
+        y_pos_pred = np.asarray(y_pos_pred, dtype=np.float32)
+        # If shapes do not agree with y_true, disable localisation plots
+        if (
+            y_pos_true.shape[0] != y_true.shape[0]
+            or y_pos_pred.shape[0] != y_true.shape[0]
+        ):
+            has_loc = False
 
     angles = np.linspace(0, 2 * np.pi, len(class_ids), endpoint=False)
     width = (2 * np.pi) / max(len(class_ids), 1)
-    accuracies = []
-    supports = []
+
+    accuracies: list[float] = []
+    supports: list[int] = []
+    mae_errors: list[float] = []
+
     for cls in class_ids:
         mask = y_true == cls
         supports.append(int(mask.sum()))
-        accuracies.append(float((y_pred[mask] == cls).mean()) if mask.any() else 0.0)
+        if mask.any():
+            acc = float((y_pred[mask] == cls).mean())
+            accuracies.append(acc)
+            if has_loc:
+                err = np.abs(y_pos_pred[mask] - y_pos_true[mask])
+                mae = float(err.mean())
+                mae_errors.append(mae)
+            else:
+                mae_errors.append(np.nan)
+        else:
+            accuracies.append(0.0)
+            mae_errors.append(np.nan)
 
+    # ---------- Radial accuracy (original behaviour, but via out_dir) ----------
     fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(8, 8))
     bars = ax.bar(
         angles,
@@ -298,9 +342,60 @@ def _plot_radial_class_accuracy(
             fontsize=9,
         )
     plt.tight_layout()
-    plt.savefig(out_path, dpi=150)
+    radial_path = out_dir / "radial_class_accuracy.png"
+    plt.savefig(radial_path, dpi=150)
     plt.close(fig)
-    return out_path
+    artifacts["radial_accuracy"] = radial_path
+
+    # ---------- Cartesian per-class accuracy ----------
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.bar(class_ids, accuracies, alpha=0.9)
+    ax.set_xlabel("Class ID")
+    ax.set_ylabel("Accuracy")
+    ax.set_title("Per-class Accuracy (bar chart)")
+    ax.set_ylim(0, 1.05)
+    for cls, acc, support in zip(class_ids, accuracies, supports):
+        ax.text(
+            cls,
+            acc + 0.02,
+            f"{acc:.2f}\n(n={support})",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+        )
+    plt.tight_layout()
+    acc_bar_path = out_dir / "accuracy_per_class_bar.png"
+    plt.savefig(acc_bar_path, dpi=150)
+    plt.close(fig)
+    artifacts["accuracy_per_class_bar"] = acc_bar_path
+
+    # ---------- Per-class localisation error (MAE) ----------
+    if has_loc and np.any(np.isfinite(mae_errors)):
+        # Replace NaNs with 0 just for plotting; they correspond to empty classes
+        mae_plot_vals = [0.0 if not np.isfinite(v) else v for v in mae_errors]
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.bar(class_ids, mae_plot_vals, alpha=0.9)
+        ax.set_xlabel("Class ID")
+        ax.set_ylabel("MAE (m)")
+        ax.set_title("Per-class Localisation Error (MAE)")
+        for cls, mae, support in zip(class_ids, mae_plot_vals, supports):
+            ax.text(
+                cls,
+                mae + 0.02 * max(mae_plot_vals or [1.0]),
+                f"{mae:.2f} m\n(n={support})",
+                ha="center",
+                va="bottom",
+                fontsize=8,
+            )
+        plt.tight_layout()
+        loc_err_path = out_dir / "localisation_error_per_class.png"
+        plt.savefig(loc_err_path, dpi=150)
+        plt.close(fig)
+        artifacts["localisation_error_per_class"] = loc_err_path
+
+    return artifacts
+
 
 
 def _plot_localisation_vs_snr(
@@ -668,6 +763,18 @@ def _llm_explain_with_self_reflection(
         {"type": "input_image", "image_url": _b64(p)} for p in img_paths
     ]
 
+    # ---- LOG DIRECT INPUT --------------------------------------------------
+    try:
+        with open("llm_inputs.log", "a", encoding="utf-8") as f:
+            f.write("=== DIRECT PASS ===\n")
+            f.write("SYSTEM_PROMPT:\n")
+            f.write(repr(system_direct) + "\n")
+            f.write("USER_CONTENT:\n")
+            f.write(repr(user_direct_parts) + "\n\n")
+    except Exception:
+        # Logging must never affect main functionality
+        pass
+
     direct_text = _call_responses_api(client, openai_model, system_direct, user_direct_parts)
 
     # ---------- SELF-REFLECTION pass ---------------------------------------
@@ -697,9 +804,20 @@ def _llm_explain_with_self_reflection(
     ]
     reflect_user_content.append({"type": "input_text", "text": "DRAFT explanation to review:\n" + direct_text})
 
+    # ---- LOG SELF-REFLECTION INPUT ----------------------------------------
+    try:
+        with open("llm_inputs.log", "a", encoding="utf-8") as f:
+            f.write("=== SELF-REFLECTION PASS ===\n")
+            f.write("SYSTEM_PROMPT:\n")
+            f.write(repr(system_reflect) + "\n")
+            f.write("USER_CONTENT:\n")
+            f.write(repr(reflect_user_content) + "\n\n")
+    except Exception:
+        pass
+
     refined_text = _call_responses_api(client, openai_model, system_reflect, reflect_user_content)
 
-    # ---------- FIELD OPS DIGEST pass -------------------------------------
+    # ---------- FIELD OPS DIGEST pass --------------------------------------
     system_digest = (
         "You lead field operations for a fibre network."
         " Convert the improved explanation into a 3-section incident digest:"
@@ -714,6 +832,18 @@ def _llm_explain_with_self_reflection(
     if attr_text:
         digest_content.append({"type": "input_text", "text": f"{method_label} attributions:\n" + attr_text})
     digest_content.append({"type": "input_text", "text": "Improved explanation to convert:\n" + refined_text})
+
+    # ---- LOG DIGEST INPUT --------------------------------------------------
+    try:
+        with open("llm_inputs.log", "a", encoding="utf-8") as f:
+            f.write("=== DIGEST PASS ===\n")
+            f.write("SYSTEM_PROMPT:\n")
+            f.write(repr(system_digest) + "\n")
+            f.write("USER_CONTENT:\n")
+            f.write(repr(digest_content) + "\n\n")
+    except Exception:
+        pass
+
     digest_text = _call_responses_api(client, openai_model, system_digest, digest_content)
 
     return direct_text, refined_text, digest_text, rag_flag
@@ -1268,13 +1398,22 @@ def main(
                 f"Eval subset size = {idx_to_eval.size(0)} | RMSE = {rmse:.3f}"
             )  # noqa: T201
 
-    radial_path: Path | None = None
+    radial_artifacts: dict[str, Path] = {}
     if y_true is not None and y_pred is not None:
-        radial_path = _plot_radial_class_accuracy(
+        if pos_hat is not None:
+            y_pos_true_np = y_pos_test[idx_to_eval].numpy()
+            y_pos_pred_np = pos_hat.detach().cpu().numpy()
+        else:
+            y_pos_true_np = None
+            y_pos_pred_np = None
+
+        radial_artifacts = _plot_radial_class_accuracy(
             y_true,
             y_pred,
             list(range(n_classes)),
-            out_dir / "radial_class_accuracy.png",
+            out_dir,
+            y_pos_true=y_pos_true_np,
+            y_pos_pred=y_pos_pred_np,
         )
 
     localisation_path = _plot_localisation_vs_snr(
@@ -1372,7 +1511,7 @@ def main(
         t_pos = float(y_pos_test[idx_int].item())
         p_pos = pos_lookup.get(idx_int)
         img_paths.append(
-            _visualise_sample(amp, snr, t_cls, p_cls, t_pos, p_pos, idx_int, out_dir)
+            _visualise_sample(classifier, amp, snr, t_cls, p_cls, t_pos, p_pos, idx_int, out_dir)
         )
 
     explain_outputs: dict[str, tuple[str, str, str, bool]] = {}
@@ -1381,7 +1520,7 @@ def main(
             try:
                 explain_pair = _llm_explain_with_self_reflection(
                     img_paths,
-                    openai_model="gpt-5",  # keep your configured model string
+                    openai_model="gpt-5",
                     classifier_type=classifier,
                     attribution_summaries=attr_summary_map.get(method),
                     attribution_method=method,
@@ -1440,14 +1579,20 @@ def main(
 
         if cm_path and cm_path.exists():
             wandb_run.log({"confusion_matrix": wandb.Image(str(cm_path))})
-        if radial_path and radial_path.exists():
-            wandb_run.log({"radial_accuracy": wandb.Image(str(radial_path))})
+        if radial_artifacts:
+            ra = radial_artifacts.get("radial_accuracy")
+            if ra and ra.exists():
+                wandb_run.log({"radial_accuracy": wandb.Image(str(ra))})
+            acc_bar = radial_artifacts.get("accuracy_per_class_bar")
+            if acc_bar and acc_bar.exists():
+                wandb_run.log({"accuracy_per_class_bar": wandb.Image(str(acc_bar))})
+            loc_err = radial_artifacts.get("localisation_error_per_class")
+            if loc_err and loc_err.exists():
+                wandb_run.log({"localisation_error_per_class": wandb.Image(str(loc_err))})
         if localisation_path and localisation_path.exists():
             wandb_run.log({"localisation_vs_snr": wandb.Image(str(localisation_path))})
         if img_paths:
-            wandb_run.log({
-                "sample_traces": [wandb.Image(str(path)) for path in img_paths],
-            })
+            wandb_run.log({"sample_traces": [wandb.Image(str(path)) for path in img_paths],})
         for method, summaries in attr_summary_map.items():
             if summaries:
                 table = wandb.Table(columns=["summary"])

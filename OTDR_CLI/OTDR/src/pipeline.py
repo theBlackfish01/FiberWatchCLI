@@ -1,6 +1,7 @@
 """Binary ➜ anomaly-only TCN ➜ TST evaluation pipeline."""
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -32,6 +33,8 @@ from data_helper import (
 from model_functions.tcn import OTDR_TCN, predict as predict_tcn
 from model_functions.tcn_binary import OTDR_TCNBinary, predict as predict_tcn_binary
 from model_functions.tst import TimeSeriesTransformer, predict as predict_tst
+
+warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
 
 __all__ = [
     "PipelineResult",
