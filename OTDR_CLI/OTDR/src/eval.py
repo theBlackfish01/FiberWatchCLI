@@ -59,7 +59,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
 
 client = OpenAI(api_key=cfg.OPENAI_API_KEY)
 
-LLM_SAMPLE_TARGET = 18
+LLM_SAMPLE_TARGET = 10
 
 
 def _init_wandb_run(config: dict[str, Any]) -> wandb.sdk.wandb_run.Run | None:
@@ -80,8 +80,6 @@ def _init_wandb_run(config: dict[str, Any]) -> wandb.sdk.wandb_run.Run | None:
 
 
 def _dedupe_preserve(seq):
-    """Remove duplicates while preserving the original order."""
-
     return tuple(dict.fromkeys(seq))
 
 
@@ -130,7 +128,7 @@ def _validate_metadata_features(
     expected_cfg: dict[str, Any],
     context: str,
 ) -> None:
-    """Compare legacy and modern metadata payloads against the requested features."""
+    """Compare metadata payloads against the requested features."""
 
     if not meta:
         return
@@ -240,13 +238,14 @@ def _visualise_sample(
         idx: int,
         out_dir: Path,
 ):
+    classifier = classifier.upper()
     plt.figure(figsize=(10, 8))
     plt.plot(np.arange(amps.size), amps, label="Amplitude")
     pred_label = "N/A" if pred_cls is None else str(pred_cls)
     pred_pos_str = "N/A" if pred_pos is None else f"{pred_pos:.3f}"
     plt.title(
         f"Sample #{idx} | TrueC={true_cls} PredC={pred_label} | "
-        f"TruePos={true_pos:.3f}m  PredPos={pred_pos_str}m | SNR={snr:.2f}"
+        f"TruePos={true_pos:.3f}m  PredPos={pred_pos_str}m | SNR={snr:.2f} | "
         f"Model - {classifier}"
     )
     plt.xlabel("P-index")
@@ -258,7 +257,7 @@ def _visualise_sample(
     return fname
 
 
-def _plot_radial_class_accuracy(
+def _plot_radial(
         y_true: np.ndarray,
         y_pred: np.ndarray,
         class_ids: List[int],
@@ -269,9 +268,11 @@ def _plot_radial_class_accuracy(
 ) -> dict[str, Path]:
     """
     Create multiple per-class diagnostic plots:
-    - Radial polar bar chart of per-class accuracy.
-    - Bar chart of per-class accuracy (Cartesian).
+    - Radial polar bar chart of per-class accuracy with enhanced styling.
+    - Bar chart of per-class accuracy (Cartesian) with color-coded performance.
     - Per-class localisation error (MAE) when localisation is available.
+    - Radial plot of localisation errors per class.
+    - Combined accuracy vs support scatter plot.
 
     Returns a dict mapping plot name -> saved Path.
     """
@@ -290,8 +291,8 @@ def _plot_radial_class_accuracy(
         y_pos_pred = np.asarray(y_pos_pred, dtype=np.float32)
         # If shapes do not agree with y_true, disable localisation plots
         if (
-            y_pos_true.shape[0] != y_true.shape[0]
-            or y_pos_pred.shape[0] != y_true.shape[0]
+                y_pos_true.shape[0] != y_true.shape[0]
+                or y_pos_pred.shape[0] != y_true.shape[0]
         ):
             has_loc = False
 
@@ -318,81 +319,229 @@ def _plot_radial_class_accuracy(
             accuracies.append(0.0)
             mae_errors.append(np.nan)
 
-    # ---------- Radial accuracy (original behaviour, but via out_dir) ----------
-    fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(8, 8))
+    # ---------- Enhanced Radial Accuracy Plot ----------
+    fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(10, 10))
+
+    # Use a perceptually uniform colormap
+    colors = plt.cm.RdYlGn(np.clip(accuracies, 0, 1))
+
     bars = ax.bar(
         angles,
         accuracies,
-        width=width * 0.9,
+        width=width * 0.85,
         bottom=0.0,
-        color=plt.cm.viridis(np.clip(accuracies, 0, 1)),
-        alpha=0.85,
+        color=colors,
+        alpha=0.9,
+        edgecolor='white',
+        linewidth=1.5,
     )
+
     ax.set_theta_direction(-1)
     ax.set_theta_offset(np.pi / 2.0)
-    ax.set_title("Per-class Accuracy (radial view)")
-    ax.set_ylim(0, 1.05)
-    for bar, cls, support in zip(bars, class_ids, supports):
+    ax.set_ylim(0, 1.0)
+    ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
+    ax.set_yticklabels(['20%', '40%', '60%', '80%', '100%'], fontsize=9)
+    ax.grid(True, alpha=0.3, linestyle='--')
+
+    # Add labels with class ID and support
+    for angle, bar, cls, support, acc in zip(angles, bars, class_ids, supports, accuracies):
+        # Position label outside the bar
+        label_radius = 1.15
         ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + 0.05,
-            f"{cls}\n(n={support})",
+            angle,
+            label_radius,
+            f"Class {cls}\n({support})",
             ha="center",
             va="center",
-            fontsize=9,
+            fontsize=10,
+            fontweight='bold',
         )
+        # Add accuracy percentage inside/near bar
+        if acc > 0.15:
+            ax.text(
+                angle,
+                acc / 2,
+                f"{acc * 100:.0f}%",
+                ha="center",
+                va="center",
+                fontsize=8,
+                color='white' if acc > 0.5 else 'black',
+                fontweight='bold',
+            )
+
+    ax.set_title("Per-Class Accuracy (Radial View)",
+                 fontsize=14, fontweight='bold', pad=20)
     plt.tight_layout()
     radial_path = out_dir / "radial_class_accuracy.png"
-    plt.savefig(radial_path, dpi=150)
+    plt.savefig(radial_path, dpi=200, bbox_inches='tight')
     plt.close(fig)
     artifacts["radial_accuracy"] = radial_path
 
-    # ---------- Cartesian per-class accuracy ----------
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.bar(class_ids, accuracies, alpha=0.9)
-    ax.set_xlabel("Class ID")
-    ax.set_ylabel("Accuracy")
-    ax.set_title("Per-class Accuracy (bar chart)")
+    # ---------- Enhanced Cartesian Accuracy Bar Chart ----------
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Color bars based on performance thresholds
+    bar_colors = ['#d32f2f' if acc < 0.6 else '#ffa726' if acc < 0.8 else '#66bb6a'
+                  for acc in accuracies]
+
+    bars = ax.bar(class_ids, accuracies, alpha=0.85, color=bar_colors,
+                  edgecolor='black', linewidth=0.8)
+
+    ax.set_xlabel("Class ID", fontsize=12, fontweight='bold')
+    ax.set_ylabel("Accuracy", fontsize=12, fontweight='bold')
+    ax.set_title("Per-Class Accuracy", fontsize=14, fontweight='bold')
     ax.set_ylim(0, 1.05)
-    for cls, acc, support in zip(class_ids, accuracies, supports):
+    ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.5, label='80% threshold')
+    ax.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5, label='60% threshold')
+    ax.grid(axis='y', alpha=0.3, linestyle=':')
+    ax.legend(loc='lower right')
+
+    # Add value labels on top of bars
+    for cls, acc, support, bar in zip(class_ids, accuracies, supports, bars):
+        height = bar.get_height()
         ax.text(
-            cls,
-            acc + 0.02,
-            f"{acc:.2f}\n(n={support})",
+            bar.get_x() + bar.get_width() / 2,
+            height + 0.02,
+            f"{acc:.2f}\nn={support}",
             ha="center",
             va="bottom",
-            fontsize=8,
+            fontsize=9,
+            fontweight='bold',
         )
+
     plt.tight_layout()
     acc_bar_path = out_dir / "accuracy_per_class_bar.png"
-    plt.savefig(acc_bar_path, dpi=150)
+    plt.savefig(acc_bar_path, dpi=200, bbox_inches='tight')
     plt.close(fig)
     artifacts["accuracy_per_class_bar"] = acc_bar_path
 
-    # ---------- Per-class localisation error (MAE) ----------
-    if has_loc and np.any(np.isfinite(mae_errors)):
-        # Replace NaNs with 0 just for plotting; they correspond to empty classes
-        mae_plot_vals = [0.0 if not np.isfinite(v) else v for v in mae_errors]
+    # ---------- Accuracy vs Support Scatter Plot ----------
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-        fig, ax = plt.subplots(figsize=(10, 5))
-        ax.bar(class_ids, mae_plot_vals, alpha=0.9)
-        ax.set_xlabel("Class ID")
-        ax.set_ylabel("MAE (m)")
-        ax.set_title("Per-class Localisation Error (MAE)")
-        for cls, mae, support in zip(class_ids, mae_plot_vals, supports):
+    scatter_colors = ['#d32f2f' if acc < 0.6 else '#ffa726' if acc < 0.8 else '#66bb6a'
+                      for acc in accuracies]
+
+    ax.scatter(supports, accuracies, s=200, c=scatter_colors,
+               alpha=0.7, edgecolors='black', linewidth=1.5)
+
+    # Add class labels
+    for cls, sup, acc in zip(class_ids, supports, accuracies):
+        ax.annotate(f"C{cls}", (sup, acc), fontsize=9, fontweight='bold',
+                    ha='center', va='center')
+
+    ax.set_xlabel("Number of Samples (Support)", fontsize=12, fontweight='bold')
+    ax.set_ylabel("Accuracy", fontsize=12, fontweight='bold')
+    ax.set_title("Classification Performance vs Sample Support",
+                 fontsize=14, fontweight='bold')
+    ax.set_ylim(-0.05, 1.05)
+    ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.5)
+    ax.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5)
+    ax.grid(True, alpha=0.3, linestyle=':')
+
+    plt.tight_layout()
+    scatter_path = out_dir / "accuracy_vs_support.png"
+    plt.savefig(scatter_path, dpi=200, bbox_inches='tight')
+    plt.close(fig)
+    artifacts["accuracy_vs_support"] = scatter_path
+
+    # ---------- Enhanced Localisation Error Bar Chart ----------
+    if has_loc and np.any(np.isfinite(mae_errors)):
+        mae_plot_vals = [0.0 if not np.isfinite(v) else v for v in mae_errors]
+        max_mae = max(mae_plot_vals) if mae_plot_vals else 1.0
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        # Color bars based on error magnitude
+        bar_colors = ['#66bb6a' if mae < max_mae * 0.3 else '#ffa726' if mae < max_mae * 0.6
+        else '#d32f2f' for mae in mae_plot_vals]
+
+        bars = ax.bar(class_ids, mae_plot_vals, alpha=0.85, color=bar_colors,
+                      edgecolor='black', linewidth=0.8)
+
+        ax.set_xlabel("Class ID", fontsize=12, fontweight='bold')
+        ax.set_ylabel("Mean Absolute Error (m)", fontsize=12, fontweight='bold')
+        ax.set_title("Per-Class Localisation Error", fontsize=14, fontweight='bold')
+        ax.grid(axis='y', alpha=0.3, linestyle=':')
+
+        # Add value labels
+        for cls, mae, support, bar in zip(class_ids, mae_plot_vals, supports, bars):
+            height = bar.get_height()
             ax.text(
-                cls,
-                mae + 0.02 * max(mae_plot_vals or [1.0]),
-                f"{mae:.2f} m\n(n={support})",
+                bar.get_x() + bar.get_width() / 2,
+                height + max_mae * 0.02,
+                f"{mae:.2f}m\nn={support}",
                 ha="center",
                 va="bottom",
-                fontsize=8,
+                fontsize=9,
+                fontweight='bold',
             )
+
         plt.tight_layout()
         loc_err_path = out_dir / "localisation_error_per_class.png"
-        plt.savefig(loc_err_path, dpi=150)
+        plt.savefig(loc_err_path, dpi=200, bbox_inches='tight')
         plt.close(fig)
         artifacts["localisation_error_per_class"] = loc_err_path
+
+        # ---------- Radial Localisation Error Plot ----------
+        fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(10, 10))
+
+        # Normalize errors for color mapping (inverted - lower error = better = greener)
+        norm_errors = np.array(mae_plot_vals)
+        if max_mae > 0:
+            norm_errors = 1.0 - (norm_errors / max_mae)
+        else:
+            norm_errors = np.ones_like(norm_errors)
+
+        colors = plt.cm.RdYlGn(np.clip(norm_errors, 0, 1))
+
+        bars = ax.bar(
+            angles,
+            mae_plot_vals,
+            width=width * 0.85,
+            bottom=0.0,
+            color=colors,
+            alpha=0.9,
+            edgecolor='white',
+            linewidth=1.5,
+        )
+
+        ax.set_theta_direction(-1)
+        ax.set_theta_offset(np.pi / 2.0)
+        ax.set_ylim(0, max_mae * 1.1)
+        ax.grid(True, alpha=0.3, linestyle='--')
+
+        # Add labels
+        for angle, bar, cls, support, mae in zip(angles, bars, class_ids, supports, mae_plot_vals):
+            label_radius = max_mae * 1.2
+            ax.text(
+                angle,
+                label_radius,
+                f"Class {cls}\n({support})",
+                ha="center",
+                va="center",
+                fontsize=10,
+                fontweight='bold',
+            )
+            # Add error value
+            if mae > max_mae * 0.15:
+                ax.text(
+                    angle,
+                    mae / 2,
+                    f"{mae:.2f}m",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color='white' if mae > max_mae * 0.5 else 'black',
+                    fontweight='bold',
+                )
+
+        ax.set_title("Per-Class Localisation Error (Radial View)",
+                     fontsize=14, fontweight='bold', pad=20)
+        plt.tight_layout()
+        radial_loc_path = out_dir / "radial_localisation_error.png"
+        plt.savefig(radial_loc_path, dpi=200, bbox_inches='tight')
+        plt.close(fig)
+        artifacts["radial_localisation_error"] = radial_loc_path
 
     return artifacts
 
@@ -689,17 +838,22 @@ def _llm_explain_with_self_reflection(
         attribution_summaries: List[str] | None = None,
         *,
         attribution_method: str = "shap",
-) -> tuple[str, str, str, bool] | None:
+) -> Tuple[str, str, str, bool] | None:
     """
     DIRECT pass -> SELF-REFLECTION pass -> OPS DIGEST pass with explicit TrueC/PredC handling.
     Returns (direct_text, refined_text, digest_text, rag_used_flag) or None if no API key.
     """
+    from datetime import datetime
+
     api_key = cfg.OPENAI_API_KEY
     if not api_key:
         print("OPENAI_API_KEY not set – skipping LLM explanation")
         return None
 
     client = OpenAI(api_key=api_key)
+
+    # Per-call run id so all three passes can be grouped in the logs
+    run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
 
     # ---------- Fault class block (shared) ---------------------------------
     fault_classes_block = (
@@ -731,6 +885,35 @@ def _llm_explain_with_self_reflection(
     method_label = attribution_method.upper()
     attr_text = "\n".join(attribution_summaries) if attribution_summaries else ""
 
+    # ---------- Shared logging helper --------------------------------------
+    def _log_llm_input(
+        section: str,
+        system_prompt: str,
+        user_content_text_parts: List[dict[str, Any]],
+        image_paths_for_log: List[Path] | None = None,
+    ) -> None:
+        """
+        Log input to the LLM in a human-readable way, without dumping base64 images.
+
+        - `user_content_text_parts`: same structure as the API call but *only* text entries.
+        - `image_paths_for_log`: list of Path objects for the images that were sent to the LLM.
+        """
+        try:
+            with open("outputs/llm_inputs.log", "a", encoding="utf-8") as f:
+                f.write(f"=== {section} (run_id={run_id}) ===\n")
+                f.write("SYSTEM_PROMPT:\n")
+                f.write(repr(system_prompt) + "\n")
+                f.write("USER_CONTENT_TEXT_PARTS:\n")
+                f.write(repr(user_content_text_parts) + "\n")
+                if image_paths_for_log:
+                    f.write("IMAGE_PATHS:\n")
+                    for p in image_paths_for_log:
+                        f.write(f"  - {str(p)}\n")
+                f.write("\n")
+        except Exception:
+            # Logging must never affect main functionality
+            pass
+
     # ---------- DIRECT pass -------------------------------------------------
     # IMPORTANT: disambiguate TrueC vs PredC and force wording when they differ
     true_pred_rules = (
@@ -753,27 +936,36 @@ def _llm_explain_with_self_reflection(
         + fault_classes_block
     )
 
+    # --- Build the actual API payload --------------------------------------
     user_direct_parts: List[dict[str, Any]] = [
         {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
     if attr_text:
-        user_direct_parts.append({"type": "input_text", "text": f"{method_label} attributions per sample:\n" + attr_text})
-    user_direct_parts.append({"type": "input_text", "text": "Selected samples for inspection (images):"})
-    user_direct_parts += [
-        {"type": "input_image", "image_url": _b64(p)} for p in img_paths
-    ]
+        user_direct_parts.append(
+            {"type": "input_text", "text": f"{method_label} attributions per sample:\n" + attr_text}
+        )
+    user_direct_parts.append(
+        {"type": "input_text", "text": "Selected samples for inspection (images):"}
+    )
 
-    # ---- LOG DIRECT INPUT --------------------------------------------------
-    try:
-        with open("llm_inputs.log", "a", encoding="utf-8") as f:
-            f.write("=== DIRECT PASS ===\n")
-            f.write("SYSTEM_PROMPT:\n")
-            f.write(repr(system_direct) + "\n")
-            f.write("USER_CONTENT:\n")
-            f.write(repr(user_direct_parts) + "\n\n")
-    except Exception:
-        # Logging must never affect main functionality
-        pass
+    # Separate image payload (for API) and log-friendly representation
+    direct_image_payloads: List[dict[str, Any]] = []
+    for p in img_paths:
+        direct_image_payloads.append(
+            {"type": "input_image", "image_url": _b64(p)}
+        )
+    user_direct_parts += direct_image_payloads
+
+    # ---- LOG DIRECT INPUT (without base64) --------------------------------
+    direct_text_parts_for_log = [
+        part for part in user_direct_parts if part.get("type") == "input_text"
+    ]
+    _log_llm_input(
+        section="DIRECT PASS",
+        system_prompt=system_direct,
+        user_content_text_parts=direct_text_parts_for_log,
+        image_paths_for_log=img_paths,
+    )
 
     direct_text = _call_responses_api(client, openai_model, system_direct, user_direct_parts)
 
@@ -797,23 +989,33 @@ def _llm_explain_with_self_reflection(
         {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
     if attr_text:
-        reflect_user_content.append({"type": "input_text", "text": f"{method_label} attributions per sample:\n" + attr_text})
-    reflect_user_content.append({"type": "input_text", "text": "Images (verify titles with TrueC/PredC and positions):"})
-    reflect_user_content += [
-        {"type": "input_image", "image_url": _b64(p)} for p in img_paths
-    ]
-    reflect_user_content.append({"type": "input_text", "text": "DRAFT explanation to review:\n" + direct_text})
+        reflect_user_content.append(
+            {"type": "input_text", "text": f"{method_label} attributions per sample:\n" + attr_text}
+        )
+    reflect_user_content.append(
+        {"type": "input_text", "text": "Images (verify titles with TrueC/PredC and positions):"}
+    )
 
-    # ---- LOG SELF-REFLECTION INPUT ----------------------------------------
-    try:
-        with open("llm_inputs.log", "a", encoding="utf-8") as f:
-            f.write("=== SELF-REFLECTION PASS ===\n")
-            f.write("SYSTEM_PROMPT:\n")
-            f.write(repr(system_reflect) + "\n")
-            f.write("USER_CONTENT:\n")
-            f.write(repr(reflect_user_content) + "\n\n")
-    except Exception:
-        pass
+    reflect_image_payloads: List[dict[str, Any]] = []
+    for p in img_paths:
+        reflect_image_payloads.append(
+            {"type": "input_image", "image_url": _b64(p)}
+        )
+    reflect_user_content += reflect_image_payloads
+    reflect_user_content.append(
+        {"type": "input_text", "text": "DRAFT explanation to review:\n" + direct_text}
+    )
+
+    # ---- LOG SELF-REFLECTION INPUT (without base64) -----------------------
+    reflect_text_parts_for_log = [
+        part for part in reflect_user_content if part.get("type") == "input_text"
+    ]
+    _log_llm_input(
+        section="SELF-REFLECTION PASS",
+        system_prompt=system_reflect,
+        user_content_text_parts=reflect_text_parts_for_log,
+        image_paths_for_log=img_paths,
+    )
 
     refined_text = _call_responses_api(client, openai_model, system_reflect, reflect_user_content)
 
@@ -830,23 +1032,28 @@ def _llm_explain_with_self_reflection(
         {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
     if attr_text:
-        digest_content.append({"type": "input_text", "text": f"{method_label} attributions:\n" + attr_text})
-    digest_content.append({"type": "input_text", "text": "Improved explanation to convert:\n" + refined_text})
+        digest_content.append(
+            {"type": "input_text", "text": f"{method_label} attributions:\n" + attr_text}
+        )
+    digest_content.append(
+        {"type": "input_text", "text": "Improved explanation to convert:\n" + refined_text}
+    )
 
-    # ---- LOG DIGEST INPUT --------------------------------------------------
-    try:
-        with open("llm_inputs.log", "a", encoding="utf-8") as f:
-            f.write("=== DIGEST PASS ===\n")
-            f.write("SYSTEM_PROMPT:\n")
-            f.write(repr(system_digest) + "\n")
-            f.write("USER_CONTENT:\n")
-            f.write(repr(digest_content) + "\n\n")
-    except Exception:
-        pass
+    # ---- LOG DIGEST INPUT (only text, no images in this pass) -------------
+    digest_text_parts_for_log = [
+        part for part in digest_content if part.get("type") == "input_text"
+    ]
+    _log_llm_input(
+        section="DIGEST PASS",
+        system_prompt=system_digest,
+        user_content_text_parts=digest_text_parts_for_log,
+        image_paths_for_log=None,
+    )
 
     digest_text = _call_responses_api(client, openai_model, system_digest, digest_content)
 
     return direct_text, refined_text, digest_text, rag_flag
+
 
 
 # --------------------------------------------------
@@ -1407,7 +1614,7 @@ def main(
             y_pos_true_np = None
             y_pos_pred_np = None
 
-        radial_artifacts = _plot_radial_class_accuracy(
+        radial_artifacts = _plot_radial(
             y_true,
             y_pred,
             list(range(n_classes)),
