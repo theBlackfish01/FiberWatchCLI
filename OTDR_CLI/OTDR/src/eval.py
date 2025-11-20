@@ -259,13 +259,14 @@ def _visualise_sample(
 
 def _plot_radial(
         classifier: str,
-        y_true: np.ndarray,
-        y_pred: np.ndarray,
+        y_true: np.ndarray | None,
+        y_pred: np.ndarray | None,
         class_ids: List[int],
         out_dir: Path,
         *,
         y_pos_true: np.ndarray | None = None,
         y_pos_pred: np.ndarray | None = None,
+        include_loss_reflectance: bool = False,
 ) -> dict[str, Path]:
     """
     Create multiple per-class diagnostic plots:
@@ -281,11 +282,20 @@ def _plot_radial(
     out_dir.mkdir(exist_ok=True)
     artifacts: dict[str, Path] = {}
 
-    if y_true.size == 0 or y_pred.size == 0 or not class_ids:
+    classification_available = (
+        y_true is not None
+        and y_pred is not None
+        and y_true.size > 0
+        and y_pred.size > 0
+    )
+
+    has_classes = bool(class_ids)
+
+    if not has_classes and not (y_pos_true is not None and y_pos_pred is not None):
         return artifacts
 
-    y_true = np.asarray(y_true)
-    y_pred = np.asarray(y_pred)
+    y_true = np.asarray(y_true) if y_true is not None else None
+    y_pred = np.asarray(y_pred) if y_pred is not None else None
 
     has_loc = y_pos_true is not None and y_pos_pred is not None
     if has_loc:
@@ -298,19 +308,26 @@ def _plot_radial(
         ):
             has_loc = False
 
-    angles = np.linspace(0, 2 * np.pi, len(class_ids), endpoint=False)
-    width = (2 * np.pi) / max(len(class_ids), 1)
+    angles = np.linspace(0, 2 * np.pi, len(class_ids), endpoint=False) if has_classes else np.array([])
+    width = (2 * np.pi) / max(len(class_ids), 1) if has_classes else 0.0
 
     accuracies: list[float] = []
     supports: list[int] = []
     mae_errors: list[float] = []
 
+    suffix = f"_{classifier.lower()}"
+    if include_loss_reflectance:
+        suffix += "_lr"
+
     for cls in class_ids:
-        mask = y_true == cls
+        mask = (y_true == cls) if y_true is not None else np.array([], dtype=bool)
         supports.append(int(mask.sum()))
-        if mask.any():
-            acc = float((y_pred[mask] == cls).mean())
-            accuracies.append(acc)
+        if mask.size and mask.any():
+            if classification_available:
+                acc = float((y_pred[mask] == cls).mean())
+                accuracies.append(acc)
+            else:
+                accuracies.append(np.nan)
             if has_loc:
                 err = np.abs(y_pos_pred[mask] - y_pos_true[mask])
                 mae = float(err.mean())
@@ -318,133 +335,167 @@ def _plot_radial(
             else:
                 mae_errors.append(np.nan)
         else:
-            accuracies.append(0.0)
+            accuracies.append(np.nan if not classification_available else 0.0)
             mae_errors.append(np.nan)
 
     # ---------- Enhanced Radial Accuracy Plot ----------
-    fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(10, 10))
+    if classification_available and has_classes:
+        fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(10, 10))
 
-    # Use a perceptually uniform colormap
-    colors = plt.cm.RdYlGn(np.clip(accuracies, 0, 1))
+        # Use a perceptually uniform colormap
+        colors = plt.cm.RdYlGn(np.clip(np.nan_to_num(accuracies, nan=0.0), 0, 1))
 
-    bars = ax.bar(
-        angles,
-        accuracies,
-        width=width * 0.85,
-        bottom=0.0,
-        color=colors,
-        alpha=0.9,
-        edgecolor='white',
-        linewidth=1.5,
-    )
-
-    ax.set_theta_direction(-1)
-    ax.set_theta_offset(np.pi / 2.0)
-    ax.set_ylim(0, 1.0)
-    ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
-    ax.set_yticklabels(['20%', '40%', '60%', '80%', '100%'], fontsize=9)
-    ax.grid(True, alpha=0.3, linestyle='--')
-
-    # Add labels with class ID and support
-    for angle, bar, cls, support, acc in zip(angles, bars, class_ids, supports, accuracies):
-        # Position label outside the bar
-        label_radius = 1.15
-        ax.text(
-            angle,
-            label_radius,
-            f"Class {cls}\n({support})",
-            ha="center",
-            va="center",
-            fontsize=10,
-            fontweight='bold',
+        bars = ax.bar(
+            angles,
+            accuracies,
+            width=width * 0.85,
+            bottom=0.0,
+            color=colors,
+            alpha=0.9,
+            edgecolor='white',
+            linewidth=1.5,
         )
-        # Add accuracy percentage inside/near bar
-        if acc > 0.15:
+
+        ax.set_theta_direction(-1)
+        ax.set_theta_offset(np.pi / 2.0)
+        ax.set_ylim(0, 1.0)
+        ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
+        ax.set_yticklabels(['20%', '40%', '60%', '80%', '100%'], fontsize=9)
+        ax.grid(True, alpha=0.3, linestyle='--')
+
+        # Add labels with class ID and support
+        for angle, bar, cls, support, acc in zip(angles, bars, class_ids, supports, accuracies):
+            # Position label outside the bar
+            label_radius = 1.15
             ax.text(
                 angle,
-                acc / 2,
-                f"{acc * 100:.0f}%",
+                label_radius,
+                f"Class {cls}\n({support})",
                 ha="center",
                 va="center",
-                fontsize=8,
-                color='white' if acc > 0.5 else 'black',
+                fontsize=10,
+                fontweight='bold',
+            )
+            # Add accuracy percentage inside/near bar
+            if isinstance(acc, (int, float)) and acc > 0.15:
+                ax.text(
+                    angle,
+                    acc / 2,
+                    f"{acc * 100:.0f}%",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color='white' if acc > 0.5 else 'black',
+                    fontweight='bold',
+                )
+
+        ax.set_title(
+            f"Per-Class Accuracy (Radial View) Model - {classifier}",
+            fontsize=14,
+            fontweight='bold',
+            pad=20,
+        )
+        plt.tight_layout()
+        radial_path = out_dir / f"radial_class_accuracy{suffix}.png"
+        print(f"Saving radial accuracy plot to {radial_path}")  # noqa: T201
+        plt.savefig(radial_path, dpi=200, bbox_inches='tight')
+        plt.close(fig)
+        artifacts["radial_accuracy"] = radial_path
+
+        # ---------- Enhanced Cartesian Accuracy Bar Chart ----------
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        # Color bars based on performance thresholds
+        bar_colors = [
+            '#d32f2f' if (acc < 0.6) else '#ffa726' if (acc < 0.8) else '#66bb6a'
+            for acc in np.nan_to_num(accuracies, nan=0.0)
+        ]
+
+        bars = ax.bar(
+            class_ids,
+            np.nan_to_num(accuracies, nan=0.0),
+            alpha=0.85,
+            color=bar_colors,
+            edgecolor='black',
+            linewidth=0.8,
+        )
+
+        ax.set_xlabel("Class ID", fontsize=12, fontweight='bold')
+        ax.set_ylabel("Accuracy", fontsize=12, fontweight='bold')
+        ax.set_title(f"Per-Class Accuracy Model - {classifier}", fontsize=14, fontweight='bold')
+        ax.set_ylim(0, 1.05)
+        ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.5, label='80% threshold')
+        ax.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5, label='60% threshold')
+        ax.grid(axis='y', alpha=0.3, linestyle=':')
+        ax.legend(loc='lower right')
+
+        # Add value labels on top of bars
+        for cls, acc, support, bar in zip(class_ids, accuracies, supports, bars):
+            height = bar.get_height()
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                height + 0.02,
+                f"{acc if np.isfinite(acc) else 0.0:.2f}\nn={support}",
+                ha="center",
+                va="bottom",
+                fontsize=9,
                 fontweight='bold',
             )
 
-    ax.set_title(f"Per-Class Accuracy (Radial View) Model - {classifier}",
-                 fontsize=14, fontweight='bold', pad=20)
-    plt.tight_layout()
-    radial_path = out_dir / "radial_class_accuracy.png"
-    plt.savefig(radial_path, dpi=200, bbox_inches='tight')
-    plt.close(fig)
-    artifacts["radial_accuracy"] = radial_path
+        plt.tight_layout()
+        acc_bar_path = out_dir / f"accuracy_per_class_bar{suffix}.png"
+        print(f"Saving accuracy bar plot to {acc_bar_path}")  # noqa: T201
+        plt.savefig(acc_bar_path, dpi=200, bbox_inches='tight')
+        plt.close(fig)
+        artifacts["accuracy_per_class_bar"] = acc_bar_path
 
-    # ---------- Enhanced Cartesian Accuracy Bar Chart ----------
-    fig, ax = plt.subplots(figsize=(12, 6))
+        # ---------- Accuracy vs Support Scatter Plot ----------
+        fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Color bars based on performance thresholds
-    bar_colors = ['#d32f2f' if acc < 0.6 else '#ffa726' if acc < 0.8 else '#66bb6a'
-                  for acc in accuracies]
+        scatter_colors = [
+            '#d32f2f' if (acc < 0.6) else '#ffa726' if (acc < 0.8) else '#66bb6a'
+            for acc in np.nan_to_num(accuracies, nan=0.0)
+        ]
 
-    bars = ax.bar(class_ids, accuracies, alpha=0.85, color=bar_colors,
-                  edgecolor='black', linewidth=0.8)
-
-    ax.set_xlabel("Class ID", fontsize=12, fontweight='bold')
-    ax.set_ylabel("Accuracy", fontsize=12, fontweight='bold')
-    ax.set_title(f"Per-Class Accuracy Model - {classifier}", fontsize=14, fontweight='bold')
-    ax.set_ylim(0, 1.05)
-    ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.5, label='80% threshold')
-    ax.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5, label='60% threshold')
-    ax.grid(axis='y', alpha=0.3, linestyle=':')
-    ax.legend(loc='lower right')
-
-    # Add value labels on top of bars
-    for cls, acc, support, bar in zip(class_ids, accuracies, supports, bars):
-        height = bar.get_height()
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            height + 0.02,
-            f"{acc:.2f}\nn={support}",
-            ha="center",
-            va="bottom",
-            fontsize=9,
-            fontweight='bold',
+        ax.scatter(
+            supports,
+            np.nan_to_num(accuracies, nan=0.0),
+            s=200,
+            c=scatter_colors,
+            alpha=0.7,
+            edgecolors='black',
+            linewidth=1.5,
         )
 
-    plt.tight_layout()
-    acc_bar_path = out_dir / "accuracy_per_class_bar.png"
-    plt.savefig(acc_bar_path, dpi=200, bbox_inches='tight')
-    plt.close(fig)
-    artifacts["accuracy_per_class_bar"] = acc_bar_path
+        # Add class labels
+        for cls, sup, acc in zip(class_ids, supports, accuracies):
+            ax.annotate(
+                f"C{cls}",
+                (sup, acc if np.isfinite(acc) else 0.0),
+                fontsize=9,
+                fontweight='bold',
+                ha='center',
+                va='center',
+            )
 
-    # ---------- Accuracy vs Support Scatter Plot ----------
-    fig, ax = plt.subplots(figsize=(10, 6))
+        ax.set_xlabel("Number of Samples (Support)", fontsize=12, fontweight='bold')
+        ax.set_ylabel("Accuracy", fontsize=12, fontweight='bold')
+        ax.set_title(
+            f"Classification Performance vs Sample Support Model - {classifier}",
+            fontsize=14,
+            fontweight='bold',
+        )
+        ax.set_ylim(-0.05, 1.05)
+        ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.5)
+        ax.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5)
+        ax.grid(True, alpha=0.3, linestyle=':')
 
-    scatter_colors = ['#d32f2f' if acc < 0.6 else '#ffa726' if acc < 0.8 else '#66bb6a'
-                      for acc in accuracies]
-
-    ax.scatter(supports, accuracies, s=200, c=scatter_colors,
-               alpha=0.7, edgecolors='black', linewidth=1.5)
-
-    # Add class labels
-    for cls, sup, acc in zip(class_ids, supports, accuracies):
-        ax.annotate(f"C{cls}", (sup, acc), fontsize=9, fontweight='bold',
-                    ha='center', va='center')
-
-    ax.set_xlabel("Number of Samples (Support)", fontsize=12, fontweight='bold')
-    ax.set_ylabel("Accuracy", fontsize=12, fontweight='bold')
-    ax.set_title(f"Classification Performance vs Sample Support Model - {classifier}",
-                 fontsize=14, fontweight='bold')
-    ax.set_ylim(-0.05, 1.05)
-    ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.5)
-    ax.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5)
-    ax.grid(True, alpha=0.3, linestyle=':')
-
-    plt.tight_layout()
-    scatter_path = out_dir / "accuracy_vs_support.png"
-    plt.savefig(scatter_path, dpi=200, bbox_inches='tight')
-    plt.close(fig)
-    artifacts["accuracy_vs_support"] = scatter_path
+        plt.tight_layout()
+        scatter_path = out_dir / f"accuracy_vs_support{suffix}.png"
+        print(f"Saving accuracy vs support plot to {scatter_path}")  # noqa: T201
+        plt.savefig(scatter_path, dpi=200, bbox_inches='tight')
+        plt.close(fig)
+        artifacts["accuracy_vs_support"] = scatter_path
 
     # ---------- Enhanced Localisation Error Bar Chart ----------
     if has_loc and np.any(np.isfinite(mae_errors)):
@@ -479,7 +530,8 @@ def _plot_radial(
             )
 
         plt.tight_layout()
-        loc_err_path = out_dir / "localisation_error_per_class.png"
+        loc_err_path = out_dir / f"localisation_error_per_class{suffix}.png"
+        print(f"Saving localisation error plot to {loc_err_path}")  # noqa: T201
         plt.savefig(loc_err_path, dpi=200, bbox_inches='tight')
         plt.close(fig)
         artifacts["localisation_error_per_class"] = loc_err_path
@@ -540,7 +592,8 @@ def _plot_radial(
         ax.set_title(f"Per-Class Localisation Error (Radial View) Model - {classifier}",
                      fontsize=14, fontweight='bold', pad=20)
         plt.tight_layout()
-        radial_loc_path = out_dir / "radial_localisation_error.png"
+        radial_loc_path = out_dir / f"radial_localisation_error{suffix}.png"
+        print(f"Saving radial localisation error plot to {radial_loc_path}")  # noqa: T201
         plt.savefig(radial_loc_path, dpi=300, bbox_inches='tight')
         plt.close(fig)
         artifacts["radial_localisation_error"] = radial_loc_path
@@ -555,12 +608,23 @@ def _plot_localisation_vs_snr(
         scaler: StandardScaler,
         y_pos: torch.Tensor,
         pos_hat: torch.Tensor | None,
-        out_path: Path,
+        out_dir: Path,
+        *,
+        classifier: str,
+        include_loss_reflectance: bool = False,
 ) -> Path | None:
     """Scatter plot of predicted localisation vs SNR coloured by localisation error."""
 
     if pos_hat is None or idx_to_eval.numel() == 0:
         return None
+
+    classifier = classifier.upper()
+    suffix = f"_{classifier.lower()}"
+    if include_loss_reflectance:
+        suffix += "_lr"
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"localisation_vs_snr{suffix}.png"
 
     snr_scaled = X[idx_to_eval, 0].detach().cpu().numpy()
     snr = snr_scaled * scaler.scale_[0] + scaler.mean_[0]
@@ -595,6 +659,7 @@ def _plot_localisation_vs_snr(
     cbar = plt.colorbar(sc, ax=ax)
     cbar.set_label("Prediction error (m)")
     plt.tight_layout()
+    print(f"Saving localisation vs SNR plot to {out_path}")  # noqa: T201
     plt.savefig(out_path, dpi=150)
     plt.close(fig)
     return out_path
@@ -1608,22 +1673,23 @@ def main(
             )  # noqa: T201
 
     radial_artifacts: dict[str, Path] = {}
-    if y_true is not None and y_pred is not None:
-        if pos_hat is not None:
-            y_pos_true_np = y_pos_test[idx_to_eval].numpy()
-            y_pos_pred_np = pos_hat.detach().cpu().numpy()
-        else:
-            y_pos_true_np = None
-            y_pos_pred_np = None
+    y_true_np = y_cls_test[idx_to_eval].numpy() if y_cls_test is not None else None
+    y_pred_np = preds_cls.numpy() if preds_cls is not None else None
+    y_pos_true_np = y_pos_test[idx_to_eval].numpy() if pos_hat is not None else None
+    y_pos_pred_np = pos_hat.detach().cpu().numpy() if pos_hat is not None else None
 
+    if (y_true_np is not None and y_pred_np is not None) or (
+            y_pos_true_np is not None and y_pos_pred_np is not None
+    ):
         radial_artifacts = _plot_radial(
             classifier,
-            y_true,
-            y_pred,
+            y_true_np,
+            y_pred_np,
             list(range(n_classes)),
             out_dir,
             y_pos_true=y_pos_true_np,
             y_pos_pred=y_pos_pred_np,
+            include_loss_reflectance=use_loss_reflectance,
         )
 
     localisation_path = _plot_localisation_vs_snr(
@@ -1632,7 +1698,9 @@ def main(
         scaler,
         y_pos_test,
         pos_hat,
-        out_dir / "localisation_vs_snr.png",
+        out_dir,
+        classifier=classifier,
+        include_loss_reflectance=use_loss_reflectance,
     )
 
     # ------------- random visualisations ------------- #
