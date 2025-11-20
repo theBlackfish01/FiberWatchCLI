@@ -85,10 +85,10 @@ class PipelineResult:
     summary_lines: list[str]
     confusion_matrix: np.ndarray
     confusion_matrix_path: Path
-    binary_confusion_matrix: np.ndarray | None = None
-    binary_confusion_matrix_path: Path | None = None
     classification_report: str
     final_predictions: torch.Tensor
+    binary_confusion_matrix: np.ndarray | None = None
+    binary_confusion_matrix_path: Path | None = None
 
 
 def _unique_paths(paths: Iterable[Path]) -> list[Path]:
@@ -247,8 +247,8 @@ def _run_tst_localisation(
             color="tab:red",
             label="Ideal",
         )
-        ax.set_xlabel("True fault position (m)")
-        ax.set_ylabel("Predicted fault position (m)")
+        ax.set_xlabel("True fault position")
+        ax.set_ylabel("Predicted fault position")
         ax.set_title("TST localisation – predictions vs. ground truth")
         ax.legend()
         fig.tight_layout()
@@ -260,7 +260,7 @@ def _run_tst_localisation(
         fig, ax = plt.subplots()
         errors = pos_pred - pos_true
         ax.hist(errors, bins=20, color="tab:blue", alpha=0.75)
-        ax.set_xlabel("Prediction error (m)")
+        ax.set_xlabel("Prediction error")
         ax.set_ylabel("Count")
         ax.set_title("TST localisation – error distribution")
         fig.tight_layout()

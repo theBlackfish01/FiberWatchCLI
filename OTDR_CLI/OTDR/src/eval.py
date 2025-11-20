@@ -59,7 +59,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
 
 client = OpenAI(api_key=cfg.OPENAI_API_KEY)
 
-LLM_SAMPLE_TARGET = 10
+LLM_SAMPLE_TARGET = 5
 
 
 def _init_wandb_run(config: dict[str, Any]) -> wandb.sdk.wandb_run.Run | None:
@@ -258,6 +258,7 @@ def _visualise_sample(
 
 
 def _plot_radial(
+        classifier: str,
         y_true: np.ndarray,
         y_pred: np.ndarray,
         class_ids: List[int],
@@ -276,7 +277,8 @@ def _plot_radial(
 
     Returns a dict mapping plot name -> saved Path.
     """
-
+    classifier = classifier.upper()
+    out_dir.mkdir(exist_ok=True)
     artifacts: dict[str, Path] = {}
 
     if y_true.size == 0 or y_pred.size == 0 or not class_ids:
@@ -369,7 +371,7 @@ def _plot_radial(
                 fontweight='bold',
             )
 
-    ax.set_title("Per-Class Accuracy (Radial View)",
+    ax.set_title(f"Per-Class Accuracy (Radial View) Model - {classifier}",
                  fontsize=14, fontweight='bold', pad=20)
     plt.tight_layout()
     radial_path = out_dir / "radial_class_accuracy.png"
@@ -389,7 +391,7 @@ def _plot_radial(
 
     ax.set_xlabel("Class ID", fontsize=12, fontweight='bold')
     ax.set_ylabel("Accuracy", fontsize=12, fontweight='bold')
-    ax.set_title("Per-Class Accuracy", fontsize=14, fontweight='bold')
+    ax.set_title(f"Per-Class Accuracy Model - {classifier}", fontsize=14, fontweight='bold')
     ax.set_ylim(0, 1.05)
     ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.5, label='80% threshold')
     ax.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5, label='60% threshold')
@@ -431,7 +433,7 @@ def _plot_radial(
 
     ax.set_xlabel("Number of Samples (Support)", fontsize=12, fontweight='bold')
     ax.set_ylabel("Accuracy", fontsize=12, fontweight='bold')
-    ax.set_title("Classification Performance vs Sample Support",
+    ax.set_title(f"Classification Performance vs Sample Support Model - {classifier}",
                  fontsize=14, fontweight='bold')
     ax.set_ylim(-0.05, 1.05)
     ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.5)
@@ -460,7 +462,7 @@ def _plot_radial(
 
         ax.set_xlabel("Class ID", fontsize=12, fontweight='bold')
         ax.set_ylabel("Mean Absolute Error (m)", fontsize=12, fontweight='bold')
-        ax.set_title("Per-Class Localisation Error", fontsize=14, fontweight='bold')
+        ax.set_title(f"Per-Class Localisation Error Model - {classifier}", fontsize=14, fontweight='bold')
         ax.grid(axis='y', alpha=0.3, linestyle=':')
 
         # Add value labels
@@ -535,11 +537,11 @@ def _plot_radial(
                     fontweight='bold',
                 )
 
-        ax.set_title("Per-Class Localisation Error (Radial View)",
+        ax.set_title(f"Per-Class Localisation Error (Radial View) Model - {classifier}",
                      fontsize=14, fontweight='bold', pad=20)
         plt.tight_layout()
         radial_loc_path = out_dir / "radial_localisation_error.png"
-        plt.savefig(radial_loc_path, dpi=200, bbox_inches='tight')
+        plt.savefig(radial_loc_path, dpi=300, bbox_inches='tight')
         plt.close(fig)
         artifacts["radial_localisation_error"] = radial_loc_path
 
@@ -1615,6 +1617,7 @@ def main(
             y_pos_pred_np = None
 
         radial_artifacts = _plot_radial(
+            classifier,
             y_true,
             y_pred,
             list(range(n_classes)),
