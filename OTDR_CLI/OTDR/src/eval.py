@@ -1234,6 +1234,16 @@ def _llm_explain_with_self_reflection(
     default=None,
     help="cuda | cpu | leave empty for auto-detect.",
 )
+@click.option(
+    "--test-noise-level",
+    type=click.FloatRange(min=0.0),
+    default=0.0,
+    show_default=True,
+    help=(
+        "Standard deviation of Gaussian noise added to the scaled test set features. "
+        "Set to 0 to disable noise injection."
+    ),
+)
 def main(
     mode,
     classifier,
@@ -1247,6 +1257,7 @@ def main(
     explain_method,
     out_dir,
     device,
+    test_noise_level,
     tcn_anomaly_only,
     orchestrate_tst,
     extra_features,
@@ -1279,6 +1290,7 @@ def main(
             "orchestrate_tst": orchestrate_tst,
             "use_loss_reflectance": use_loss_reflectance,
             "extra_features": list(extras),
+            "test_noise_level": test_noise_level,
         }
     )
     feature_suffix = "_lr" if use_loss_reflectance else ""
@@ -1430,6 +1442,13 @@ def main(
     X_test = splits["test"].X
     y_cls_test = splits["test"].y_class
     y_pos_test = splits["test"].y_pos
+
+    if test_noise_level > 0:
+        noise = torch.randn_like(X_test) * float(test_noise_level)
+        X_test = X_test + noise
+        print(
+            f"[INFO] Added Gaussian noise to test set with σ={test_noise_level:.4f}."
+        )
 
     if classifier == "tst" and not orchestrate_tst:
         fault_mask = y_cls_test != 0
