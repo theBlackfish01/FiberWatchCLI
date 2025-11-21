@@ -502,7 +502,7 @@ def _plot_radial(
         mae_plot_vals = [0.0 if not np.isfinite(v) else v for v in mae_errors]
         max_mae = max(mae_plot_vals) if mae_plot_vals else 1.0
 
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(12, 10))
 
         # Color bars based on error magnitude
         bar_colors = ['#66bb6a' if mae < max_mae * 0.3 else '#ffa726' if mae < max_mae * 0.6
@@ -532,12 +532,12 @@ def _plot_radial(
         plt.tight_layout()
         loc_err_path = out_dir / f"localisation_error_per_class{suffix}.png"
         print(f"Saving localisation error plot to {loc_err_path}")  # noqa: T201
-        plt.savefig(loc_err_path, dpi=200, bbox_inches='tight')
+        plt.savefig(loc_err_path, dpi=400)
         plt.close(fig)
         artifacts["localisation_error_per_class"] = loc_err_path
 
         # ---------- Radial Localisation Error Plot ----------
-        fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(10, 10))
+        fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(10, 12))
 
         # Normalize errors for color mapping (inverted - lower error = better = greener)
         norm_errors = np.array(mae_plot_vals)
@@ -1622,6 +1622,61 @@ def main(
         device=device,
         input_channels=input_channels,
     )
+    # ---------- model summary ---------- #
+    try:
+        from torchinfo import summary as torchinfo_summary
+
+        # Build a dummy input that matches what the model.forward expects.
+        # Try the raw test tensor first.
+        if classifier == "tst":
+            if tst_features is None or tst_features.size(0) == 0:
+                raise ValueError("tst_features is empty; cannot build dummy input.")
+            dummy = tst_features[:1].to(device)
+        else:
+            if X_test.size(0) == 0:
+                raise ValueError("X_test is empty; cannot build dummy input.")
+            dummy = X_test[:1].to(device)
+
+        print("\n[MODEL SUMMARY] ------------------------------")
+        try:
+            # First attempt: run summary with raw dummy shape
+            torchinfo_summary(
+                classifier_model,
+                input_data=dummy,
+                col_names=("input_size", "output_size", "num_params", "trainable"),
+                depth=6,
+                verbose=0,
+            )
+        except Exception:
+            # Common alt layout for TCNs: (B, C, T). Try permuting if 3D or reshaping if 2D.
+            if dummy.dim() == 3:
+                dummy_alt = dummy.permute(0, 2, 1).contiguous()
+            elif dummy.dim() == 2:
+                # If your model expects channel-first, treat features as channels.
+                dummy_alt = dummy.unsqueeze(1)  # (B, 1, T)
+            else:
+                dummy_alt = dummy
+
+            torchinfo_summary(
+                classifier_model,
+                input_data=dummy_alt,
+                col_names=("input_size", "output_size", "num_params", "trainable"),
+                depth=6,
+                verbose=0,
+            )
+
+        total_params = sum(p.numel() for p in classifier_model.parameters())
+        trainable_params = sum(p.numel() for p in classifier_model.parameters() if p.requires_grad)
+        print(f"[INFO] Total params: {total_params:,} | Trainable params: {trainable_params:,}")
+        print("[MODEL SUMMARY END] --------------------------\n")
+
+    except Exception as e:
+        # Hard fallback: never crash evaluation because of summary
+        print(f"[WARN] Could not create torchinfo summary: {e}")
+        print(classifier_model)
+        total_params = sum(p.numel() for p in classifier_model.parameters())
+        trainable_params = sum(p.numel() for p in classifier_model.parameters() if p.requires_grad)
+        print(f"[INFO] Total params: {total_params:,} | Trainable params: {trainable_params:,}\n")
 
     idx_to_eval = torch.arange(X_test.size(0))
 
