@@ -1637,16 +1637,30 @@ def main(
                 raise ValueError("X_test is empty; cannot build dummy input.")
             dummy = X_test[:1].to(device)
 
+            # TCN variants expect channel-first inputs; mirror prediction preprocessing
+            # by converting vector rows to (B, C, L).
+            if classifier in {"tcn", "tcn_binary"}:
+                from model_functions.tcn import _to_two_channel
+
+                dummy = _to_two_channel(dummy.cpu(), pos_count=pos_count).to(device)
+
+        def _render_summary(tensor: torch.Tensor) -> str:
+            """Return a formatted torchinfo summary for the given dummy tensor."""
+
+            with torch.no_grad():
+                info = torchinfo_summary(
+                    classifier_model,
+                    input_data=tensor,
+                    col_names=("input_size", "output_size", "num_params", "trainable"),
+                    depth=6,
+                    verbose=0,
+                )
+            return str(info)
+
         print("\n[MODEL SUMMARY] ------------------------------")
         try:
             # First attempt: run summary with raw dummy shape
-            torchinfo_summary(
-                classifier_model,
-                input_data=dummy,
-                col_names=("input_size", "output_size", "num_params", "trainable"),
-                depth=6,
-                verbose=0,
-            )
+            summary_text = _render_summary(dummy)
         except Exception:
             # Common alt layout for TCNs: (B, C, T). Try permuting if 3D or reshaping if 2D.
             if dummy.dim() == 3:
@@ -1657,13 +1671,9 @@ def main(
             else:
                 dummy_alt = dummy
 
-            torchinfo_summary(
-                classifier_model,
-                input_data=dummy_alt,
-                col_names=("input_size", "output_size", "num_params", "trainable"),
-                depth=6,
-                verbose=0,
-            )
+            summary_text = _render_summary(dummy_alt)
+
+        print(summary_text)
 
         total_params = sum(p.numel() for p in classifier_model.parameters())
         trainable_params = sum(p.numel() for p in classifier_model.parameters() if p.requires_grad)
