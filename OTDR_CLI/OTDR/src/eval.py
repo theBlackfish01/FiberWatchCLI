@@ -1637,6 +1637,13 @@ def main(
                 raise ValueError("X_test is empty; cannot build dummy input.")
             dummy = X_test[:1].to(device)
 
+            # TCN variants expect channel-first inputs; mirror prediction preprocessing
+            # by converting vector rows to (B, C, L).
+            if classifier in {"tcn", "tcn_binary"}:
+                from model_functions.tcn import _to_two_channel
+
+                dummy = _to_two_channel(dummy.cpu(), pos_count=pos_count).to(device)
+
         def _render_summary(tensor: torch.Tensor) -> str:
             """Return a formatted torchinfo summary for the given dummy tensor."""
 
