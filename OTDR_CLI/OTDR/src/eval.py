@@ -1893,8 +1893,12 @@ def main(
             size=sample_goal,
             replace=False,
         )
-    llm_target = min(LLM_SAMPLE_TARGET, chosen.size)
-    llm_indices = chosen[:llm_target] if llm_target > 0 else np.empty(0, dtype=int)
+    llm_limit = min(30, chosen.size)
+    llm_indices_all = chosen[:llm_limit] if llm_limit > 0 else np.empty(0, dtype=int)
+    llm_batches = [
+        llm_indices_all[i : i + LLM_SAMPLE_TARGET]
+        for i in range(0, llm_indices_all.size, LLM_SAMPLE_TARGET)
+    ]
 
     idx_eval_cpu = idx_to_eval.detach().cpu()
     pred_lookup: dict[int, int] = {}
@@ -1913,126 +1917,150 @@ def main(
         }
 
     # ------------- Feature attribution explainability ------------- #
-    attr_summary_map: dict[str, List[str]] = {method: [] for method in explain_methods}
-    if preds_cls is not None and llm_indices.size > 0:
-        try:
-            bg_size = min(50, idx_eval_cpu.size(0))
-            if bg_size > 0:
-                background = X_test[idx_eval_cpu[:bg_size]].numpy()
-                sample_tensor = torch.as_tensor(llm_indices, dtype=torch.long)
-                sample_block = X_test[sample_tensor].numpy()
-                for method in explain_methods:
-                    if method == "shap":
-                        attr_summary_map[method] = _compute_shap_summaries(
-                            classifier_model,
-                            classifier_for_eval,
-                            device,
-                            background,
-                            sample_block,
-                            llm_indices.tolist(),
-                            pred_lookup,
-                            meas_cols,
-                            pos_count=pos_count,
-                        )
-                    elif method == "lime":
-                        attr_summary_map[method] = _compute_lime_summaries(
-                            classifier_model,
-                            classifier_for_eval,
-                            device,
-                            background,
-                            sample_block,
-                            llm_indices.tolist(),
-                            pred_lookup,
-                            meas_cols,
-                            pos_count=pos_count,
-                        )
-                    else:
-                        raise ValueError(f"Unsupported explainability method '{method}'.")
-        except Exception as exc:  # pragma: no cover - fallback path
-            print(f"[WARN] Explainability computation failed: {exc}")
-
-    img_paths: list[Path] = []
-    num_points = pos_count
-    for idx in llm_indices:
-        idx_int = int(idx)
-        amp_scaled = X_test[idx_int][1 : 1 + num_points].detach().cpu().numpy()
-        amp = (
-            amp_scaled * scaler.scale_[1 : 1 + num_points]
-            + scaler.mean_[1 : 1 + num_points]
-        )
-        snr_scaled = X_test[idx_int][0].item()
-        snr = float(snr_scaled * scaler.scale_[0] + scaler.mean_[0])
-        t_cls = int(y_cls_test[idx_int].item())
-        p_cls = pred_lookup.get(idx_int)
-        t_pos = float(y_pos_test[idx_int].item())
-        p_pos = pos_lookup.get(idx_int)
-        img_paths.append(
-            _visualise_sample(
-                classifier,
-                amp,
-                snr,
-                t_cls,
-                p_cls,
-                t_pos,
-                p_pos,
-                idx_int,
-                out_dir,
-                classifier_label=classifier_display_label,
-                localisation_label=localisation_display_label,
-            )
-        )
-
-    explain_outputs: dict[str, tuple[str, str, str, bool]] = {}
-    if img_paths:
-        for method in explain_methods:
-            try:
-                explain_pair = _llm_explain_with_self_reflection(
-                    img_paths,
-                    openai_model="gpt-5",
-                    classifier_type=classifier_plot_label,
-                    attribution_summaries=attr_summary_map.get(method),
-                    attribution_method=method,
-                )
-            except Exception as exc:  # pragma: no cover - API errors
-                print(f"[WARN] LLM explanation ({method}) failed: {exc}")
-                continue
-            if explain_pair:
-                explain_outputs[method] = explain_pair
-
     classifier_name = classifier_plot_label
     llm_dir = Path("outputs/llm_output")
     llm_dir.mkdir(parents=True, exist_ok=True)
 
-    for method, explain_tuple in explain_outputs.items():
-        direct_text, refined_text, digest_text, rag_flag = explain_tuple
-        method_slug = method.lower()
-        explanation_file = llm_dir / f"llm_explanation_{method_slug}.txt"
-        i = 1
-        while explanation_file.exists():
-            explanation_file = llm_dir / f"llm_explanation_{method_slug}_{i}.txt"
-            i += 1
+    for batch_num, llm_indices in enumerate(llm_batches, start=1):
+        attr_summary_map: dict[str, List[str]] = {method: [] for method in explain_methods}
+        if preds_cls is not None and llm_indices.size > 0:
+            try:
+                bg_size = min(50, idx_eval_cpu.size(0))
+                if bg_size > 0:
+                    background = X_test[idx_eval_cpu[:bg_size]].numpy()
+                    sample_tensor = torch.as_tensor(llm_indices, dtype=torch.long)
+                    sample_block = X_test[sample_tensor].numpy()
+                    for method in explain_methods:
+                        if method == "shap":
+                            attr_summary_map[method] = _compute_shap_summaries(
+                                classifier_model,
+                                classifier_for_eval,
+                                device,
+                                background,
+                                sample_block,
+                                llm_indices.tolist(),
+                                pred_lookup,
+                                meas_cols,
+                                pos_count=pos_count,
+                            )
+                        elif method == "lime":
+                            attr_summary_map[method] = _compute_lime_summaries(
+                                classifier_model,
+                                classifier_for_eval,
+                                device,
+                                background,
+                                sample_block,
+                                llm_indices.tolist(),
+                                pred_lookup,
+                                meas_cols,
+                                pos_count=pos_count,
+                            )
+                        else:
+                            raise ValueError(
+                                f"Unsupported explainability method '{method}'."
+                            )
+            except Exception as exc:  # pragma: no cover - fallback path
+                print(f"[WARN] Explainability computation failed: {exc}")
 
-        header = (
-            f"LLM explanation for eval subset {'with' if rag_flag else 'without'} RAG "
-            f"for {classifier_name} in {mode} mode ({method.upper()} attributions)"
-            f" covering {len(llm_indices)} samples:\n\n"
-        )
-        combined = (
-            header
-            + "=== DIRECT ===\n"
-            + direct_text.strip()
-            + "\n\n=== SELF-REFLECTION (REVISED) ===\n"
-            + refined_text.strip()
-            + "\n\n=== FIELD OPS DIGEST ===\n"
-            + digest_text.strip()
-            + "\n"
-        )
-        explanation_file.write_text(combined, encoding="utf-8")
-        print(
-            f"LLM explanation (direct + self-reflection + ops digest) saved to {explanation_file.name}"
-        )  # noqa: T201
+        img_paths: list[Path] = []
+        num_points = pos_count
+        for idx in llm_indices:
+            idx_int = int(idx)
+            amp_scaled = X_test[idx_int][1 : 1 + num_points].detach().cpu().numpy()
+            amp = (
+                amp_scaled * scaler.scale_[1 : 1 + num_points]
+                + scaler.mean_[1 : 1 + num_points]
+            )
+            snr_scaled = X_test[idx_int][0].item()
+            snr = float(snr_scaled * scaler.scale_[0] + scaler.mean_[0])
+            t_cls = int(y_cls_test[idx_int].item())
+            p_cls = pred_lookup.get(idx_int)
+            t_pos = float(y_pos_test[idx_int].item())
+            p_pos = pos_lookup.get(idx_int)
+            img_paths.append(
+                _visualise_sample(
+                    classifier,
+                    amp,
+                    snr,
+                    t_cls,
+                    p_cls,
+                    t_pos,
+                    p_pos,
+                    idx_int,
+                    out_dir,
+                    classifier_label=classifier_display_label,
+                    localisation_label=localisation_display_label,
+                )
+            )
+
+        explain_outputs: dict[str, tuple[str, str, str, bool]] = {}
+        if img_paths:
+            for method in explain_methods:
+                try:
+                    explain_pair = _llm_explain_with_self_reflection(
+                        img_paths,
+                        openai_model="gpt-5",
+                        classifier_type=classifier_plot_label,
+                        attribution_summaries=attr_summary_map.get(method),
+                        attribution_method=method,
+                    )
+                except Exception as exc:  # pragma: no cover - API errors
+                    print(f"[WARN] LLM explanation ({method}) failed: {exc}")
+                    continue
+                if explain_pair:
+                    explain_outputs[method] = explain_pair
+
+        for method, explain_tuple in explain_outputs.items():
+            direct_text, refined_text, digest_text, rag_flag = explain_tuple
+            method_slug = method.lower()
+            explanation_file = llm_dir / (
+                f"llm_explanation_{method_slug}_batch{batch_num}.txt"
+            )
+            i = 1
+            while explanation_file.exists():
+                explanation_file = llm_dir / (
+                    f"llm_explanation_{method_slug}_batch{batch_num}_{i}.txt"
+                )
+                i += 1
+
+            header = (
+                f"LLM explanation for eval subset {'with' if rag_flag else 'without'} RAG "
+                f"for {classifier_name} in {mode} mode ({method.upper()} attributions)"
+                f" covering {len(llm_indices)} samples (batch {batch_num}):\n\n"
+            )
+            combined = (
+                header
+                + "=== DIRECT ===\n"
+                + direct_text.strip()
+                + "\n\n=== SELF-REFLECTION (REVISED) ===\n"
+                + refined_text.strip()
+                + "\n\n=== FIELD OPS DIGEST ===\n"
+                + digest_text.strip()
+                + "\n"
+            )
+            explanation_file.write_text(combined, encoding="utf-8")
+            print(
+                "LLM explanation (direct + self-reflection + ops digest) "
+                f"saved to {explanation_file.name}"
+            )  # noqa: T201
+            if wandb_run:
+                wandb_run.log({f"llm_{method_slug}_batch{batch_num}": wandb.Html(combined)})
+
         if wandb_run:
-            wandb_run.log({f"llm_{method_slug}": wandb.Html(combined)})
+            if img_paths:
+                wandb_run.log(
+                    {
+                        f"{wandb_prefix}sample_traces_batch{batch_num}": [
+                            wandb.Image(str(path)) for path in img_paths
+                        ],
+                    }
+                )
+            for method, summaries in attr_summary_map.items():
+                if summaries:
+                    table = wandb.Table(columns=["summary"])
+                    for summary in summaries:
+                        table.add_data(summary)
+                    wandb_run.log({f"{method}_summaries_batch{batch_num}": table})
 
     if wandb_run:
         metrics_payload: dict[str, float] = {}
@@ -2059,14 +2087,6 @@ def main(
                 wandb_run.log({f"{wandb_prefix}localisation_error_per_class": wandb.Image(str(loc_err))})
         if localisation_path and localisation_path.exists():
             wandb_run.log({f"{wandb_prefix}localisation_vs_snr": wandb.Image(str(localisation_path))})
-        if img_paths:
-            wandb_run.log({f"{wandb_prefix}sample_traces": [wandb.Image(str(path)) for path in img_paths],})
-        for method, summaries in attr_summary_map.items():
-            if summaries:
-                table = wandb.Table(columns=["summary"])
-                for summary in summaries:
-                    table.add_data(summary)
-                wandb_run.log({f"{method}_summaries": table})
 
     if wandb_run:
         wandb_run.finish()
