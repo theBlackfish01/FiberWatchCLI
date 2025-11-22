@@ -237,16 +237,23 @@ def _visualise_sample(
         pred_pos: float | None,
         idx: int,
         out_dir: Path,
+        *,
+        classifier_label: str | None = None,
+        localisation_label: str | None = None,
 ):
-    classifier = classifier.upper()
+    classifier = classifier_label.upper() if classifier_label else classifier.upper()
+    loc_model = localisation_label.upper() if localisation_label else None
     plt.figure(figsize=(10, 8))
     plt.plot(np.arange(amps.size), amps, label="Amplitude")
     pred_label = "N/A" if pred_cls is None else str(pred_cls)
     pred_pos_str = "N/A" if pred_pos is None else f"{pred_pos:.3f}"
+    model_title = f"Model - {classifier}"
+    if loc_model:
+        model_title += f" / {loc_model}"
     plt.title(
         f"Sample #{idx} | TrueC={true_cls} PredC={pred_label} | "
         f"TruePos={true_pos:.3f}m  PredPos={pred_pos_str}m | SNR={snr:.2f} | "
-        f"Model - {classifier}"
+        f"{model_title}"
     )
     plt.xlabel("P-index")
     plt.ylabel("Amplitude")
@@ -611,6 +618,7 @@ def _plot_localisation_vs_snr(
         out_dir: Path,
         *,
         classifier: str,
+        localisation_model: str | None = None,
         include_loss_reflectance: bool = False,
 ) -> Path | None:
     """Scatter plot of predicted localisation vs SNR coloured by localisation error."""
@@ -619,6 +627,8 @@ def _plot_localisation_vs_snr(
         return None
 
     classifier = classifier.upper()
+    if localisation_model:
+        classifier = f"{classifier}+{localisation_model.upper()}"
     suffix = f"_{classifier.lower()}"
     if include_loss_reflectance:
         suffix += "_lr"
@@ -654,7 +664,7 @@ def _plot_localisation_vs_snr(
     )
     ax.set_xlabel("SNR (dB)")
     ax.set_ylabel("Position (m)")
-    ax.set_title("Localisation vs SNR (error-coloured)")
+    ax.set_title(f"Localisation vs SNR (error-coloured) – {classifier}")
     ax.legend(loc="upper right")
     cbar = plt.colorbar(sc, ax=ax)
     cbar.set_label("Prediction error (m)")
@@ -1164,6 +1174,20 @@ def _llm_explain_with_self_reflection(
     help="Chain binary TCN ➜ anomaly-only TCN ➜ TST for localisation evaluation.",
 )
 @click.option(
+    "--tcn-full-to-tst",
+    is_flag=True,
+    help=(
+        "Run full multi-class TCN classification before TST localisation (uses TCN"
+        " predictions as class tokens)."
+    ),
+)
+@click.option(
+    "--tcn-full-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Override path to the full multi-class TCN checkpoint used with --tcn-full-to-tst.",
+)
+@click.option(
     "--cls-path",
     type=click.Path(dir_okay=False, path_type=Path),
     default=None,
@@ -1253,6 +1277,8 @@ def main(
     binary_path,
     anomaly_path,
     tst_path,
+    tcn_full_to_tst,
+    tcn_full_path,
     num_samples,
     explain_method,
     out_dir,
@@ -1288,6 +1314,7 @@ def main(
             "num_samples": num_samples,
             "tcn_anomaly_only": tcn_anomaly_only,
             "orchestrate_tst": orchestrate_tst,
+            "tcn_full_to_tst": tcn_full_to_tst,
             "use_loss_reflectance": use_loss_reflectance,
             "extra_features": list(extras),
             "test_noise_level": test_noise_level,
@@ -1305,6 +1332,9 @@ def main(
     anomaly_default = Path("models") / (
         f"tcn_anomaly{feature_suffix}.pt" if feature_suffix else "tcn_anomaly.pt"
     )
+    tcn_full_default = Path("models") / (
+        f"tcn_full{feature_suffix}.pt" if feature_suffix else "tcn_full.pt"
+    )
     tst_default = Path("models") / (
         f"tst{feature_suffix}.pt" if feature_suffix else "tst.pt"
     )
@@ -1312,6 +1342,7 @@ def main(
     binary_ckpt = Path(binary_path) if binary_path else binary_default
     anomaly_ckpt = Path(anomaly_path) if anomaly_path else anomaly_default
     tst_ckpt = Path(tst_path) if tst_path else tst_default
+    tcn_full_ckpt = Path(tcn_full_path) if tcn_full_path else tcn_full_default
 
     # ---------- data ---------- #
     df = load_raw_dataframe(data_path)
@@ -1450,7 +1481,15 @@ def main(
             f"[INFO] Added Gaussian noise to test set with σ={test_noise_level:.4f}."
         )
 
-    if classifier == "tst" and not orchestrate_tst:
+    tcn_full_bridge = orchestrate_tst and tcn_full_to_tst
+
+    if tcn_full_to_tst and not orchestrate_tst:
+        raise click.BadOptionUsage(
+            "--tcn-full-to-tst",
+            "The full-TCN➜TST bridge requires --orchestrate-tst to be enabled.",
+        )
+
+    if classifier == "tst" and not orchestrate_tst and not tcn_full_bridge:
         fault_mask = y_cls_test != 0
         if fault_mask.sum().item() == 0:
             raise ValueError("No faulty samples available in the test set for TST evaluation.")
@@ -1468,15 +1507,27 @@ def main(
     )
     print("[INFO] Using device:", device)
 
+    classifier_for_eval = "tcn" if tcn_full_bridge else classifier
+    classifier_display_label = classifier.upper()
+    localisation_display_label: str | None = None
+    wandb_prefix = "tcn_full_tst_" if tcn_full_bridge else ""
+
+    if tcn_full_bridge:
+        classifier_display_label = "TCN_FULL"
+        localisation_display_label = "TST"
+
     # ---------- load models ---------- #
-    if classifier == "tcn":
+    if classifier_for_eval == "tcn":
         cls_base = "tcn_anomaly" if tcn_anomaly_only else "tcn_full"
-    elif classifier == "tcn_binary":
+    elif classifier_for_eval == "tcn_binary":
         cls_base = "tcn_binary"
     else:
         cls_base = "tst"
     default_cls_name = f"{cls_base}{feature_suffix}.pt" if feature_suffix else f"{cls_base}.pt"
-    cls_path = Path(cls_path) if cls_path else Path("models") / default_cls_name
+    if tcn_full_bridge:
+        cls_path = tcn_full_ckpt
+    else:
+        cls_path = Path(cls_path) if cls_path else Path("models") / default_cls_name
 
     cls_meta = load_classifier_meta(cls_path)
     _validate_metadata_features(cls_meta, expected_feature_config, "Classifier metadata")
@@ -1501,7 +1552,12 @@ def main(
 
     default_n_classes = int(df["Class"].max() + 1)
 
-    if orchestrate_tst and mode != "pipeline":
+    if tcn_full_bridge:
+        for chk in (tcn_full_ckpt, tst_ckpt):
+            if not chk.exists():
+                raise FileNotFoundError(f"Checkpoint not found: {chk}")
+
+    if orchestrate_tst and mode != "pipeline" and not tcn_full_bridge:
         if classifier != "tst":
             raise click.BadOptionUsage(
                 "--orchestrate-tst",
@@ -1539,9 +1595,9 @@ def main(
             wandb_run.finish()
         return
 
-    if classifier == "tcn_binary":
+    if classifier_for_eval == "tcn_binary":
         n_classes = 2
-    elif classifier == "tcn":
+    elif classifier_for_eval == "tcn":
         variant = "anomaly_only" if tcn_anomaly_only else "full"
         if cls_meta and "variant" in cls_meta:
             meta_variant = cls_meta["variant"]
@@ -1601,7 +1657,7 @@ def main(
         return
 
     anomaly_mapping: dict[int, int] | None = None
-    if classifier == "tcn" and tcn_anomaly_only:
+    if classifier_for_eval == "tcn" and tcn_anomaly_only:
         X_test, y_cls_test, y_pos_test, anomaly_mapping, _ = remap_anomaly_only_targets(
             X_test,
             y_cls_test,
@@ -1615,20 +1671,35 @@ def main(
 
     seq_len = tst_features.shape[1] if tst_features is not None else X_test.shape[1]
     classifier_model = load_classifier(
-        classifier,
+        classifier_for_eval,
         cls_path,
         seq_len=seq_len,
         n_classes=n_classes,
         device=device,
         input_channels=input_channels,
     )
+
+    if tcn_full_bridge:
+        tst_meta = load_classifier_meta(tst_ckpt)
+        _validate_metadata_features(tst_meta, expected_feature_config, "TST metadata")
+        if tst_meta:
+            tst_pos = tst_meta.get("pos_count")
+            if tst_pos is not None and int(tst_pos) != pos_count:
+                raise ValueError(
+                    "TST checkpoint expects a different number of position columns."
+                )
+            tst_channels = tst_meta.get("input_channels")
+            if tst_channels is not None and int(tst_channels) != input_channels:
+                raise ValueError(
+                    "TST checkpoint expects a different input channel arrangement."
+                )
     # ---------- model summary ---------- #
     try:
         from torchinfo import summary as torchinfo_summary
 
         # Build a dummy input that matches what the model.forward expects.
         # Try the raw test tensor first.
-        if classifier == "tst":
+        if classifier_for_eval == "tst":
             if tst_features is None or tst_features.size(0) == 0:
                 raise ValueError("tst_features is empty; cannot build dummy input.")
             dummy = tst_features[:1].to(device)
@@ -1639,7 +1710,7 @@ def main(
 
             # TCN variants expect channel-first inputs; mirror prediction preprocessing
             # by converting vector rows to (B, C, L).
-            if classifier in {"tcn", "tcn_binary"}:
+            if classifier_for_eval in {"tcn", "tcn_binary"}:
                 from model_functions.tcn import _to_two_channel
 
                 dummy = _to_two_channel(dummy.cpu(), pos_count=pos_count).to(device)
@@ -1694,21 +1765,39 @@ def main(
     pos_hat = None
     logits = None
     preds_cls = None
-    if classifier == "tcn":
+    if tcn_full_bridge:
+        logits, _ = predict_tcn(
+            classifier_model,
+            X_test[idx_to_eval],
+            pos_count=pos_count,
+        )
+        preds_cls = logits.argmax(1)
+        class_feature = preds_cls.to(dtype=X_test.dtype).unsqueeze(1)
+        bridge_features = torch.cat([class_feature, X_test], dim=1)
+        tst_model = load_classifier(
+            "tst",
+            tst_ckpt,
+            seq_len=bridge_features.shape[1],
+            n_classes=n_classes,
+            device=device,
+            input_channels=input_channels,
+        )
+        pos_hat = predict_tst(tst_model, bridge_features[idx_to_eval], device=device)
+    elif classifier_for_eval == "tcn":
         logits, pos_hat = predict_tcn(
             classifier_model,
             X_test[idx_to_eval],
             pos_count=pos_count,
         )
         preds_cls = logits.argmax(1)
-    elif classifier == "tcn_binary":
+    elif classifier_for_eval == "tcn_binary":
         logits = predict_tcn_binary(
             classifier_model,
             X_test[idx_to_eval],
             pos_count=pos_count,
         )
         preds_cls = logits.argmax(1)
-    elif classifier == "tst":
+    elif classifier_for_eval == "tst":
         pos_hat = predict_tst(classifier_model, tst_features[idx_to_eval])
         preds_cls = None
 
@@ -1716,6 +1805,10 @@ def main(
         rmse = root_mean_squared_error(y_pos_test[idx_to_eval].numpy(), pos_hat.numpy())
     else:
         rmse = None
+
+    classifier_plot_label = classifier_display_label
+    if localisation_display_label:
+        classifier_plot_label = f"{classifier_display_label}+{localisation_display_label}"
 
     acc = None
     auc_val = None
@@ -1745,7 +1838,7 @@ def main(
         # Confusion matrix plot
         cm = confusion_matrix(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
         ConfusionMatrixDisplay(cm).plot(include_values=True, cmap="Blues", colorbar=False)
-        plt.title("Confusion Matrix – Eval subset")
+        plt.title(f"Confusion Matrix – Eval subset ({classifier_plot_label})")
         plt.tight_layout()
         cm_path = out_dir / "confusion_matrix.png"
         plt.savefig(cm_path, dpi=150)
@@ -1766,7 +1859,7 @@ def main(
             y_pos_true_np is not None and y_pos_pred_np is not None
     ):
         radial_artifacts = _plot_radial(
-            classifier,
+            classifier_plot_label,
             y_true_np,
             y_pred_np,
             list(range(n_classes)),
@@ -1783,7 +1876,8 @@ def main(
         y_pos_test,
         pos_hat,
         out_dir,
-        classifier=classifier,
+        classifier=classifier_display_label,
+        localisation_model=localisation_display_label,
         include_loss_reflectance=use_loss_reflectance,
     )
 
@@ -1831,7 +1925,7 @@ def main(
                     if method == "shap":
                         attr_summary_map[method] = _compute_shap_summaries(
                             classifier_model,
-                            classifier,
+                            classifier_for_eval,
                             device,
                             background,
                             sample_block,
@@ -1843,7 +1937,7 @@ def main(
                     elif method == "lime":
                         attr_summary_map[method] = _compute_lime_summaries(
                             classifier_model,
-                            classifier,
+                            classifier_for_eval,
                             device,
                             background,
                             sample_block,
@@ -1873,7 +1967,19 @@ def main(
         t_pos = float(y_pos_test[idx_int].item())
         p_pos = pos_lookup.get(idx_int)
         img_paths.append(
-            _visualise_sample(classifier, amp, snr, t_cls, p_cls, t_pos, p_pos, idx_int, out_dir)
+            _visualise_sample(
+                classifier,
+                amp,
+                snr,
+                t_cls,
+                p_cls,
+                t_pos,
+                p_pos,
+                idx_int,
+                out_dir,
+                classifier_label=classifier_display_label,
+                localisation_label=localisation_display_label,
+            )
         )
 
     explain_outputs: dict[str, tuple[str, str, str, bool]] = {}
@@ -1883,7 +1989,7 @@ def main(
                 explain_pair = _llm_explain_with_self_reflection(
                     img_paths,
                     openai_model="gpt-5",
-                    classifier_type=classifier,
+                    classifier_type=classifier_plot_label,
                     attribution_summaries=attr_summary_map.get(method),
                     attribution_method=method,
                 )
@@ -1893,7 +1999,7 @@ def main(
             if explain_pair:
                 explain_outputs[method] = explain_pair
 
-    classifier_name = classifier.upper()
+    classifier_name = classifier_plot_label
     llm_dir = Path("outputs/llm_output")
     llm_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1940,21 +2046,21 @@ def main(
             wandb_run.log(metrics_payload)
 
         if cm_path and cm_path.exists():
-            wandb_run.log({"confusion_matrix": wandb.Image(str(cm_path))})
+            wandb_run.log({f"{wandb_prefix}confusion_matrix": wandb.Image(str(cm_path))})
         if radial_artifacts:
             ra = radial_artifacts.get("radial_accuracy")
             if ra and ra.exists():
-                wandb_run.log({"radial_accuracy": wandb.Image(str(ra))})
+                wandb_run.log({f"{wandb_prefix}radial_accuracy": wandb.Image(str(ra))})
             acc_bar = radial_artifacts.get("accuracy_per_class_bar")
             if acc_bar and acc_bar.exists():
-                wandb_run.log({"accuracy_per_class_bar": wandb.Image(str(acc_bar))})
+                wandb_run.log({f"{wandb_prefix}accuracy_per_class_bar": wandb.Image(str(acc_bar))})
             loc_err = radial_artifacts.get("localisation_error_per_class")
             if loc_err and loc_err.exists():
-                wandb_run.log({"localisation_error_per_class": wandb.Image(str(loc_err))})
+                wandb_run.log({f"{wandb_prefix}localisation_error_per_class": wandb.Image(str(loc_err))})
         if localisation_path and localisation_path.exists():
-            wandb_run.log({"localisation_vs_snr": wandb.Image(str(localisation_path))})
+            wandb_run.log({f"{wandb_prefix}localisation_vs_snr": wandb.Image(str(localisation_path))})
         if img_paths:
-            wandb_run.log({"sample_traces": [wandb.Image(str(path)) for path in img_paths],})
+            wandb_run.log({f"{wandb_prefix}sample_traces": [wandb.Image(str(path)) for path in img_paths],})
         for method, summaries in attr_summary_map.items():
             if summaries:
                 table = wandb.Table(columns=["summary"])
