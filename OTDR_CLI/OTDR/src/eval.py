@@ -14,7 +14,7 @@ import base64
 import os
 import click
 import json
-from typing import Any, List, Tuple
+from typing import Any, List, Sequence, Tuple
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import numpy as np
@@ -620,11 +620,17 @@ def _plot_localisation_vs_snr(
         classifier: str,
         localisation_model: str | None = None,
         include_loss_reflectance: bool = False,
-) -> Path | None:
-    """Scatter plot of predicted localisation vs SNR coloured by localisation error."""
+        feature_names: Sequence[str] | None = None,
+) -> dict[str, Path]:
+    """Scatter plot of predicted localisation vs key scalar features.
+
+    Always plots localisation vs SNR, and when loss/reflectance features are
+    available (``include_loss_reflectance``), also plots localisation against
+    those scalars using the same error colouring.
+    """
 
     if pos_hat is None or idx_to_eval.numel() == 0:
-        return None
+        return {}
 
     classifier = classifier.upper()
     if localisation_model:
@@ -634,10 +640,7 @@ def _plot_localisation_vs_snr(
         suffix += "_lr"
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"localisation_vs_snr{suffix}.png"
 
-    snr_scaled = X[idx_to_eval, 0].detach().cpu().numpy()
-    snr = snr_scaled * scaler.scale_[0] + scaler.mean_[0]
     pred_pos = pos_hat.detach().cpu().numpy()
     true_pos = y_pos[idx_to_eval].detach().cpu().numpy()
     error = pred_pos - true_pos
@@ -1223,10 +1226,13 @@ def _llm_explain_with_self_reflection(
 )
 @click.option(
     "--explain-method",
-    type=click.Choice(["shap", "lime", "both"], case_sensitive=False),
+    type=click.Choice(["shap", "lime", "both", "none"], case_sensitive=False),
     default="both",
     show_default=True,
-    help="Feature attribution method used for sample explainability (both runs SHAP + LIME).",
+    help=(
+        "Feature attribution method used for sample explainability (both runs SHAP + LIME). "
+        "Use 'none' to disable attribution generation."
+    ),
 )
 @click.option(
     "--extra-feature",
@@ -1303,14 +1309,18 @@ def main(
     extras = _dedupe_preserve(extra_features)
     if explain_method == "both":
         explain_methods = ("shap", "lime")
+    elif explain_method == "none":
+        explain_methods = tuple()
     else:
         explain_methods = (explain_method,)
+
+    requested_methods = ",".join(explain_methods) if explain_methods else "none"
 
     wandb_run = _init_wandb_run(
         {
             "mode": mode,
             "classifier": classifier,
-            "requested_methods": ",".join(explain_methods),
+            "requested_methods": requested_methods,
             "num_samples": num_samples,
             "tcn_anomaly_only": tcn_anomaly_only,
             "orchestrate_tst": orchestrate_tst,
@@ -1856,11 +1866,33 @@ def main(
                 f"Eval subset size = {idx_to_eval.size(0)} | RMSE = {rmse:.3f}"
             )  # noqa: T201
 
+    scatter_path: Path | None = None
     radial_artifacts: dict[str, Path] = {}
     y_true_np = y_cls_test[idx_to_eval].numpy() if y_cls_test is not None else None
     y_pred_np = preds_cls.numpy() if preds_cls is not None else None
     y_pos_true_np = y_pos_test[loc_indices].numpy() if pos_hat is not None else None
     y_pos_pred_np = pos_hat.detach().cpu().numpy() if pos_hat is not None else None
+
+    if (tcn_full_bridge or classifier_for_eval == "tst") and y_pos_true_np is not None:
+        scatter_path = out_dir / "tst_localisation_scatter.png"
+        fig, ax = plt.subplots()
+        ax.scatter(y_pos_true_np, y_pos_pred_np, alpha=0.6, edgecolor="none")
+        diag_min = float(min(y_pos_true_np.min(), y_pos_pred_np.min()))
+        diag_max = float(max(y_pos_true_np.max(), y_pos_pred_np.max()))
+        ax.plot(
+            [diag_min, diag_max],
+            [diag_min, diag_max],
+            linestyle="--",
+            color="tab:red",
+            label="Ideal",
+        )
+        ax.set_xlabel("True fault position")
+        ax.set_ylabel("Predicted fault position")
+        ax.set_title("TST localisation – predictions vs. ground truth")
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(scatter_path, dpi=150)
+        plt.close(fig)
 
     if (y_true_np is not None and y_pred_np is not None) or (
             y_pos_true_np is not None and y_pos_pred_np is not None
@@ -1876,7 +1908,7 @@ def main(
             include_loss_reflectance=use_loss_reflectance,
         )
 
-    localisation_path = _plot_localisation_vs_snr(
+    localisation_paths = _plot_localisation_vs_snr(
         X_test,
         loc_indices,
         scaler,
@@ -1886,6 +1918,7 @@ def main(
         classifier=classifier_display_label,
         localisation_model=localisation_display_label,
         include_loss_reflectance=use_loss_reflectance,
+        feature_names=meas_cols,
     )
 
     # ------------- random visualisations ------------- #
@@ -1900,8 +1933,12 @@ def main(
             size=sample_goal,
             replace=False,
         )
-    llm_target = min(LLM_SAMPLE_TARGET, chosen.size)
-    llm_indices = chosen[:llm_target] if llm_target > 0 else np.empty(0, dtype=int)
+    llm_limit = min(30, chosen.size)
+    llm_indices_all = chosen[:llm_limit] if llm_limit > 0 else np.empty(0, dtype=int)
+    llm_batches = [
+        llm_indices_all[i : i + LLM_SAMPLE_TARGET]
+        for i in range(0, llm_indices_all.size, LLM_SAMPLE_TARGET)
+    ]
 
     idx_eval_cpu = idx_to_eval.detach().cpu()
     pred_lookup: dict[int, int] = {}
@@ -1990,9 +2027,9 @@ def main(
             )
         )
 
-    explain_outputs: dict[str, tuple[str, str, str, bool]] = {}
-    if img_paths:
-        for method in explain_methods:
+    for batch_num, llm_indices in enumerate(llm_batches, start=1):
+        attr_summary_map: dict[str, List[str]] = {method: [] for method in explain_methods}
+        if preds_cls is not None and llm_indices.size > 0 and explain_methods:
             try:
                 explain_pair = _llm_explain_with_self_reflection(
                     img_paths,
@@ -2001,46 +2038,27 @@ def main(
                     attribution_summaries=attr_summary_map.get(method),
                     attribution_method=method,
                 )
-            except Exception as exc:  # pragma: no cover - API errors
-                print(f"[WARN] LLM explanation ({method}) failed: {exc}")
-                continue
-            if explain_pair:
-                explain_outputs[method] = explain_pair
+            )
 
     classifier_name = classifier_plot_label
     llm_dir = Path("outputs/llm_output")
     llm_dir.mkdir(parents=True, exist_ok=True)
 
-    for method, explain_tuple in explain_outputs.items():
-        direct_text, refined_text, digest_text, rag_flag = explain_tuple
-        method_slug = method.lower()
-        explanation_file = llm_dir / f"llm_explanation_{method_slug}.txt"
-        i = 1
-        while explanation_file.exists():
-            explanation_file = llm_dir / f"llm_explanation_{method_slug}_{i}.txt"
-            i += 1
-
-        header = (
-            f"LLM explanation for eval subset {'with' if rag_flag else 'without'} RAG "
-            f"for {classifier_name} in {mode} mode ({method.upper()} attributions)"
-            f" covering {len(llm_indices)} samples:\n\n"
-        )
-        combined = (
-            header
-            + "=== DIRECT ===\n"
-            + direct_text.strip()
-            + "\n\n=== SELF-REFLECTION (REVISED) ===\n"
-            + refined_text.strip()
-            + "\n\n=== FIELD OPS DIGEST ===\n"
-            + digest_text.strip()
-            + "\n"
-        )
-        explanation_file.write_text(combined, encoding="utf-8")
-        print(
-            f"LLM explanation (direct + self-reflection + ops digest) saved to {explanation_file.name}"
-        )  # noqa: T201
         if wandb_run:
-            wandb_run.log({f"llm_{method_slug}": wandb.Html(combined)})
+            if img_paths:
+                wandb_run.log(
+                    {
+                        f"{wandb_prefix}sample_traces_batch{batch_num}": [
+                            wandb.Image(str(path)) for path in img_paths
+                        ],
+                    }
+                )
+            for method, summaries in attr_summary_map.items():
+                if summaries:
+                    table = wandb.Table(columns=["summary"])
+                    for summary in summaries:
+                        table.add_data(summary)
+                    wandb_run.log({f"{method}_summaries_batch{batch_num}": table})
 
     if wandb_run:
         metrics_payload: dict[str, float] = {}
