@@ -340,6 +340,16 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
     help="cuda | cuda:0 | mps | cpu | leave empty for auto-detect.",
 )
 @click.option(
+    "--train-noise-level",
+    type=click.FloatRange(min=0.0),
+    default=0.0,
+    show_default=True,
+    help=(
+        "Standard deviation of Gaussian noise added to the scaled training/"
+        "validation/test features. Set to 0 to disable noise injection."
+    ),
+)
+@click.option(
     "--tcn-anomaly-only/--tcn-all-data",
     "tcn_anomaly_only",
     default=False,
@@ -358,6 +368,7 @@ def main(
         data_path,
         out_dir,
         device,
+        train_noise_level,
         tcn_anomaly_only,
         use_loss_reflectance
 ) -> None:
@@ -389,6 +400,19 @@ def main(
         scaler,
         measurement_override=measurements,
     )
+
+    if train_noise_level > 0:
+        splits = {
+            name: SplitTensors(
+                X=split.X + torch.randn_like(split.X) * float(train_noise_level),
+                y_class=split.y_class,
+                y_pos=split.y_pos,
+            )
+            for name, split in splits.items()
+        }
+        print(
+            f"[INFO] Added Gaussian noise to dataset splits with σ={train_noise_level:.4f}."
+        )
 
     # ----------------------------- Device ---------------------------------#
     device = _resolve_device(device)
