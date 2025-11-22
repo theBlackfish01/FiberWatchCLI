@@ -14,7 +14,7 @@ import base64
 import os
 import click
 import json
-from typing import Any, List, Tuple
+from typing import Any, List, Sequence, Tuple
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import numpy as np
@@ -620,11 +620,17 @@ def _plot_localisation_vs_snr(
         classifier: str,
         localisation_model: str | None = None,
         include_loss_reflectance: bool = False,
-) -> Path | None:
-    """Scatter plot of predicted localisation vs SNR coloured by localisation error."""
+        feature_names: Sequence[str] | None = None,
+) -> dict[str, Path]:
+    """Scatter plot of predicted localisation vs key scalar features.
+
+    Always plots localisation vs SNR, and when loss/reflectance features are
+    available (``include_loss_reflectance``), also plots localisation against
+    those scalars using the same error colouring.
+    """
 
     if pos_hat is None or idx_to_eval.numel() == 0:
-        return None
+        return {}
 
     classifier = classifier.upper()
     if localisation_model:
@@ -634,45 +640,65 @@ def _plot_localisation_vs_snr(
         suffix += "_lr"
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"localisation_vs_snr{suffix}.png"
 
-    snr_scaled = X[idx_to_eval, 0].detach().cpu().numpy()
-    snr = snr_scaled * scaler.scale_[0] + scaler.mean_[0]
     pred_pos = pos_hat.detach().cpu().numpy()
     true_pos = y_pos[idx_to_eval].detach().cpu().numpy()
     error = pred_pos - true_pos
 
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sc = ax.scatter(
-        snr,
-        pred_pos,
-        c=error,
-        cmap="coolwarm",
-        s=45,
-        alpha=0.85,
-        edgecolors="k",
-        linewidths=0.2,
-        label="Predicted position",
-    )
-    ax.scatter(
-        snr,
-        true_pos,
-        c="black",
-        s=10,
-        alpha=0.3,
-        label="True position",
-    )
-    ax.set_xlabel("SNR (dB)")
-    ax.set_ylabel("Position (m)")
-    ax.set_title(f"Localisation vs SNR (error-coloured) – {classifier}")
-    ax.legend(loc="upper right")
-    cbar = plt.colorbar(sc, ax=ax)
-    cbar.set_label("Prediction error (m)")
-    plt.tight_layout()
-    print(f"Saving localisation vs SNR plot to {out_path}")  # noqa: T201
-    plt.savefig(out_path, dpi=150)
-    plt.close(fig)
-    return out_path
+    def _denormalise(column_idx: int) -> np.ndarray:
+        values = X[idx_to_eval, column_idx].detach().cpu().numpy()
+        return values * scaler.scale_[column_idx] + scaler.mean_[column_idx]
+
+    def _make_plot(feature: np.ndarray, label: str, key: str) -> Path:
+        path = out_dir / f"localisation_vs_{key}{suffix}.png"
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sc = ax.scatter(
+            feature,
+            pred_pos,
+            c=error,
+            cmap="coolwarm",
+            s=45,
+            alpha=0.85,
+            edgecolors="k",
+            linewidths=0.2,
+            label="Predicted position",
+        )
+        ax.scatter(
+            feature,
+            true_pos,
+            c="black",
+            s=10,
+            alpha=0.3,
+            label="True position",
+        )
+        ax.set_xlabel(label)
+        ax.set_ylabel("Position (m)")
+        ax.set_title(f"Localisation vs {label} (error-coloured) – {classifier}")
+        ax.legend(loc="upper right")
+        cbar = plt.colorbar(sc, ax=ax)
+        cbar.set_label("Prediction error (m)")
+        plt.tight_layout()
+        print(f"Saving localisation vs {key} plot to {path}")  # noqa: T201
+        plt.savefig(path, dpi=150)
+        plt.close(fig)
+        return path
+
+    plots: dict[str, Path] = {}
+    plots["snr"] = _make_plot(_denormalise(0), "SNR (dB)", "snr")
+
+    if include_loss_reflectance:
+        lower_name_map = {name.lower(): idx for idx, name in enumerate(feature_names or [])}
+        loss_idx = lower_name_map.get("loss")
+        reflectance_idx = lower_name_map.get("reflectance")
+
+        if loss_idx is not None:
+            plots["loss"] = _make_plot(_denormalise(loss_idx), "Loss (dB)", "loss")
+        if reflectance_idx is not None:
+            plots["reflectance"] = _make_plot(
+                _denormalise(reflectance_idx), "Reflectance (dB)", "reflectance"
+            )
+
+    return plots
 
 
 def _b64(path: Path) -> str:
@@ -1849,11 +1875,33 @@ def main(
                 f"Eval subset size = {idx_to_eval.size(0)} | RMSE = {rmse:.3f}"
             )  # noqa: T201
 
+    scatter_path: Path | None = None
     radial_artifacts: dict[str, Path] = {}
     y_true_np = y_cls_test[idx_to_eval].numpy() if y_cls_test is not None else None
     y_pred_np = preds_cls.numpy() if preds_cls is not None else None
     y_pos_true_np = y_pos_test[idx_to_eval].numpy() if pos_hat is not None else None
     y_pos_pred_np = pos_hat.detach().cpu().numpy() if pos_hat is not None else None
+
+    if (tcn_full_bridge or classifier_for_eval == "tst") and y_pos_true_np is not None:
+        scatter_path = out_dir / "tst_localisation_scatter.png"
+        fig, ax = plt.subplots()
+        ax.scatter(y_pos_true_np, y_pos_pred_np, alpha=0.6, edgecolor="none")
+        diag_min = float(min(y_pos_true_np.min(), y_pos_pred_np.min()))
+        diag_max = float(max(y_pos_true_np.max(), y_pos_pred_np.max()))
+        ax.plot(
+            [diag_min, diag_max],
+            [diag_min, diag_max],
+            linestyle="--",
+            color="tab:red",
+            label="Ideal",
+        )
+        ax.set_xlabel("True fault position")
+        ax.set_ylabel("Predicted fault position")
+        ax.set_title("TST localisation – predictions vs. ground truth")
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(scatter_path, dpi=150)
+        plt.close(fig)
 
     if (y_true_np is not None and y_pred_np is not None) or (
             y_pos_true_np is not None and y_pos_pred_np is not None
@@ -1869,7 +1917,7 @@ def main(
             include_loss_reflectance=use_loss_reflectance,
         )
 
-    localisation_path = _plot_localisation_vs_snr(
+    localisation_paths = _plot_localisation_vs_snr(
         X_test,
         idx_to_eval,
         scaler,
@@ -1879,6 +1927,7 @@ def main(
         classifier=classifier_display_label,
         localisation_model=localisation_display_label,
         include_loss_reflectance=use_loss_reflectance,
+        feature_names=meas_cols,
     )
 
     # ------------- random visualisations ------------- #
@@ -2057,8 +2106,14 @@ def main(
             loc_err = radial_artifacts.get("localisation_error_per_class")
             if loc_err and loc_err.exists():
                 wandb_run.log({f"{wandb_prefix}localisation_error_per_class": wandb.Image(str(loc_err))})
-        if localisation_path and localisation_path.exists():
-            wandb_run.log({f"{wandb_prefix}localisation_vs_snr": wandb.Image(str(localisation_path))})
+        if localisation_paths:
+            for key, path in localisation_paths.items():
+                if path and path.exists():
+                    wandb_run.log(
+                        {f"{wandb_prefix}localisation_vs_{key}": wandb.Image(str(path))}
+                    )
+        if scatter_path and scatter_path.exists():
+            wandb_run.log({f"{wandb_prefix}tst_localisation_scatter": wandb.Image(str(scatter_path))})
         if img_paths:
             wandb_run.log({f"{wandb_prefix}sample_traces": [wandb.Image(str(path)) for path in img_paths],})
         for method, summaries in attr_summary_map.items():
