@@ -1793,6 +1793,7 @@ def main(
         print(f"[INFO] Total params: {total_params:,} | Trainable params: {trainable_params:,}\n")
 
     idx_to_eval = torch.arange(X_test.size(0))
+    loc_indices = idx_to_eval
 
     # ------------- inference ------------- #
     pos_hat = None
@@ -1805,8 +1806,13 @@ def main(
             pos_count=pos_count,
         )
         preds_cls = logits.argmax(1)
-        class_feature = preds_cls.to(dtype=X_test.dtype).unsqueeze(1)
-        bridge_features = torch.cat([class_feature, X_test], dim=1)
+        fault_mask = y_cls_test != 0
+        if fault_mask.sum().item() == 0:
+            raise ValueError("No faulty samples available for TST localisation.")
+
+        loc_indices = torch.nonzero(fault_mask, as_tuple=False).view(-1)
+        class_feature = preds_cls[loc_indices].to(dtype=X_test.dtype).unsqueeze(1)
+        bridge_features = torch.cat([class_feature, X_test[loc_indices]], dim=1)
         tst_model = load_classifier(
             "tst",
             tst_ckpt,
@@ -1815,7 +1821,7 @@ def main(
             device=device,
             input_channels=input_channels,
         )
-        pos_hat = predict_tst(tst_model, bridge_features[idx_to_eval], device=device)
+        pos_hat = predict_tst(tst_model, bridge_features, device=device)
     elif classifier_for_eval == "tcn":
         logits, pos_hat = predict_tcn(
             classifier_model,
@@ -1835,7 +1841,9 @@ def main(
         preds_cls = None
 
     if pos_hat is not None:
-        rmse = root_mean_squared_error(y_pos_test[idx_to_eval].numpy(), pos_hat.numpy())
+        rmse = root_mean_squared_error(
+            y_pos_test[loc_indices].numpy(), pos_hat.numpy()
+        )
     else:
         rmse = None
 
@@ -1886,7 +1894,7 @@ def main(
     radial_artifacts: dict[str, Path] = {}
     y_true_np = y_cls_test[idx_to_eval].numpy() if y_cls_test is not None else None
     y_pred_np = preds_cls.numpy() if preds_cls is not None else None
-    y_pos_true_np = y_pos_test[idx_to_eval].numpy() if pos_hat is not None else None
+    y_pos_true_np = y_pos_test[loc_indices].numpy() if pos_hat is not None else None
     y_pos_pred_np = pos_hat.detach().cpu().numpy() if pos_hat is not None else None
 
     if (tcn_full_bridge or classifier_for_eval == "tst") and y_pos_true_np is not None:
@@ -1926,7 +1934,7 @@ def main(
 
     localisation_paths = _plot_localisation_vs_snr(
         X_test,
-        idx_to_eval,
+        loc_indices,
         scaler,
         y_pos_test,
         pos_hat,
@@ -1967,9 +1975,10 @@ def main(
     pos_lookup: dict[int, float] = {}
     if pos_hat is not None:
         pos_cpu = pos_hat.detach().cpu()
+        loc_eval_cpu = loc_indices.detach().cpu()
         pos_lookup = {
-            int(idx_eval_cpu[i].item()): float(pos_cpu[i].item())
-            for i in range(idx_eval_cpu.size(0))
+            int(loc_eval_cpu[i].item()): float(pos_cpu[i].item())
+            for i in range(loc_eval_cpu.size(0))
         }
 
     # ------------- Feature attribution explainability ------------- #
