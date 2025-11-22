@@ -1249,10 +1249,13 @@ def _llm_explain_with_self_reflection(
 )
 @click.option(
     "--explain-method",
-    type=click.Choice(["shap", "lime", "both"], case_sensitive=False),
+    type=click.Choice(["shap", "lime", "both", "none"], case_sensitive=False),
     default="both",
     show_default=True,
-    help="Feature attribution method used for sample explainability (both runs SHAP + LIME).",
+    help=(
+        "Feature attribution method used for sample explainability (both runs SHAP + LIME). "
+        "Use 'none' to disable attribution generation."
+    ),
 )
 @click.option(
     "--extra-feature",
@@ -1329,14 +1332,18 @@ def main(
     extras = _dedupe_preserve(extra_features)
     if explain_method == "both":
         explain_methods = ("shap", "lime")
+    elif explain_method == "none":
+        explain_methods = tuple()
     else:
         explain_methods = (explain_method,)
+
+    requested_methods = ",".join(explain_methods) if explain_methods else "none"
 
     wandb_run = _init_wandb_run(
         {
             "mode": mode,
             "classifier": classifier,
-            "requested_methods": ",".join(explain_methods),
+            "requested_methods": requested_methods,
             "num_samples": num_samples,
             "tcn_anomaly_only": tcn_anomaly_only,
             "orchestrate_tst": orchestrate_tst,
@@ -1972,7 +1979,7 @@ def main(
 
     for batch_num, llm_indices in enumerate(llm_batches, start=1):
         attr_summary_map: dict[str, List[str]] = {method: [] for method in explain_methods}
-        if preds_cls is not None and llm_indices.size > 0:
+        if preds_cls is not None and llm_indices.size > 0 and explain_methods:
             try:
                 bg_size = min(50, idx_eval_cpu.size(0))
                 if bg_size > 0:
