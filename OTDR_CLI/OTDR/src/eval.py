@@ -986,8 +986,10 @@ def _llm_explain_with_self_reflection(
         print("RAG retrieval successful, using retrieved snippets in LLM prompt.")
 
     # ---------- Attribution text (shared) ----------------------------------
-    method_label = attribution_method.upper()
+    method_label_raw = attribution_method or "none"
+    method_label = method_label_raw.upper()
     attr_text = "\n".join(attribution_summaries) if attribution_summaries else ""
+    has_attribution = bool(attr_text)
 
     # ---------- Shared logging helper --------------------------------------
     def _log_llm_input(
@@ -1028,14 +1030,23 @@ def _llm_explain_with_self_reflection(
         "- NEVER swap or rename these; do not call TrueC the prediction or PredC the truth.\n"
     )
 
+    method_clause = (
+        f"Use the reference snippets and the {method_label} feature attributions when available. "
+        f"Cite snippets like [1], [2] when used. If {method_label} is present, explicitly state which features raised/lowered "
+        "the predicted class probability.\n\n"
+    )
+    if not has_attribution:
+        method_clause = (
+            "Use the reference snippets. No attribution is provided for these samples; "
+            "focus on visual evidence and retrieved context.\n\n"
+        )
+
     system_direct = (
         "You are an optical-fibre fault-analysis expert. "
         "Given the following figures (OTDR amplitude over P-points; titles include TrueC/PredC and positions), "
         f"write a concise explanation for each figure predicted by a {classifier_type} model. "
         "Explain fault type, position, likely causes, and concrete next actions. "
-        f"Use the reference snippets and the {method_label} feature attributions when available. "
-        f"Cite snippets like [1], [2] when used. If {method_label} is present, explicitly state which features raised/lowered "
-        "the predicted class probability.\n\n"
+        + method_clause
         + true_pred_rules
         + fault_classes_block
     )
@@ -1076,15 +1087,35 @@ def _llm_explain_with_self_reflection(
     # ---------- SELF-REFLECTION pass ---------------------------------------
     # Provide SAME images so the reviewer can verify visually.
     # Repeat the TrueC/PredC rule to avoid drift.
-    system_reflect = (
+    reflect_intro = (
         "You are a meticulous QA reviewer for optical-fibre explanations. "
-        "You will receive: (a) the same context (reference snippets, feature-attribution summaries, and the images), and (b) a DRAFT explanation. "
+        "You will receive: (a) the same context (reference snippets"
+    )
+    if has_attribution:
+        reflect_intro += " and feature-attribution summaries"
+    reflect_intro += ", and (b) a DRAFT explanation. "
+
+    reflect_rules = (
         "OUTPUT ONLY an improved explanation that:\n"
         f"1) Matches {method_label} signs (positive values → increase predicted class probability; negative → decrease).\n"
         f"2) Mentions the top-k absolute {method_label} contributors (k≈5) in plain English.\n"
         "3) Grounds standards/definitions with citations [i] that exist in the provided snippet list.\n"
         "4) Avoids hallucinated numbers; if a number isn’t present, use cautious wording or a justified range.\n"
         "5) Keeps the operator section actionable (2–3 steps).\n\n"
+    )
+    if not has_attribution:
+        reflect_rules = (
+            "OUTPUT ONLY an improved explanation that:\n"
+            "1) Aligns with the provided figures and snippet references.\n"
+            "2) Clearly calls out any disagreements between TrueC and PredC.\n"
+            "3) Grounds standards/definitions with citations [i] that exist in the provided snippet list.\n"
+            "4) Avoids hallucinated numbers; if a number isn’t present, use cautious wording or a justified range.\n"
+            "5) Keeps the operator section actionable (2–3 steps).\n\n"
+        )
+
+    system_reflect = (
+        reflect_intro
+        + reflect_rules
         + true_pred_rules
         + fault_classes_block
     )
@@ -1343,7 +1374,7 @@ def main(
     if explain_method == "both":
         explain_methods = ("shap", "lime")
     elif explain_method == "none":
-        explain_methods = tuple()
+        explain_methods = ("none",)
     else:
         explain_methods = (explain_method,)
 
@@ -2106,14 +2137,15 @@ def main(
 
     for batch_num, llm_indices in enumerate(llm_batches, start=1):
         attr_summary_map: dict[str, List[str]] = {method: [] for method in explain_methods}
-        if preds_cls is not None and llm_indices.size > 0 and explain_methods:
+        compute_attr_methods = [m for m in explain_methods if m != "none"]
+        if preds_cls is not None and llm_indices.size > 0 and compute_attr_methods:
             try:
                 bg_size = min(50, idx_eval_cpu.size(0))
                 if bg_size > 0:
                     background = X_test[idx_eval_cpu[:bg_size]].numpy()
                     sample_tensor = torch.as_tensor(llm_indices, dtype=torch.long)
                     sample_block = X_test[sample_tensor].numpy()
-                    for method in explain_methods:
+                    for method in compute_attr_methods:
                         if method == "shap":
                             attr_summary_map[method] = _compute_shap_summaries(
                                 classifier_model,
