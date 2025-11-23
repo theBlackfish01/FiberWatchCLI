@@ -685,8 +685,11 @@ def _plot_localisation_vs_snr(
             fontweight="bold",
             pad=18,
         )
-        ax.legend(loc="upper right", fontsize=11, frameon=True)
-        ax.tick_params(axis="both", labelsize=11, width=1.05)
+        ax.legend(loc="upper right", fontsize=11, frameon=True, fancybox=True, framealpha=0.9)
+        ax.tick_params(axis="both", labelsize=11, width=1.05, length=6)
+        ax.grid(True, linestyle=":", alpha=0.28)
+        ax.set_facecolor("#fafafa")
+        ax.set_axisbelow(True)
         cbar = plt.colorbar(sc, ax=ax)
         cbar.set_label("Prediction error (m)", fontsize=12, fontweight="bold", labelpad=8)
         cbar.ax.tick_params(labelsize=10, width=1.0)
@@ -2037,6 +2040,8 @@ def main(
         fig, ax = plt.subplots(figsize=(9, 7))
         disp = ConfusionMatrixDisplay(cm)
         disp.plot(include_values=True, cmap="Blues", colorbar=False, ax=ax, values_format="d")
+        ax.set_facecolor("#fafafa")
+        ax.grid(False)
         ax.set_title(
             f"Confusion Matrix – Eval subset ({classifier_plot_label})",
             fontsize=15,
@@ -2045,11 +2050,12 @@ def main(
         )
         ax.set_xlabel("Predicted label", fontsize=12, fontweight="bold", labelpad=12)
         ax.set_ylabel("True label", fontsize=12, fontweight="bold", labelpad=12)
-        ax.tick_params(axis="both", which="major", labelsize=11, width=1.2)
+        ax.tick_params(axis="both", which="major", labelsize=11, width=1.2, length=6)
+        plt.setp(ax.get_xticklabels(), rotation=20, ha="right", rotation_mode="anchor")
         for text in ax.texts:
             text.set_fontsize(11)
             text.set_fontweight("bold")
-        fig.tight_layout()
+        fig.tight_layout(pad=1.1)
         cm_path = out_dir / "confusion_matrix.png"
         fig.savefig(cm_path, dpi=180, bbox_inches="tight")
         plt.close(fig)
@@ -2065,6 +2071,7 @@ def main(
     )
 
     scatter_path: Path | None = None
+    scatter_key: str | None = None
     radial_artifacts: dict[str, Path] = {}
     y_true_np = y_cls_test[idx_to_eval].numpy() if y_cls_test is not None else None
     y_pred_np = preds_cls.numpy() if preds_cls is not None else None
@@ -2081,8 +2088,9 @@ def main(
             radial_y_true = loc_true_np
             radial_y_pred = loc_pred_np
 
-    if (tcn_full_bridge or classifier_for_eval == "tst") and y_pos_true_np is not None:
-        scatter_path = out_dir / "tst_localisation_scatter.png"
+    if (tcn_full_bridge or classifier_for_eval in {"tst", "tcn"}) and y_pos_true_np is not None:
+        scatter_stem = "tcn_full_bridge" if tcn_full_bridge else classifier_for_eval
+        scatter_path = out_dir / f"{scatter_stem}_localisation_scatter.png"
         fig, ax = plt.subplots(figsize=(9, 7))
         rng = np.random.default_rng(7)
         jitter_scale = max(float(np.ptp(y_pos_true_np)), float(np.ptp(y_pos_pred_np)), 1e-3) * 0.005
@@ -2111,14 +2119,17 @@ def main(
         ax.set_xlabel("True fault position", fontsize=13, fontweight="bold", labelpad=10)
         ax.set_ylabel("Predicted fault position", fontsize=13, fontweight="bold", labelpad=10)
         ax.set_title(
-            "TST localisation – predictions vs. ground truth",
+            f"{classifier_plot_label} localisation – predictions vs. ground truth",
             fontsize=15,
             fontweight="bold",
             pad=18,
         )
-        ax.legend(frameon=True, fontsize=11, loc="upper left")
-        ax.tick_params(axis="both", labelsize=11, width=1.1)
+        ax.legend(frameon=True, fontsize=11, loc="upper left", fancybox=True, framealpha=0.92)
+        ax.tick_params(axis="both", labelsize=11, width=1.1, length=6)
+        ax.grid(True, linestyle=":", alpha=0.22)
+        ax.set_facecolor("#fafafa")
         fig.tight_layout(pad=1.5)
+        scatter_key = scatter_stem
         fig.savefig(scatter_path, dpi=180, bbox_inches="tight")
         plt.close(fig)
 
@@ -2362,7 +2373,8 @@ def main(
                         {f"{wandb_prefix}localisation_vs_{key}": wandb.Image(str(path))}
                     )
         if scatter_path and scatter_path.exists():
-            wandb_run.log({f"{wandb_prefix}tst_localisation_scatter": wandb.Image(str(scatter_path))})
+            scatter_log_name = scatter_key or Path(scatter_path).stem
+            wandb_run.log({f"{wandb_prefix}{scatter_log_name}": wandb.Image(str(scatter_path))})
         if img_paths:
             wandb_run.log({f"{wandb_prefix}sample_traces": [wandb.Image(str(path)) for path in img_paths],})
         for method, summaries in attr_summary_map.items():
