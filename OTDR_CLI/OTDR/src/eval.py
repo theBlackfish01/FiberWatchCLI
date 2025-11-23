@@ -652,35 +652,47 @@ def _plot_localisation_vs_snr(
 
     def _make_plot(feature: np.ndarray, label: str, key: str) -> Path:
         path = out_dir / f"localisation_vs_{key}{suffix}.png"
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(11, 7))
+        rng = np.random.default_rng(11)
+        jitter_scale = max(float(np.ptp(feature)), 1e-5) * 0.004
+        feature_jitter = feature + rng.normal(0.0, jitter_scale, size=feature.shape)
+        true_offset = rng.normal(0.0, jitter_scale, size=true_pos.shape)
+
         sc = ax.scatter(
-            feature,
+            feature_jitter,
             pred_pos,
             c=error,
             cmap="coolwarm",
-            s=45,
-            alpha=0.85,
+            s=70,
+            alpha=0.82,
             edgecolors="k",
-            linewidths=0.2,
+            linewidths=0.3,
             label="Predicted position",
         )
         ax.scatter(
-            feature,
-            true_pos,
+            feature_jitter,
+            true_pos + true_offset,
             c="black",
-            s=10,
-            alpha=0.3,
+            s=18,
+            alpha=0.35,
             label="True position",
         )
-        ax.set_xlabel(label)
-        ax.set_ylabel("Position (m)")
-        ax.set_title(f"Localisation vs {label} (error-coloured) – {classifier}")
-        ax.legend(loc="upper right")
+        ax.set_xlabel(label, fontsize=13, fontweight="bold", labelpad=10)
+        ax.set_ylabel("Position (m)", fontsize=13, fontweight="bold", labelpad=10)
+        ax.set_title(
+            f"Localisation vs {label} (error-coloured) – {classifier}",
+            fontsize=15,
+            fontweight="bold",
+            pad=18,
+        )
+        ax.legend(loc="upper right", fontsize=11, frameon=True)
+        ax.tick_params(axis="both", labelsize=11, width=1.05)
         cbar = plt.colorbar(sc, ax=ax)
-        cbar.set_label("Prediction error (m)")
-        plt.tight_layout()
+        cbar.set_label("Prediction error (m)", fontsize=12, fontweight="bold", labelpad=8)
+        cbar.ax.tick_params(labelsize=10, width=1.0)
+        plt.tight_layout(pad=1.4)
         print(f"Saving localisation vs {key} plot to {path}")  # noqa: T201
-        plt.savefig(path, dpi=150)
+        plt.savefig(path, dpi=170, bbox_inches="tight")
         plt.close(fig)
         return path
 
@@ -2022,12 +2034,25 @@ def main(
 
         # Confusion matrix plot
         cm = confusion_matrix(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
-        ConfusionMatrixDisplay(cm).plot(include_values=True, cmap="Blues", colorbar=False)
-        plt.title(f"Confusion Matrix – Eval subset ({classifier_plot_label})")
-        plt.tight_layout()
+        fig, ax = plt.subplots(figsize=(9, 7))
+        disp = ConfusionMatrixDisplay(cm)
+        disp.plot(include_values=True, cmap="Blues", colorbar=False, ax=ax, values_format="d")
+        ax.set_title(
+            f"Confusion Matrix – Eval subset ({classifier_plot_label})",
+            fontsize=15,
+            fontweight="bold",
+            pad=18,
+        )
+        ax.set_xlabel("Predicted label", fontsize=12, fontweight="bold", labelpad=12)
+        ax.set_ylabel("True label", fontsize=12, fontweight="bold", labelpad=12)
+        ax.tick_params(axis="both", which="major", labelsize=11, width=1.2)
+        for text in ax.texts:
+            text.set_fontsize(11)
+            text.set_fontweight("bold")
+        fig.tight_layout()
         cm_path = out_dir / "confusion_matrix.png"
-        plt.savefig(cm_path, dpi=150)
-        plt.close()
+        fig.savefig(cm_path, dpi=180, bbox_inches="tight")
+        plt.close(fig)
     else:
         if rmse is not None:
             print(
@@ -2046,10 +2071,34 @@ def main(
     y_pos_true_np = y_pos_test[loc_indices].numpy() if pos_hat is not None else None
     y_pos_pred_np = pos_hat.detach().cpu().numpy() if pos_hat is not None else None
 
+    radial_y_true = y_true_np
+    radial_y_pred = y_pred_np
+    if pos_hat is not None:
+        # Align localisation arrays with matching classification slices to enable localisation plots
+        loc_true_np = y_cls_test[loc_indices].numpy()
+        loc_pred_np = preds_cls[loc_indices].numpy() if preds_cls is not None else None
+        if radial_y_true is None or radial_y_true.shape[0] != y_pos_true_np.shape[0]:
+            radial_y_true = loc_true_np
+            radial_y_pred = loc_pred_np
+
     if (tcn_full_bridge or classifier_for_eval == "tst") and y_pos_true_np is not None:
         scatter_path = out_dir / "tst_localisation_scatter.png"
-        fig, ax = plt.subplots()
-        ax.scatter(y_pos_true_np, y_pos_pred_np, alpha=0.6, edgecolor="none")
+        fig, ax = plt.subplots(figsize=(9, 7))
+        rng = np.random.default_rng(7)
+        jitter_scale = max(float(np.ptp(y_pos_true_np)), float(np.ptp(y_pos_pred_np)), 1e-3) * 0.005
+        jitter_true = y_pos_true_np + rng.normal(0.0, jitter_scale, size=y_pos_true_np.shape)
+        jitter_pred = y_pos_pred_np + rng.normal(0.0, jitter_scale, size=y_pos_pred_np.shape)
+
+        ax.scatter(
+            jitter_true,
+            jitter_pred,
+            alpha=0.7,
+            edgecolor="black",
+            linewidth=0.6,
+            s=55,
+            color="tab:blue",
+            label="Predictions",
+        )
         diag_min = float(min(y_pos_true_np.min(), y_pos_pred_np.min()))
         diag_max = float(max(y_pos_true_np.max(), y_pos_pred_np.max()))
         ax.plot(
@@ -2059,21 +2108,27 @@ def main(
             color="tab:red",
             label="Ideal",
         )
-        ax.set_xlabel("True fault position")
-        ax.set_ylabel("Predicted fault position")
-        ax.set_title("TST localisation – predictions vs. ground truth")
-        ax.legend()
-        fig.tight_layout()
-        fig.savefig(scatter_path, dpi=150)
+        ax.set_xlabel("True fault position", fontsize=13, fontweight="bold", labelpad=10)
+        ax.set_ylabel("Predicted fault position", fontsize=13, fontweight="bold", labelpad=10)
+        ax.set_title(
+            "TST localisation – predictions vs. ground truth",
+            fontsize=15,
+            fontweight="bold",
+            pad=18,
+        )
+        ax.legend(frameon=True, fontsize=11, loc="upper left")
+        ax.tick_params(axis="both", labelsize=11, width=1.1)
+        fig.tight_layout(pad=1.5)
+        fig.savefig(scatter_path, dpi=180, bbox_inches="tight")
         plt.close(fig)
 
-    if (y_true_np is not None and y_pred_np is not None) or (
+    if (radial_y_true is not None and radial_y_pred is not None) or (
             y_pos_true_np is not None and y_pos_pred_np is not None
     ):
         radial_artifacts = _plot_radial(
             classifier_plot_label,
-            y_true_np,
-            y_pred_np,
+            radial_y_true,
+            radial_y_pred,
             list(range(n_classes)),
             out_dir,
             y_pos_true=y_pos_true_np,
