@@ -15,6 +15,7 @@ python -m src.train --mode all
 """
 
 from pathlib import Path
+from time import perf_counter
 from dataclasses import fields, is_dataclass
 import json
 from typing import Tuple, Optional
@@ -445,10 +446,14 @@ def main(
         ae_cfg = AEConfig(save_path=ae_path, device=device)
         val_norm_idx = (splits["val"].y_class == NORMAL).nonzero(as_tuple=True)[0]
         X_val_norm = splits["val"].X[val_norm_idx]
+        start_time = perf_counter()
         ae, thresh = train_gru_ae(ae, X_norm, X_val_norm, cfg=ae_cfg)
+        print(f"[GRU-AE] Training completed in {perf_counter() - start_time:.2f}s")
 
         print(f"[GRU-AE] Threshold={thresh:.5f}")
+        eval_start = perf_counter()
         _evaluate_gru_ae(ae, thresh, splits["test"].X, splits["test"].y_class)
+        print(f"[GRU-AE] Evaluation completed in {perf_counter() - eval_start:.2f}s")
 
         gru_meta = {
             "threshold": float(thresh),
@@ -521,6 +526,7 @@ def main(
         tcn_name = f"{tcn_name}{feature_suffix}" if feature_suffix else tcn_name
         tcn_save_path = out_dir / f"{tcn_name}.pt"
         tcn_cfg = TCNConfig(save_path=tcn_save_path, device=device, pos_count=pos_count)
+        start_time = perf_counter()
         tcn = train_tcn(
             tcn,
             train_split.X,
@@ -531,6 +537,8 @@ def main(
             val_split.y_pos,
             cfg=tcn_cfg,
         )
+        eval_start = perf_counter()
+        print(f"[TCN]    Training completed in {perf_counter() - start_time:.2f}s")
         _evaluate_tcn(
             tcn,
             test_split.X,
@@ -538,6 +546,7 @@ def main(
             test_split.y_pos,
             pos_count=pos_count,
         )
+        print(f"[TCN]    Evaluation completed in {perf_counter() - eval_start:.2f}s")
 
         class_labels = sorted(int(c) for c in torch.unique(train_split.y_class).tolist())
         tcn_meta = {
@@ -586,6 +595,7 @@ def main(
             device=device,
             pos_count=pos_count,
         )
+        start_time = perf_counter()
         tcn_binary = train_tcn_binary(
             tcn_binary,
             train_bin.X,
@@ -594,12 +604,15 @@ def main(
             val_bin.y_class,
             cfg=tcn_bin_cfg,
         )
+        print(f"[TCN-B]  Training completed in {perf_counter() - start_time:.2f}s")
+        eval_start = perf_counter()
         _evaluate_tcn_binary(
             tcn_binary,
             test_bin.X,
             test_bin.y_class,
             pos_count=pos_count,
         )
+        print(f"[TCN-B]  Evaluation completed in {perf_counter() - eval_start:.2f}s")
 
         tcn_binary_meta = {
             "variant": "binary",
@@ -633,6 +646,7 @@ def main(
             save_path=out_dir / f"{tst_name}.pt",
             device=device,
         )
+        start_time = perf_counter()
         tst = train_tst(
             model=tst,
             train_tensor=fault_train.X,
@@ -643,7 +657,10 @@ def main(
             val_y_pos=fault_val.y_pos,
             cfg=tst_cfg,
         )
+        print(f"[TST]    Training completed in {perf_counter() - start_time:.2f}s")
+        eval_start = perf_counter()
         _evaluate_tst(tst, fault_test.X, fault_test.y_class, fault_test.y_pos)
+        print(f"[TST]    Evaluation completed in {perf_counter() - eval_start:.2f}s")
 
 
 if __name__ == "__main__":

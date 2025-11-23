@@ -14,6 +14,7 @@ import base64
 import os
 import click
 import json
+from time import perf_counter
 from typing import Any, List, Sequence, Tuple
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
@@ -1609,6 +1610,7 @@ def main(
             meta = load_classifier_meta(chk)
             _validate_metadata_features(meta, expected_feature_config, f"{label} metadata")
 
+        cascade_start = perf_counter()
         pipeline_result = run_cascade(
             X_test=X_test,
             y_cls_test=y_cls_test,
@@ -1621,6 +1623,10 @@ def main(
             default_n_classes=default_n_classes,
             pos_count=pos_count,
             input_channels=input_channels,
+        )
+        print(
+            f"[PIPELINE] Cascade evaluation completed in "
+            f"{perf_counter() - cascade_start:.2f}s"
         )
         print("\n".join(pipeline_result.summary_lines))  # noqa: T201
         print(f"Confusion matrix saved to {pipeline_result.confusion_matrix_path}")  # noqa: T201
@@ -1672,6 +1678,7 @@ def main(
             if not chk.exists():
                 raise FileNotFoundError(f"Checkpoint not found: {chk}")
 
+        cascade_start = perf_counter()
         pipeline_result = run_cascade(
             X_test=X_test,
             y_cls_test=y_cls_test,
@@ -1684,6 +1691,10 @@ def main(
             default_n_classes=default_n_classes,
             pos_count=pos_count,
             input_channels=input_channels,
+        )
+        print(
+            f"[PIPELINE] Cascade evaluation completed in "
+            f"{perf_counter() - cascade_start:.2f}s"
         )
         print("\n".join(pipeline_result.summary_lines))  # noqa: T201
         print(f"Confusion matrix saved to {pipeline_result.confusion_matrix_path}")  # noqa: T201
@@ -1799,6 +1810,8 @@ def main(
     pos_hat = None
     logits = None
     preds_cls = None
+    eval_start = perf_counter()
+
     if tcn_full_bridge:
         logits, _ = predict_tcn(
             classifier_model,
@@ -1889,6 +1902,11 @@ def main(
             print(
                 f"Eval subset size = {idx_to_eval.size(0)} | RMSE = {rmse:.3f}"
             )  # noqa: T201
+
+    print(
+        f"[EVAL] {classifier_plot_label} evaluation completed in "
+        f"{perf_counter() - eval_start:.2f}s"
+    )
 
     scatter_path: Path | None = None
     radial_artifacts: dict[str, Path] = {}
