@@ -2056,7 +2056,10 @@ def main(
             text.set_fontsize(11)
             text.set_fontweight("bold")
         fig.tight_layout(pad=1.1)
-        cm_path = out_dir / "confusion_matrix.png"
+        cm_suffix = classifier_plot_label.lower().replace("+", "_").replace(" ", "_")
+        if use_loss_reflectance:
+            cm_suffix += "_lr"
+        cm_path = out_dir / f"confusion_matrix_{cm_suffix}.png"
         fig.savefig(cm_path, dpi=180, bbox_inches="tight")
         plt.close(fig)
     else:
