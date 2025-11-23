@@ -1298,6 +1298,14 @@ def _llm_explain_with_self_reflection(
         "Set to 0 to disable noise injection."
     ),
 )
+@click.option(
+    "--profile-flops",
+    is_flag=True,
+    help=(
+        "Profile classifier/localiser inference to report FLOP counts alongside latency. "
+        "Adds overhead; disable for routine evaluation runs."
+    ),
+)
 def main(
     mode,
     classifier,
@@ -1318,6 +1326,7 @@ def main(
     orchestrate_tst,
     extra_features,
     use_loss_reflectance,
+    profile_flops,
 ):  # noqa: C901
     out_dir = Path("outputs") / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1352,6 +1361,7 @@ def main(
             "use_loss_reflectance": use_loss_reflectance,
             "extra_features": list(extras),
             "test_noise_level": test_noise_level,
+            "profile_flops": profile_flops,
         }
     )
     feature_suffix = "_lr" if use_loss_reflectance else ""
@@ -1812,12 +1822,78 @@ def main(
     preds_cls = None
     eval_start = perf_counter()
 
+    def _aggregate_profiler_flops(prof: torch.profiler.profile) -> float | None:
+        try:
+            flops = [evt.flops for evt in prof.key_averages() if evt.flops is not None]
+            return float(sum(flops)) if flops else None
+        except Exception as exc:  # pragma: no cover - best-effort aggregation
+            print(f"[WARN] Unable to aggregate FLOPs from profiler: {exc}")
+            return None
+
+    def _format_flops(value: float | None) -> str:
+        if value is None:
+            return "N/A"
+        units = (("TFLOPs", 1e12), ("GFLOPs", 1e9), ("MFLOPs", 1e6))
+        for label, factor in units:
+            if value >= factor:
+                return f"{value / factor:.2f} {label}"
+        return f"{value:.0f} FLOPs"
+
+    def _run_inference_with_profile(
+        tag: str,
+        call_fn,
+        *,
+        flop_model: torch.nn.Module | None = None,
+        flop_inputs: tuple[torch.Tensor, ...] | None = None,
+    ) -> tuple[Any, float, float | None]:
+        start_time = perf_counter()
+        flop_total: float | None = None
+        if profile_flops:
+            activities = [torch.profiler.ProfilerActivity.CPU]
+            if torch.cuda.is_available():
+                activities.append(torch.profiler.ProfilerActivity.CUDA)
+            try:
+                with torch.profiler.profile(
+                    activities=activities, with_flops=True
+                ) as prof:
+                    result = call_fn()
+                duration = perf_counter() - start_time
+                flop_total = _aggregate_profiler_flops(prof)
+                return result, duration, flop_total
+            except Exception as prof_exc:  # pragma: no cover - profiling optional
+                print(f"[WARN] Profiling for {tag} failed with torch.profiler: {prof_exc}")
+                if flop_model is not None and flop_inputs is not None:
+                    try:
+                        from fvcore.nn import FlopCountAnalysis
+
+                        flop_total = float(FlopCountAnalysis(flop_model, flop_inputs).total())
+                    except Exception as fv_exc:  # pragma: no cover - optional dependency
+                        print(f"[WARN] FLOP analysis fallback failed for {tag}: {fv_exc}")
+                start_time = perf_counter()
+                result = call_fn()
+                duration = perf_counter() - start_time
+                return result, duration, flop_total
+
+        result = call_fn()
+        duration = perf_counter() - start_time
+        return result, duration, flop_total
+
+    def _log_inference_stats(label: str, duration: float, flop_total: float | None) -> None:
+        suffix = f" | FLOPs: {_format_flops(flop_total)}" if profile_flops else ""
+        print(f"[EVAL] {label} inference completed in {duration:.2f}s{suffix}")
+
     if tcn_full_bridge:
-        logits, _ = predict_tcn(
-            classifier_model,
-            X_test[idx_to_eval],
-            pos_count=pos_count,
+        (logits, _), tcn_duration, tcn_flops = _run_inference_with_profile(
+            "tcn_full_bridge",
+            lambda: predict_tcn(
+                classifier_model,
+                X_test[idx_to_eval],
+                pos_count=pos_count,
+            ),
+            flop_model=classifier_model,
+            flop_inputs=(X_test[:1].to(device),),
         )
+        _log_inference_stats("TCN_FULL", tcn_duration, tcn_flops)
         preds_cls = logits.argmax(1)
         fault_mask = y_cls_test != 0
         if fault_mask.sum().item() == 0:
@@ -1834,23 +1910,47 @@ def main(
             device=device,
             input_channels=input_channels,
         )
-        pos_hat = predict_tst(tst_model, bridge_features, device=device)
-    elif classifier_for_eval == "tcn":
-        logits, pos_hat = predict_tcn(
-            classifier_model,
-            X_test[idx_to_eval],
-            pos_count=pos_count,
+        pos_hat, tst_duration, tst_flops = _run_inference_with_profile(
+            "tst_bridge",
+            lambda: predict_tst(tst_model, bridge_features, device=device),
+            flop_model=tst_model,
+            flop_inputs=(bridge_features.to(device),),
         )
+        _log_inference_stats("TST", tst_duration, tst_flops)
+    elif classifier_for_eval == "tcn":
+        (logits, pos_hat), infer_duration, infer_flops = _run_inference_with_profile(
+            "tcn",
+            lambda: predict_tcn(
+                classifier_model,
+                X_test[idx_to_eval],
+                pos_count=pos_count,
+            ),
+            flop_model=classifier_model,
+            flop_inputs=(X_test[:1].to(device),),
+        )
+        _log_inference_stats("TCN", infer_duration, infer_flops)
         preds_cls = logits.argmax(1)
     elif classifier_for_eval == "tcn_binary":
-        logits = predict_tcn_binary(
-            classifier_model,
-            X_test[idx_to_eval],
-            pos_count=pos_count,
+        logits, infer_duration, infer_flops = _run_inference_with_profile(
+            "tcn_binary",
+            lambda: predict_tcn_binary(
+                classifier_model,
+                X_test[idx_to_eval],
+                pos_count=pos_count,
+            ),
+            flop_model=classifier_model,
+            flop_inputs=(X_test[:1].to(device),),
         )
+        _log_inference_stats("TCN_BINARY", infer_duration, infer_flops)
         preds_cls = logits.argmax(1)
     elif classifier_for_eval == "tst":
-        pos_hat = predict_tst(classifier_model, tst_features[idx_to_eval])
+        pos_hat, infer_duration, infer_flops = _run_inference_with_profile(
+            "tst",
+            lambda: predict_tst(classifier_model, tst_features[idx_to_eval]),
+            flop_model=classifier_model,
+            flop_inputs=(tst_features[:1].to(device),),
+        )
+        _log_inference_stats("TST", infer_duration, infer_flops)
         preds_cls = None
 
     if pos_hat is not None:
