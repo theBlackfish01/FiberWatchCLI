@@ -233,13 +233,15 @@ def _visualise_sample(
         classifier: str,
         amps: np.ndarray,
         snr: float,
+        *,
+        loss_db: float | None = None,
+        reflectance_db: float | None = None,
         true_cls: int,
         pred_cls: int | None,
         true_pos: float,
         pred_pos: float | None,
         idx: int,
         out_dir: Path,
-        *,
         classifier_label: str | None = None,
         localisation_label: str | None = None,
 ):
@@ -249,13 +251,25 @@ def _visualise_sample(
     plt.plot(np.arange(amps.size), amps, label="Amplitude")
     pred_label = "N/A" if pred_cls is None else str(pred_cls)
     pred_pos_str = "N/A" if pred_pos is None else f"{pred_pos:.3f}"
+    loss_str = "N/A" if loss_db is None else f"{loss_db:.2f} dB"
+    refl_str = "N/A" if reflectance_db is None else f"{reflectance_db:.2f} dB"
     model_title = f"Model - {classifier}"
     if loc_model:
         model_title += f" / {loc_model}"
     plt.title(
         f"Sample #{idx} | TrueC={true_cls} PredC={pred_label} | "
-        f"TruePos={true_pos:.3f}  PredPos={pred_pos_str} | SNR={snr:.2f} | "
+        f"TruePos={true_pos:.3f}  PredPos={pred_pos_str} | SNR={snr:.2f} dB | "
         f"{model_title}"
+    )
+    plt.gca().text(
+        0.02,
+        0.98,
+        f"SNR: {snr:.2f} dB\nLoss: {loss_str}\nReflectance: {refl_str}",
+        transform=plt.gca().transAxes,
+        ha="left",
+        va="top",
+        fontsize=11,
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="#f0f0f0", edgecolor="gray", alpha=0.9),
     )
     plt.xlabel("P-index")
     plt.ylabel("Amplitude")
@@ -2290,6 +2304,12 @@ def main(
 
         img_paths: list[Path] = []
         num_points = pos_count
+        loss_idx: int | None = None
+        reflectance_idx: int | None = None
+        if use_loss_reflectance:
+            lower_name_map = {name.lower(): i for i, name in enumerate(meas_cols)}
+            loss_idx = lower_name_map.get("loss")
+            reflectance_idx = lower_name_map.get("reflectance")
         for idx in llm_indices:
             idx_int = int(idx)
             amp_scaled = X_test[idx_int][1 : 1 + num_points].detach().cpu().numpy()
@@ -2299,6 +2319,19 @@ def main(
             )
             snr_scaled = X_test[idx_int][0].item()
             snr = float(snr_scaled * scaler.scale_[0] + scaler.mean_[0])
+            loss_val: float | None = None
+            reflectance_val: float | None = None
+            if loss_idx is not None:
+                loss_scaled = X_test[idx_int][loss_idx].item()
+                loss_val = float(
+                    loss_scaled * scaler.scale_[loss_idx] + scaler.mean_[loss_idx]
+                )
+            if reflectance_idx is not None:
+                refl_scaled = X_test[idx_int][reflectance_idx].item()
+                reflectance_val = float(
+                    refl_scaled * scaler.scale_[reflectance_idx]
+                    + scaler.mean_[reflectance_idx]
+                )
             t_cls = int(y_cls_test[idx_int].item())
             p_cls = pred_lookup.get(idx_int)
             t_pos = float(y_pos_test[idx_int].item())
@@ -2308,6 +2341,8 @@ def main(
                     classifier,
                     amp,
                     snr,
+                    loss_db=loss_val,
+                    reflectance_db=reflectance_val,
                     t_cls,
                     p_cls,
                     t_pos,
