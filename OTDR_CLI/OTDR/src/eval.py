@@ -30,6 +30,7 @@ from sklearn.metrics import (
     ConfusionMatrixDisplay,
     classification_report,
     roc_auc_score,
+    mean_absolute_error
 )
 from data_helper import (
     load_raw_dataframe,
@@ -253,7 +254,7 @@ def _visualise_sample(
         model_title += f" / {loc_model}"
     plt.title(
         f"Sample #{idx} | TrueC={true_cls} PredC={pred_label} | "
-        f"TruePos={true_pos:.3f}m  PredPos={pred_pos_str}m | SNR={snr:.2f} | "
+        f"TruePos={true_pos:.3f}  PredPos={pred_pos_str} | SNR={snr:.2f} | "
         f"{model_title}"
     )
     plt.xlabel("P-index")
@@ -348,7 +349,7 @@ def _plot_radial(
 
     # ---------- Enhanced Radial Accuracy Plot ----------
     if classification_available and has_classes:
-        fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(10, 10))
+        fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(12, 12))
 
         # Use a perceptually uniform colormap
         colors = plt.cm.RdYlGn(np.clip(np.nan_to_num(accuracies, nan=0.0), 0, 1))
@@ -361,28 +362,35 @@ def _plot_radial(
             color=colors,
             alpha=0.9,
             edgecolor='white',
-            linewidth=1.5,
+            linewidth=1.6,
         )
 
         ax.set_theta_direction(-1)
         ax.set_theta_offset(np.pi / 2.0)
         ax.set_ylim(0, 1.0)
+
+        # Remove degree markers / theta tick labels
+        ax.set_xticks([])
+        ax.set_xticklabels([])
+
         ax.set_yticks([0.2, 0.4, 0.6, 0.8, 1.0])
-        ax.set_yticklabels(['20%', '40%', '60%', '80%', '100%'], fontsize=9)
+        ax.set_yticklabels(['20%', '40%', '60%', '80%', '100%'], fontsize=10, fontweight='bold')
+        ax.tick_params(axis='y', pad=6)
         ax.grid(True, alpha=0.3, linestyle='--')
 
         # Add labels with class ID and support
         for angle, bar, cls, support, acc in zip(angles, bars, class_ids, supports, accuracies):
             # Position label outside the bar
-            label_radius = 1.15
+            label_radius = 0.9
             ax.text(
                 angle,
                 label_radius,
                 f"Class {cls}\n({support})",
                 ha="center",
                 va="center",
-                fontsize=10,
+                fontsize=11,
                 fontweight='bold',
+                bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="none", alpha=0.85),
             )
             # Add accuracy percentage inside/near bar
             if isinstance(acc, (int, float)) and acc > 0.15:
@@ -392,26 +400,26 @@ def _plot_radial(
                     f"{acc * 100:.0f}%",
                     ha="center",
                     va="center",
-                    fontsize=8,
+                    fontsize=9,
                     color='white' if acc > 0.5 else 'black',
                     fontweight='bold',
                 )
 
         ax.set_title(
             f"Per-Class Accuracy (Radial View) Model - {classifier}",
-            fontsize=14,
+            fontsize=16,
             fontweight='bold',
-            pad=20,
+            pad=36,
         )
-        plt.tight_layout()
+        plt.tight_layout(pad=1.6)
         radial_path = out_dir / f"radial_class_accuracy{suffix}.png"
         print(f"Saving radial accuracy plot to {radial_path}")  # noqa: T201
-        plt.savefig(radial_path, dpi=200, bbox_inches='tight')
+        plt.savefig(radial_path, dpi=220, bbox_inches='tight')
         plt.close(fig)
         artifacts["radial_accuracy"] = radial_path
 
         # ---------- Enhanced Cartesian Accuracy Bar Chart ----------
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(12.5, 6.5))
 
         # Color bars based on performance thresholds
         bar_colors = [
@@ -425,40 +433,47 @@ def _plot_radial(
             alpha=0.85,
             color=bar_colors,
             edgecolor='black',
-            linewidth=0.8,
+            linewidth=0.9,
         )
 
-        ax.set_xlabel("Class ID", fontsize=12, fontweight='bold')
-        ax.set_ylabel("Accuracy", fontsize=12, fontweight='bold')
-        ax.set_title(f"Per-Class Accuracy Model - {classifier}", fontsize=14, fontweight='bold')
-        ax.set_ylim(0, 1.05)
+        ax.set_xlabel("Class ID", fontsize=13, fontweight='bold', labelpad=10)
+        ax.set_ylabel("Accuracy", fontsize=13, fontweight='bold', labelpad=10)
+        ax.set_title(
+            f"Per-Class Accuracy Model - {classifier}",
+            fontsize=15,
+            fontweight='bold',
+            pad=18
+        )
+        ax.set_ylim(0, 1.08)
         ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.5, label='80% threshold')
         ax.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5, label='60% threshold')
         ax.grid(axis='y', alpha=0.3, linestyle=':')
-        ax.legend(loc='lower right')
+        ax.tick_params(axis="both", labelsize=11, width=1.0, length=6)
+        ax.legend(loc='lower right', fontsize=10, frameon=True, fancybox=True, framealpha=0.9)
 
         # Add value labels on top of bars
         for cls, acc, support, bar in zip(class_ids, accuracies, supports, bars):
             height = bar.get_height()
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
-                height + 0.02,
+                height + 0.025,
                 f"{acc if np.isfinite(acc) else 0.0:.2f}\nn={support}",
                 ha="center",
                 va="bottom",
-                fontsize=9,
+                fontsize=9.5,
                 fontweight='bold',
+                bbox=dict(boxstyle="round,pad=0.18", facecolor="white", edgecolor="none", alpha=0.8),
             )
 
-        plt.tight_layout()
+        plt.tight_layout(pad=1.2)
         acc_bar_path = out_dir / f"accuracy_per_class_bar{suffix}.png"
         print(f"Saving accuracy bar plot to {acc_bar_path}")  # noqa: T201
-        plt.savefig(acc_bar_path, dpi=200, bbox_inches='tight')
+        plt.savefig(acc_bar_path, dpi=220, bbox_inches='tight')
         plt.close(fig)
         artifacts["accuracy_per_class_bar"] = acc_bar_path
 
         # ---------- Accuracy vs Support Scatter Plot ----------
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(10.5, 6.5))
 
         scatter_colors = [
             '#d32f2f' if (acc < 0.6) else '#ffa726' if (acc < 0.8) else '#66bb6a'
@@ -468,9 +483,9 @@ def _plot_radial(
         ax.scatter(
             supports,
             np.nan_to_num(accuracies, nan=0.0),
-            s=200,
+            s=210,
             c=scatter_colors,
-            alpha=0.7,
+            alpha=0.75,
             edgecolors='black',
             linewidth=1.5,
         )
@@ -480,28 +495,31 @@ def _plot_radial(
             ax.annotate(
                 f"C{cls}",
                 (sup, acc if np.isfinite(acc) else 0.0),
-                fontsize=9,
+                fontsize=9.5,
                 fontweight='bold',
                 ha='center',
                 va='center',
+                bbox=dict(boxstyle="round,pad=0.12", facecolor="white", edgecolor="none", alpha=0.75),
             )
 
-        ax.set_xlabel("Number of Samples (Support)", fontsize=12, fontweight='bold')
-        ax.set_ylabel("Accuracy", fontsize=12, fontweight='bold')
+        ax.set_xlabel("Number of Samples (Support)", fontsize=13, fontweight='bold', labelpad=10)
+        ax.set_ylabel("Accuracy", fontsize=13, fontweight='bold', labelpad=10)
         ax.set_title(
             f"Classification Performance vs Sample Support Model - {classifier}",
-            fontsize=14,
+            fontsize=15,
             fontweight='bold',
+            pad=18,
         )
-        ax.set_ylim(-0.05, 1.05)
+        ax.set_ylim(-0.05, 1.07)
         ax.axhline(y=0.8, color='green', linestyle='--', alpha=0.5)
         ax.axhline(y=0.6, color='orange', linestyle='--', alpha=0.5)
         ax.grid(True, alpha=0.3, linestyle=':')
+        ax.tick_params(axis="both", labelsize=11, width=1.0, length=6)
 
-        plt.tight_layout()
+        plt.tight_layout(pad=1.2)
         scatter_path = out_dir / f"accuracy_vs_support{suffix}.png"
         print(f"Saving accuracy vs support plot to {scatter_path}")  # noqa: T201
-        plt.savefig(scatter_path, dpi=200, bbox_inches='tight')
+        plt.savefig(scatter_path, dpi=220, bbox_inches='tight')
         plt.close(fig)
         artifacts["accuracy_vs_support"] = scatter_path
 
@@ -510,42 +528,49 @@ def _plot_radial(
         mae_plot_vals = [0.0 if not np.isfinite(v) else v for v in mae_errors]
         max_mae = max(mae_plot_vals) if mae_plot_vals else 1.0
 
-        fig, ax = plt.subplots(figsize=(12, 10))
+        fig, ax = plt.subplots(figsize=(12.5, 9.0))
 
         # Color bars based on error magnitude
         bar_colors = ['#66bb6a' if mae < max_mae * 0.3 else '#ffa726' if mae < max_mae * 0.6
         else '#d32f2f' for mae in mae_plot_vals]
 
-        bars = ax.bar(class_ids, mae_plot_vals, alpha=0.85, color=bar_colors,
-                      edgecolor='black', linewidth=0.8)
+        bars = ax.bar(class_ids, mae_plot_vals, alpha=0.88, color=bar_colors,
+                      edgecolor='black', linewidth=0.9)
 
-        ax.set_xlabel("Class ID", fontsize=12, fontweight='bold')
-        ax.set_ylabel("Mean Absolute Error (m)", fontsize=12, fontweight='bold')
-        ax.set_title(f"Per-Class Localisation Error Model - {classifier}", fontsize=14, fontweight='bold')
+        ax.set_xlabel("Class ID", fontsize=13, fontweight='bold', labelpad=10)
+        ax.set_ylabel("Mean Absolute Error", fontsize=13, fontweight='bold', labelpad=10)
+        ax.set_title(
+            f"Per-Class Localisation Error Model - {classifier}",
+            fontsize=15,
+            fontweight='bold',
+            pad=18
+        )
         ax.grid(axis='y', alpha=0.3, linestyle=':')
+        ax.tick_params(axis="both", labelsize=11, width=1.0, length=6)
 
         # Add value labels
         for cls, mae, support, bar in zip(class_ids, mae_plot_vals, supports, bars):
             height = bar.get_height()
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
-                height + max_mae * 0.02,
-                f"{mae:.2f}m\nn={support}",
+                height + max_mae * 0.025,
+                f"{mae:.2f} \nn={support}",
                 ha="center",
                 va="bottom",
-                fontsize=9,
+                fontsize=9.5,
                 fontweight='bold',
+                bbox=dict(boxstyle="round,pad=0.18", facecolor="white", edgecolor="none", alpha=0.8),
             )
 
-        plt.tight_layout()
+        plt.tight_layout(pad=1.3)
         loc_err_path = out_dir / f"localisation_error_per_class{suffix}.png"
         print(f"Saving localisation error plot to {loc_err_path}")  # noqa: T201
-        plt.savefig(loc_err_path, dpi=400)
+        plt.savefig(loc_err_path, dpi=400, bbox_inches='tight')
         plt.close(fig)
         artifacts["localisation_error_per_class"] = loc_err_path
 
         # ---------- Radial Localisation Error Plot ----------
-        fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(10, 12))
+        fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(12, 12))
 
         # Normalize errors for color mapping (inverted - lower error = better = greener)
         norm_errors = np.array(mae_plot_vals)
@@ -564,45 +589,56 @@ def _plot_radial(
             color=colors,
             alpha=0.9,
             edgecolor='white',
-            linewidth=1.5,
+            linewidth=1.6,
         )
 
         ax.set_theta_direction(-1)
         ax.set_theta_offset(np.pi / 2.0)
         ax.set_ylim(0, max_mae * 1.1)
+
+        # Remove degree markers / theta tick labels
+        ax.set_xticks([])
+        ax.set_xticklabels([])
+
         ax.grid(True, alpha=0.3, linestyle='--')
+        ax.tick_params(axis='y', labelsize=15, width=1.0, length=5, pad=6)
 
         # Add labels
         for angle, bar, cls, support, mae in zip(angles, bars, class_ids, supports, mae_plot_vals):
-            label_radius = max_mae * 1.2
+            label_radius = max_mae * 0.85
             ax.text(
                 angle,
                 label_radius,
                 f"Class {cls}\n({support})",
                 ha="center",
                 va="center",
-                fontsize=10,
+                fontsize=20,
                 fontweight='bold',
+                bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="none", alpha=0.85),
             )
             # Add error value
             if mae > max_mae * 0.15:
                 ax.text(
                     angle,
                     mae / 2,
-                    f"{mae:.2f}m",
+                    f"{mae:.2f}",
                     ha="center",
                     va="center",
-                    fontsize=8,
+                    fontsize=9,
                     color='white' if mae > max_mae * 0.5 else 'black',
                     fontweight='bold',
                 )
 
-        ax.set_title(f"Per-Class Localisation Error (Radial View) Model - {classifier}",
-                     fontsize=14, fontweight='bold', pad=20)
-        plt.tight_layout()
+        ax.set_title(
+            f"Per-Class Localisation Error - {classifier}",
+            fontsize=16,
+            fontweight='bold',
+            pad=36
+        )
+        plt.tight_layout(pad=1.6)
         radial_loc_path = out_dir / f"radial_localisation_error{suffix}.png"
         print(f"Saving radial localisation error plot to {radial_loc_path}")  # noqa: T201
-        plt.savefig(radial_loc_path, dpi=300, bbox_inches='tight')
+        plt.savefig(radial_loc_path, dpi=320, bbox_inches='tight')
         plt.close(fig)
         artifacts["radial_localisation_error"] = radial_loc_path
 
@@ -652,7 +688,7 @@ def _plot_localisation_vs_snr(
 
     def _make_plot(feature: np.ndarray, label: str, key: str) -> Path:
         path = out_dir / f"localisation_vs_{key}{suffix}.png"
-        fig, ax = plt.subplots(figsize=(11, 7))
+        fig, ax = plt.subplots(figsize=(12, 8))
         rng = np.random.default_rng(11)
         jitter_scale = max(float(np.ptp(feature)), 1e-5) * 0.004
         feature_jitter = feature + rng.normal(0.0, jitter_scale, size=feature.shape)
@@ -663,39 +699,41 @@ def _plot_localisation_vs_snr(
             pred_pos,
             c=error,
             cmap="coolwarm",
-            s=70,
+            s=75,
             alpha=0.82,
             edgecolors="k",
-            linewidths=0.3,
+            linewidths=0.35,
             label="Predicted position",
         )
         ax.scatter(
             feature_jitter,
             true_pos + true_offset,
             c="black",
-            s=18,
+            s=20,
             alpha=0.35,
             label="True position",
         )
-        ax.set_xlabel(label, fontsize=13, fontweight="bold", labelpad=10)
-        ax.set_ylabel("Position (m)", fontsize=13, fontweight="bold", labelpad=10)
+        ax.set_xlabel(label, fontsize=13.5, fontweight="bold", labelpad=12)
+        ax.set_ylabel("Position", fontsize=13.5, fontweight="bold", labelpad=12)
         ax.set_title(
             f"Localisation vs {label} (error-coloured) – {classifier}",
-            fontsize=15,
+            fontsize=16,
             fontweight="bold",
-            pad=18,
+            pad=26,
         )
-        ax.legend(loc="upper right", fontsize=11, frameon=True, fancybox=True, framealpha=0.9)
-        ax.tick_params(axis="both", labelsize=11, width=1.05, length=6)
-        ax.grid(True, linestyle=":", alpha=0.28)
+        ax.legend(loc="upper right", fontsize=11.5, frameon=True, fancybox=True, framealpha=0.9)
+        ax.tick_params(axis="both", labelsize=12, width=1.05, length=6)
+        ax.grid(True, linestyle=":", alpha=0.30)
         ax.set_facecolor("#fafafa")
         ax.set_axisbelow(True)
+
         cbar = plt.colorbar(sc, ax=ax)
-        cbar.set_label("Prediction error (m)", fontsize=12, fontweight="bold", labelpad=8)
-        cbar.ax.tick_params(labelsize=10, width=1.0)
-        plt.tight_layout(pad=1.4)
+        cbar.set_label("Prediction error", fontsize=12.5, fontweight="bold", labelpad=10)
+        cbar.ax.tick_params(labelsize=11, width=1.0)
+
+        plt.tight_layout(pad=1.6)
         print(f"Saving localisation vs {key} plot to {path}")  # noqa: T201
-        plt.savefig(path, dpi=170, bbox_inches="tight")
+        plt.savefig(path, dpi=175, bbox_inches="tight")
         plt.close(fig)
         return path
 
@@ -715,6 +753,7 @@ def _plot_localisation_vs_snr(
             )
 
     return plots
+
 
 
 def _b64(path: Path) -> str:
@@ -963,7 +1002,7 @@ def _llm_explain_with_self_reflection(
     Returns (direct_text, refined_text, digest_text, rag_used_flag) or None if no API key.
     """
     from datetime import datetime
-
+    return "","","",False
     api_key = cfg.OPENAI_API_KEY
     if not api_key:
         print("OPENAI_API_KEY not set – skipping LLM explanation")
@@ -1065,7 +1104,7 @@ def _llm_explain_with_self_reflection(
         + true_pred_rules
         + fault_classes_block
     )
-
+    print(f"SYSTEM_DIRECT:\n{system_direct}")
     # --- Build the actual API payload --------------------------------------
     user_direct_parts: List[dict[str, Any]] = [
         {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
@@ -1134,7 +1173,7 @@ def _llm_explain_with_self_reflection(
         + true_pred_rules
         + fault_classes_block
     )
-
+    print(f"[LLM] {system_reflect}")
     reflect_user_content: List[dict[str, Any]] = [
         {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
     ]
@@ -1176,7 +1215,7 @@ def _llm_explain_with_self_reflection(
         "\n1) \"Key Findings\" (bullet list)."
         "\n2) \"Impact vs SNR\" (describe confidence level relative to SNR trends in the figures)."
         "\n3) \"Next Actions\" (2–3 concrete steps)."
-        " Tie any localisation statements to metre positions, and flag uncertain ones."
+        " Tie any localisation statements to positions, and flag uncertain ones."
     )
     digest_content: List[dict[str, Any]] = [
         {"type": "input_text", "text": "Reference snippets:\n" + (ref_block or "*<no snippets retrieved>*")},
@@ -1188,7 +1227,7 @@ def _llm_explain_with_self_reflection(
     digest_content.append(
         {"type": "input_text", "text": "Improved explanation to convert:\n" + refined_text}
     )
-
+    print("System prompt: ", system_digest)
     # ---- LOG DIGEST INPUT (only text, no images in this pass) -------------
     digest_text_parts_for_log = [
         part for part in digest_content if part.get("type") == "input_text"
@@ -1603,7 +1642,7 @@ def main(
     wandb_prefix = "tcn_full_tst_" if tcn_full_bridge else ""
 
     if tcn_full_bridge:
-        classifier_display_label = "TCN_FULL"
+        classifier_display_label = "TCN"
         localisation_display_label = "TST"
 
     # ---------- load models ---------- #
@@ -2000,11 +2039,14 @@ def main(
         preds_cls = None
 
     if pos_hat is not None:
-        rmse = root_mean_squared_error(
-            y_pos_test[loc_indices].numpy(), pos_hat.numpy()
-        )
+        y_pos_true_global = y_pos_test[loc_indices].numpy()
+        y_pos_pred_global = pos_hat.numpy()
+
+        rmse = root_mean_squared_error(y_pos_true_global, y_pos_pred_global)
+        mae = mean_absolute_error(y_pos_true_global, y_pos_pred_global)
     else:
         rmse = None
+        mae = None
 
     classifier_plot_label = classifier_display_label
     if localisation_display_label:
@@ -2020,7 +2062,7 @@ def main(
         acc = accuracy_score(y_cls_test[idx_to_eval].numpy(), preds_cls.numpy())
         if rmse is not None:
             print(
-                f"Eval subset size = {idx_to_eval.size(0)} | Acc = {acc:.3f} | RMSE = {rmse:.3f}"
+                f"Eval subset size = {idx_to_eval.size(0)} | Acc = {acc:.3f} | RMSE = {rmse:.3f} | MAE = {mae:.3f}"
             )  # noqa: T201
         else:
             print(
@@ -2071,7 +2113,7 @@ def main(
     print(
         f"[EVAL] {classifier_plot_label} evaluation completed in "
         f"{perf_counter() - eval_start:.2f}s"
-    )
+    )# TODO
 
     scatter_path: Path | None = None
     scatter_key: str | None = None
