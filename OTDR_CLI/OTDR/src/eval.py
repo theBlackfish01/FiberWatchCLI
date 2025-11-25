@@ -2113,7 +2113,7 @@ def main(
     print(
         f"[EVAL] {classifier_plot_label} evaluation completed in "
         f"{perf_counter() - eval_start:.2f}s"
-    )# TODO
+    )
 
     scatter_path: Path | None = None
     scatter_key: str | None = None
