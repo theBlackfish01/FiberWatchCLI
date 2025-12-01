@@ -295,7 +295,7 @@ def _plot_radial(
     Create multiple per-class diagnostic plots:
     - Radial polar bar chart of per-class accuracy with enhanced styling.
     - Bar chart of per-class accuracy (Cartesian) with color-coded performance.
-    - Per-class localisation error (MAE) when localisation is available.
+    - Per-class localisation error (RMSE) when localisation is available.
     - Radial plot of localisation errors per class.
     - Combined accuracy vs support scatter plot.
 
@@ -336,7 +336,7 @@ def _plot_radial(
 
     accuracies: list[float] = []
     supports: list[int] = []
-    mae_errors: list[float] = []
+    rmse_errors: list[float] = []
 
     suffix = f"_{classifier.lower()}"
     if include_loss_reflectance:
@@ -352,14 +352,14 @@ def _plot_radial(
             else:
                 accuracies.append(np.nan)
             if has_loc:
-                err = np.abs(y_pos_pred[mask] - y_pos_true[mask])
-                mae = float(err.mean())
-                mae_errors.append(mae)
+                err = y_pos_pred[mask] - y_pos_true[mask]
+                rmse = float(np.sqrt(np.mean(np.square(err))))
+                rmse_errors.append(rmse)
             else:
-                mae_errors.append(np.nan)
+                rmse_errors.append(np.nan)
         else:
             accuracies.append(np.nan if not classification_available else 0.0)
-            mae_errors.append(np.nan)
+            rmse_errors.append(np.nan)
 
     # ---------- Enhanced Radial Accuracy Plot ----------
     if classification_available and has_classes:
@@ -538,21 +538,21 @@ def _plot_radial(
         artifacts["accuracy_vs_support"] = scatter_path
 
     # ---------- Enhanced Localisation Error Bar Chart ----------
-    if has_loc and np.any(np.isfinite(mae_errors)):
-        mae_plot_vals = [0.0 if not np.isfinite(v) else v for v in mae_errors]
-        max_mae = max(mae_plot_vals) if mae_plot_vals else 1.0
+    if has_loc and np.any(np.isfinite(rmse_errors)):
+        rmse_plot_vals = [0.0 if not np.isfinite(v) else v for v in rmse_errors]
+        max_rmse = max(rmse_plot_vals) if rmse_plot_vals else 1.0
 
         fig, ax = plt.subplots(figsize=(12.5, 9.0))
 
         # Color bars based on error magnitude
-        bar_colors = ['#66bb6a' if mae < max_mae * 0.3 else '#ffa726' if mae < max_mae * 0.6
-        else '#d32f2f' for mae in mae_plot_vals]
+        bar_colors = ['#66bb6a' if rmse < max_rmse * 0.3 else '#ffa726' if rmse < max_rmse * 0.6
+        else '#d32f2f' for rmse in rmse_plot_vals]
 
-        bars = ax.bar(class_ids, mae_plot_vals, alpha=0.88, color=bar_colors,
+        bars = ax.bar(class_ids, rmse_plot_vals, alpha=0.88, color=bar_colors,
                       edgecolor='black', linewidth=0.9)
 
         ax.set_xlabel("Class ID", fontsize=13, fontweight='bold', labelpad=10)
-        ax.set_ylabel("Mean Absolute Error", fontsize=13, fontweight='bold', labelpad=10)
+        ax.set_ylabel("Root Mean Squared Error", fontsize=13, fontweight='bold', labelpad=10)
         ax.set_title(
             f"Per-Class Localisation Error Model - {classifier}",
             fontsize=15,
@@ -563,12 +563,12 @@ def _plot_radial(
         ax.tick_params(axis="both", labelsize=11, width=1.0, length=6)
 
         # Add value labels
-        for cls, mae, support, bar in zip(class_ids, mae_plot_vals, supports, bars):
+        for cls, rmse, support, bar in zip(class_ids, rmse_plot_vals, supports, bars):
             height = bar.get_height()
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
-                height + max_mae * 0.025,
-                f"{mae:.2f} \nn={support}",
+                height + max_rmse * 0.025,
+                f"{rmse:.2f} \nn={support}",
                 ha="center",
                 va="bottom",
                 fontsize=9.5,
@@ -587,9 +587,9 @@ def _plot_radial(
         fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(12, 12))
 
         # Normalize errors for color mapping (inverted - lower error = better = greener)
-        norm_errors = np.array(mae_plot_vals)
-        if max_mae > 0:
-            norm_errors = 1.0 - (norm_errors / max_mae)
+        norm_errors = np.array(rmse_plot_vals)
+        if max_rmse > 0:
+            norm_errors = 1.0 - (norm_errors / max_rmse)
         else:
             norm_errors = np.ones_like(norm_errors)
 
@@ -597,7 +597,7 @@ def _plot_radial(
 
         bars = ax.bar(
             angles,
-            mae_plot_vals,
+            rmse_plot_vals,
             width=width * 0.85,
             bottom=0.0,
             color=colors,
@@ -608,7 +608,7 @@ def _plot_radial(
 
         ax.set_theta_direction(-1)
         ax.set_theta_offset(np.pi / 2.0)
-        ax.set_ylim(0, max_mae * 1.1)
+        ax.set_ylim(0, max_rmse * 1.1)
 
         # Remove degree markers / theta tick labels
         ax.set_xticks([])
@@ -618,8 +618,8 @@ def _plot_radial(
         ax.tick_params(axis='y', labelsize=15, width=1.0, length=5, pad=6)
 
         # Add labels
-        for angle, bar, cls, support, mae in zip(angles, bars, class_ids, supports, mae_plot_vals):
-            label_radius = max_mae * 0.85
+        for angle, bar, cls, support, rmse in zip(angles, bars, class_ids, supports, rmse_plot_vals):
+            label_radius = max_rmse * 0.85
             ax.text(
                 angle,
                 label_radius,
@@ -631,15 +631,15 @@ def _plot_radial(
                 bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="none", alpha=0.85),
             )
             # Add error value
-            if mae > max_mae * 0.15:
+            if rmse > max_rmse * 0.15:
                 ax.text(
                     angle,
-                    mae / 2,
-                    f"{mae:.2f}",
+                    rmse / 2,
+                    f"{rmse:.2f}",
                     ha="center",
                     va="center",
                     fontsize=9,
-                    color='white' if mae > max_mae * 0.5 else 'black',
+                    color='white' if rmse > max_rmse * 0.5 else 'black',
                     fontweight='bold',
                 )
 
