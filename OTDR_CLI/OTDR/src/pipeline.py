@@ -22,6 +22,7 @@ from sklearn.metrics import (
     root_mean_squared_error,
 )
 from sklearn.preprocessing import StandardScaler
+from scipy.stats import gaussian_kde
 
 from data_helper import (
     load_raw_dataframe,
@@ -237,7 +238,33 @@ def _run_tst_localisation(
     if evaluated > 0:
         scatter_path = out_dir / "tst_localisation_scatter.png"
         fig, ax = plt.subplots()
-        ax.scatter(pos_true, pos_pred, alpha=0.6, edgecolor="none")
+        
+        errors = pos_pred - pos_true
+
+        # Filter out True Negatives (where both true and pred are 0)
+        mask = (pos_true != 0) | (pos_pred != 0)
+        if mask.any():
+            filtered_errors = errors[mask]
+        else:
+            filtered_errors = errors
+
+        mean_error = np.mean(filtered_errors)
+        var_error = np.var(filtered_errors)
+        mae_error = np.mean(np.abs(filtered_errors))
+        rmse_error = np.sqrt(np.mean(filtered_errors**2))
+        print(
+            f"[TST] Localisation Error (excluding TNs): "
+            f"Mean={mean_error:.4f}, Variance={var_error:.4f}, "
+            f"MAE={mae_error:.4f}, RMSE={rmse_error:.4f}"
+        )
+        
+        ax.scatter(
+            pos_true, 
+            pos_pred, 
+            alpha=0.6, 
+            edgecolor="none", 
+            label="Predictions"
+        )
         diag_min = float(min(pos_true.min(), pos_pred.min()))
         diag_max = float(max(pos_true.max(), pos_pred.max()))
         ax.plot(
@@ -249,16 +276,66 @@ def _run_tst_localisation(
         )
         ax.set_xlabel("True fault position")
         ax.set_ylabel("Predicted fault position")
-        ax.set_title("TST localisation – predictions vs. ground truth")
-        ax.legend()
+        ax.set_title("TST localisation")
+        
+        # Add a text box for metrics
+        textstr = '\n'.join((
+            r'$\mathrm{MAE}=%.4f$' % (mae_error, ),
+            r'$\mathrm{RMSE}=%.4f$' % (rmse_error, )))
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=11,
+                verticalalignment='top', bbox=props)
+                
+        ax.legend(loc="lower right")
         fig.tight_layout()
         fig.savefig(scatter_path, dpi=150)
         plt.close(fig)
         plot_paths["scatter"] = scatter_path
 
+        # ---------------------------------------------------------------------
+        # Density (KDE) plot for Actual vs Predicted
+        # ---------------------------------------------------------------------
+        try:
+            # Filter out 0.0s for density plot to focus on fault distribution
+            dens_true = pos_true[pos_true > 0]
+            dens_pred = pos_pred[pos_pred > 0]
+
+            if dens_true.size > 1 and dens_pred.size > 1:
+                density_path = out_dir / "tst_density_kde.png"
+                fig_kde, ax_kde = plt.subplots(figsize=(10, 6))
+
+                # Compute KDE
+                kde_true = gaussian_kde(dens_true)
+                kde_pred = gaussian_kde(dens_pred)
+                
+                # Evaluation grid
+                x_grid = np.linspace(
+                    min(dens_true.min(), dens_pred.min()),
+                    max(dens_true.max(), dens_pred.max()),
+                    500
+                )
+
+                ax_kde.plot(x_grid, kde_true(x_grid), color="tab:green", label="Actual Faults", linewidth=2)
+                ax_kde.fill_between(x_grid, kde_true(x_grid), color="tab:green", alpha=0.2)
+                
+                ax_kde.plot(x_grid, kde_pred(x_grid), color="tab:blue", label="Predicted Faults", linewidth=2, linestyle="--")
+                ax_kde.fill_between(x_grid, kde_pred(x_grid), color="tab:blue", alpha=0.1)
+
+                ax_kde.set_xlabel("Fault Position (normalized)", fontsize=12, fontweight="bold")
+                ax_kde.set_ylabel("Density", fontsize=12, fontweight="bold")
+                ax_kde.set_title("Fault Position Density (KDE) - TST", fontsize=14, fontweight="bold")
+                ax_kde.legend(fontsize=11)
+                ax_kde.grid(True, linestyle=":", alpha=0.3)
+                fig_kde.tight_layout()
+                fig_kde.savefig(density_path, dpi=150)
+                plt.close(fig_kde)
+                plot_paths["density"] = density_path
+        except Exception as exc:
+            pass  # KDE can fail on degenerate data
+
         error_path = out_dir / "tst_localisation_error_hist.png"
         fig, ax = plt.subplots()
-        errors = pos_pred - pos_true
+        # errors already calculated
         ax.hist(errors, bins=20, color="tab:blue", alpha=0.75)
         ax.set_xlabel("Prediction error")
         ax.set_ylabel("Count")
@@ -269,10 +346,10 @@ def _run_tst_localisation(
         plot_paths["error_hist"] = error_path
 
     return Stage3Result(
-        rmse=rmse,
-        mae=mae,
-        median_ae=median_ae,
-        bias=bias,
+        rmse=rmse_error if mask.any() else None,
+        mae=mae_error if mask.any() else None,
+        median_ae=float(np.median(np.abs(filtered_errors))) if mask.any() else None,
+        bias=mean_error if mask.any() else None,
         evaluated_samples=evaluated,
         plot_paths=plot_paths,
     )

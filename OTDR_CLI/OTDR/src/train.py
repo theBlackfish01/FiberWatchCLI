@@ -12,7 +12,65 @@ python -m src.train --mode tcn
 
 # Train all 
 python -m src.train --mode all
+
+# Train Siamese
+python -m src.train --mode siamese
 """
+
+from pathlib import Path
+from time import perf_counter
+from dataclasses import fields, is_dataclass
+import json
+from typing import Tuple, Optional
+
+import click
+import numpy as np
+import torch
+from sklearn.metrics import accuracy_score, root_mean_squared_error, roc_auc_score, roc_curve, classification_report
+
+# ---------------------------------------------------------------------------
+# Local project imports
+# ---------------------------------------------------------------------------
+
+from data_helper import (
+    SplitTensors,
+    load_raw_dataframe,
+    make_splits,
+    fit_scaler,
+    tensorise_splits,
+    measurement_columns,
+    summarise_feature_layout,
+    build_feature_config,
+)
+
+from model_functions.gruae import (
+    VectorGRUAE,
+    TrainConfig as AEConfig,
+    train_gru_ae,
+    reconstruction_error,
+)
+from model_functions.tcn import (
+    OTDR_TCN,
+    TrainConfig as TCNConfig,
+    train_tcn,
+    predict as predict_tcn
+)
+from model_functions.tcn_binary import (
+    OTDR_TCNBinary,
+    TrainConfig as TCNBinaryConfig,
+    train_tcn_binary,
+    predict as predict_tcn_binary,
+)
+from model_functions.tst import (
+    TimeSeriesTransformer,
+    TrainConfig as TSTConfig,
+    train_tst,
+    predict as predict_tst,
+)
+from model_functions.siamese import (
+    train_siamese,
+    TrainConfig as SiameseConfig,
+)
 
 from pathlib import Path
 from time import perf_counter
@@ -311,27 +369,23 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
 # Click CLI
 # ---------------------------------------------------------------------------
 
-@click.command(
-    context_settings=dict(help_option_names=["-h", "--help"])
-)
+@click.command(context_settings=dict(help_option_names=["-h", "--help"]))
 @click.option(
     "--mode",
-    type=click.Choice(["gru_ae", "tcn", "tcn_binary", "tst", "all"], case_sensitive=False),
+    type=click.Choice(["gru_ae", "tcn", "binary", "tst", "all", "siamese"], case_sensitive=False),
     required=True,
-    help="Which component(s) to train.",
+    help="Which model(s) to train.",
 )
 @click.option(
     "--data", "data_path",
-    type=click.Path(dir_okay=False, path_type=Path),
-    default=Path("data/OTDR_DATA.csv"),
-    show_default=True,
-    help="Path to cleaned OTDR dataset (CSV or Parquet).",
+    type=click.Path(exists=True, file_okay=True, dir_okay=True),
+    default="data/processed",
+    help="Path to dataset (CSV file or Parquet directory).",
 )
 @click.option(
     "--out-dir",
-    type=str,
+    type=click.Path(file_okay=False, dir_okay=True),
     default="models",
-    show_default=True,
     help="Directory for saved weights & metadata.",
 )
 @click.option(
@@ -342,13 +396,9 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
 )
 @click.option(
     "--train-noise-level",
-    type=click.FloatRange(min=0.0),
+    type=float,
     default=0.0,
-    show_default=True,
-    help=(
-        "Standard deviation of Gaussian noise added to the scaled training/"
-        "validation/test features. Set to 0 to disable noise injection."
-    ),
+    help="Standard deviation of Gaussian noise added to features.",
 )
 @click.option(
     "--tcn-anomaly-only/--tcn-all-data",
@@ -359,22 +409,30 @@ def _with_class_feature(split: SplitTensors) -> SplitTensors:
 @click.option(
     "--use-loss-reflectance",
     is_flag=True,
-    help=(
-            "Append 'loss' and 'Reflectance' to the measurement vector and train models "
-            "with those leakage-prone features."
-    ),
+    default=False,
+    help="Include 'loss' and 'Reflectance' columns in the input features.",
 )
+@click.option("--epochs", default=None, type=int, help="Override default epochs (Siamese only).")
+@click.option("--batch-size", default=None, type=int, help="Override batch size (Siamese only).")
+@click.option("--lr", default=None, type=float, help="Override learning rate (Siamese only).")
 def main(
-        mode,
-        data_path,
-        out_dir,
-        device,
-        train_noise_level,
-        tcn_anomaly_only,
-        use_loss_reflectance
-) -> None:
+    mode: str,
+    data_path: str,
+    out_dir: str,
+    device: str | None,
+    train_noise_level: float,
+    tcn_anomaly_only: bool,
+    use_loss_reflectance: bool,
+    epochs: int | None,
+    batch_size: int | None,
+    lr: float | None,
+):
     out_dir = Path(out_dir)
     _ensure_dir(out_dir)
+    
+    processed_path = Path(data_path)
+    
+    # ----------------------------- Device ---------------------------------#
 
     # ----------------------------- Data -----------------------------------#
     df = load_raw_dataframe(data_path)
@@ -633,6 +691,21 @@ def main(
         }
         with open(tcn_binary_path.with_suffix(".json"), "w") as fp:
             json.dump(tcn_binary_meta, fp, indent=2)
+
+    # ----------------------------- Siamese ---------------------------------#
+    if mode == "siamese":
+        print("\n=== Training Siamese Network ===")
+        cfg = SiameseConfig()
+        if epochs:
+            cfg.epochs = epochs
+        if batch_size:
+            cfg.batch_size = batch_size
+        if lr:
+            cfg.lr = lr
+        if device:
+            cfg.device = device
+            
+        train_siamese(processed_path, cfg, OTDR_TCN)
 
     # ----------------------------- TST -------------------------------------#
     if mode in {"tst", "all"}:

@@ -19,10 +19,13 @@ from typing import Any, List, Sequence, Tuple
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.stats import gaussian_kde
 import shap
 from lime.lime_tabular import LimeTabularExplainer
 import torch
 import wandb
+from model_functions.siamese import SiameseNetwork
+from model_functions.tcn import OTDR_TCN
 from sklearn.metrics import (
     accuracy_score,
     root_mean_squared_error,
@@ -39,6 +42,7 @@ from data_helper import (
     measurement_columns,
     summarise_feature_layout,
     build_feature_config,
+    summarise_feature_layout
 )
 from model_functions.gruae import VectorGRUAE, reconstruction_error
 from model_functions.tcn import predict as predict_tcn
@@ -55,6 +59,7 @@ from pathlib import Path
 from rag import build_reference_block, retrieve
 from openai import OpenAI
 import warnings
+import matplotlib.patheffects as path_effects
 
 
 warnings.filterwarnings("ignore", category=FutureWarning)  # noqa: T201
@@ -567,11 +572,11 @@ def _plot_radial(
             height = bar.get_height()
             ax.text(
                 bar.get_x() + bar.get_width() / 2,
-                height + max_rmse * 0.025,
-                f"{rmse:.2f} \nn={support}",
+                height + max_rmse * 0.02,
+                f"{rmse:.3f}",
                 ha="center",
                 va="bottom",
-                fontsize=9.5,
+                fontsize=12,
                 fontweight='bold',
                 bbox=dict(boxstyle="round,pad=0.18", facecolor="white", edgecolor="none", alpha=0.8),
             )
@@ -615,7 +620,7 @@ def _plot_radial(
         ax.set_xticklabels([])
 
         ax.grid(True, alpha=0.3, linestyle='--')
-        ax.tick_params(axis='y', labelsize=15, width=1.0, length=5, pad=6)
+        ax.tick_params(axis='y', labelsize=7, width=1.0, length=5, pad=6)
 
         # Add labels
         for angle, bar, cls, support, rmse in zip(angles, bars, class_ids, supports, rmse_plot_vals):
@@ -628,19 +633,21 @@ def _plot_radial(
                 va="center",
                 fontsize=20,
                 fontweight='bold',
-                bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="none", alpha=0.85),
+                bbox=dict(boxstyle="round,pad=0.25", facecolor="white", edgecolor="black", alpha=0.85),
             )
             # Add error value
-            if rmse > max_rmse * 0.15:
+            if rmse > max_rmse * 0.05:
                 ax.text(
                     angle,
                     rmse / 2,
-                    f"{rmse:.2f}",
+                    f"{rmse:.3f}",
                     ha="center",
                     va="center",
-                    fontsize=9,
-                    color='white' if rmse > max_rmse * 0.5 else 'black',
+                    fontsize=14,
+                    color='white',
                     fontweight='bold',
+                    path_effects=[path_effects.Stroke(linewidth=2, foreground='black'),
+                                    path_effects.Normal()],
                 )
 
         ax.set_title(
@@ -1016,7 +1023,6 @@ def _llm_explain_with_self_reflection(
     Returns (direct_text, refined_text, digest_text, rag_used_flag) or None if no API key.
     """
     from datetime import datetime
-    return "","","",False
     api_key = cfg.OPENAI_API_KEY
     if not api_key:
         print("OPENAI_API_KEY not set – skipping LLM explanation")
@@ -1029,6 +1035,7 @@ def _llm_explain_with_self_reflection(
 
     # ---------- Fault class block (shared) ---------------------------------
     fault_classes_block = (
+        "Position context: The given position value × 10 ≈ physical distance in meters (e.g., 0.10 = 1.0m).\n"
         "Fault Classes are labelled as follows:\n"
         "id\tfault type\t\t\ttypical signs\n"
         "0\tnormal / no fault\t\tbaseline trace, loss ≈ 0, position = 0\n"
@@ -1113,7 +1120,7 @@ def _llm_explain_with_self_reflection(
         "You are an optical-fibre fault-analysis expert. "
         "Given the following figures (OTDR amplitude over P-points; titles include TrueC/PredC and positions), "
         f"write a concise explanation for each figure predicted by a {classifier_type} model. "
-        "Explain fault type, position, likely causes, and concrete next actions. "
+        "Explain fault type, position (in meters), likely causes, and concrete next actions. "
         + method_clause
         + true_pred_rules
         + fault_classes_block
@@ -1265,9 +1272,9 @@ def _llm_explain_with_self_reflection(
 @click.command(context_settings=dict(help_option_names=["-h", "--help"]))
 @click.option(
     "--mode",
-    type=click.Choice(["pipeline", "direct"], case_sensitive=False),
+    type=click.Choice(["pipeline", "direct", "siamese"], case_sensitive=False),
     required=True,
-    help="Evaluation mode: pipeline (GRU-AE filter) or direct (full test set).",
+    help="Evaluation mode: pipeline, direct, or siamese.",
 )
 @click.option(
     "--classifier",
@@ -1338,6 +1345,12 @@ def _llm_explain_with_self_reflection(
     help="Optional override for the TST localisation checkpoint (pipeline mode).",
 )
 @click.option(
+    "--siamese-path",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Path to the Siamese encoder checkpoint (for siamese mode).",
+)
+@click.option(
     "--num-samples",
     type=click.IntRange(0, None),
     default=18,
@@ -1405,6 +1418,11 @@ def _llm_explain_with_self_reflection(
         "Adds overhead; disable for routine evaluation runs."
     ),
 )
+@click.option(
+    "--use-llm",
+    is_flag=True,
+    help="Enable LLM-based explanation generation (requires OpenAI API key).",
+)
 def main(
     mode,
     classifier,
@@ -1426,9 +1444,102 @@ def main(
     extra_features,
     use_loss_reflectance,
     profile_flops,
+    use_llm,
+    siamese_path,
 ):  # noqa: C901
     out_dir = Path("outputs") / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # -------------------------------------------------------------------------
+    # Siamese Evaluation Mode
+    # -------------------------------------------------------------------------
+    if mode == "siamese":
+        print(f"\n=== Evaluating Siamese Network on {device} ===")
+        device_obj = torch.device(device if device else ("cuda" if torch.cuda.is_available() else "cpu"))
+        
+        # Load Data
+        print("Loading data...")
+        df = load_raw_dataframe(data_path)
+        train_df, val_df, test_df = make_splits(df)
+        
+        measurements = measurement_columns(train_df, include_loss_reflectance=use_loss_reflectance)
+        layout = summarise_feature_layout(measurements)
+        pos_count = int(layout["pos_count"])
+
+        scaler = StandardScaler()
+        scaler.fit(train_df[measurements].values.astype(np.float32))
+        
+        splits = tensorise_splits(train_df, val_df, test_df, scaler, measurement_override=measurements)
+        test_X = splits["test"].X.to(device_obj)
+        test_y = splits["test"].y_class.cpu().numpy()
+        
+        # Load Model
+        n_classes = int(splits["train"].y_class.max().item() + 1)
+        
+        # Determine actual input channels after reshaping
+        # It's 1 (Pos) + 1 (SNR) + num_extras
+        in_ch = 2 + (len(measurements) - 1 - pos_count)
+        
+        base_model = OTDR_TCN(n_classes=n_classes, in_ch=in_ch).to(device_obj)
+        siamese_net = SiameseNetwork(base_model).to(device_obj)
+        
+        if siamese_path and Path(siamese_path).exists():
+            siamese_net.base_model.load_state_dict(torch.load(siamese_path, map_location=device_obj))
+            print(f"Loaded Siamese weights from {siamese_path}")
+        else:
+            print("[WARN] No checkpoint provided (or not found). Using random weights.")
+
+        siamese_net.eval()
+        
+        # Helper to reshape inputs for OTDR_TCN
+        def _reshape_input(xb: torch.Tensor) -> torch.Tensor:
+            if xb.size(1) < pos_count + 1:
+                pass # Already shaped?
+            pos = xb[:, 1 : 1 + pos_count]
+            extras = xb[:, 1 + pos_count :]
+            seq_len = pos.size(1)
+            channels = [pos]
+            snr = xb[:, 0]
+            channels.append(snr.unsqueeze(1).repeat(1, seq_len))
+            if extras.numel() > 0:
+                for idx in range(extras.size(1)):
+                    feat = extras[:, idx]
+                    channels.append(feat.unsqueeze(1).repeat(1, seq_len))
+            return torch.stack(channels, dim=1)
+
+        print("Generating embeddings...")
+        embeddings = []
+        BATCH_SIZE = 128
+        with torch.no_grad():
+            for i in range(0, len(test_X), BATCH_SIZE):
+                batch = test_X[i:i+BATCH_SIZE]
+                # Fix shape
+                batch = _reshape_input(batch)
+                
+                emb = siamese_net.forward_once(batch)
+                embeddings.append(emb.cpu().numpy())
+        
+        embeddings = np.concatenate(embeddings, axis=0)
+        
+        # PCA Visualisation
+        print("Projecting with PCA...")
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=2)
+        emb_pca = pca.fit_transform(embeddings)
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        scatter = ax.scatter(emb_pca[:, 0], emb_pca[:, 1], c=test_y, cmap="tab10", alpha=0.6, s=15)
+        plt.colorbar(scatter, label="Class")
+        ax.set_title("Siamese Embeddings (PCA) - Test Set")
+        ax.set_xlabel("PC1")
+        ax.set_ylabel("PC2")
+        ax.grid(True, linestyle=":", alpha=0.3)
+        out_file = out_dir / "siamese_pca.png"
+        fig.savefig(out_file, dpi=150)
+        plt.close(fig)
+        print(f"Saved PCA plot to {out_file}")
+        
+        return
 
     if classifier != "tcn" and tcn_anomaly_only:
         raise click.BadOptionUsage(
@@ -1994,28 +2105,30 @@ def main(
         )
         _log_inference_stats("TCN_FULL", tcn_duration, tcn_flops)
         preds_cls = logits.argmax(1)
-        fault_mask = y_cls_test != 0
+        # Use PREDICTED faults to drive the localisation stage (realistic pipeline behavior)
+        fault_mask = preds_cls != 0
         if fault_mask.sum().item() == 0:
-            raise ValueError("No faulty samples available for TST localisation.")
-
-        loc_indices = torch.nonzero(fault_mask, as_tuple=False).view(-1)
-        class_feature = preds_cls[loc_indices].to(dtype=X_test.dtype).unsqueeze(1)
-        bridge_features = torch.cat([class_feature, X_test[loc_indices]], dim=1)
-        tst_model = load_classifier(
-            "tst",
-            tst_ckpt,
-            seq_len=bridge_features.shape[1],
-            n_classes=n_classes,
-            device=device,
-            input_channels=input_channels,
-        )
-        pos_hat, tst_duration, tst_flops = _run_inference_with_profile(
-            "tst_bridge",
-            lambda: predict_tst(tst_model, bridge_features, device=device),
-            flop_model=tst_model,
-            flop_inputs=(bridge_features.to(device),),
-        )
-        _log_inference_stats("TST", tst_duration, tst_flops)
+            print("[WARN] No faults predicted by TCN. Skipping TST localisation.")
+            pos_hat = None
+        else:
+            loc_indices = torch.nonzero(fault_mask, as_tuple=False).view(-1)
+            class_feature = preds_cls[loc_indices].to(dtype=X_test.dtype).unsqueeze(1)
+            bridge_features = torch.cat([class_feature, X_test[loc_indices]], dim=1)
+            tst_model = load_classifier(
+                "tst",
+                tst_ckpt,
+                seq_len=bridge_features.shape[1],
+                n_classes=n_classes,
+                device=device,
+                input_channels=input_channels,
+            )
+            pos_hat, tst_duration, tst_flops = _run_inference_with_profile(
+                "tst_bridge",
+                lambda: predict_tst(tst_model, bridge_features, device=device),
+                flop_model=tst_model,
+                flop_inputs=(bridge_features.to(device),),
+            )
+            _log_inference_stats("TST", tst_duration, tst_flops)
     elif classifier_for_eval == "tcn":
         (logits, pos_hat), infer_duration, infer_flops = _run_inference_with_profile(
             "tcn",
@@ -2058,6 +2171,12 @@ def main(
 
         rmse = root_mean_squared_error(y_pos_true_global, y_pos_pred_global)
         mae = mean_absolute_error(y_pos_true_global, y_pos_pred_global)
+        
+        # apply TN filter
+        mask = (y_pos_true_global != 0) | (y_pos_pred_global != 0)
+        if mask.any():
+            rmse = root_mean_squared_error(y_pos_true_global[mask], y_pos_pred_global[mask])
+            mae = mean_absolute_error(y_pos_true_global[mask], y_pos_pred_global[mask])
     else:
         rmse = None
         mae = None
@@ -2140,12 +2259,29 @@ def main(
     radial_y_true = y_true_np
     radial_y_pred = y_pred_np
     if pos_hat is not None:
-        # Align localisation arrays with matching classification slices to enable localisation plots
-        loc_true_np = y_cls_test[loc_indices].numpy()
-        loc_pred_np = preds_cls[loc_indices].numpy() if preds_cls is not None else None
-        if radial_y_true is None or radial_y_true.shape[0] != y_pos_true_np.shape[0]:
-            radial_y_true = loc_true_np
-            radial_y_pred = loc_pred_np
+        # Create full-sized position arrays aligned with y_true_np/y_pred_np
+        # idx_to_eval usually covers the whole test set in pipeline mode
+        
+        # Ground truth positions for ALL samples
+        y_pos_true_np = y_pos_test[idx_to_eval].numpy()
+        
+        # Predicted positions: init with 0.0 (default for Class 0/Normal)
+        y_pos_pred_np = np.zeros_like(y_pos_true_np)
+        
+        # Map the subset predictions (pos_hat) back to their full-array indices
+        abs_to_rel = {idx.item(): i for i, idx in enumerate(idx_to_eval)}
+        
+        pos_hat_np = pos_hat.detach().cpu().numpy()
+        loc_indices_np = loc_indices.detach().cpu().numpy()
+        
+        for i, abs_idx in enumerate(loc_indices_np):
+            if abs_idx in abs_to_rel:
+                rel_idx = abs_to_rel[abs_idx]
+                y_pos_pred_np[rel_idx] = pos_hat_np[i]
+                
+        # Now radial_y_true/pred can just be the full arrays
+        radial_y_true = y_true_np
+        radial_y_pred = y_pred_np
 
     if (tcn_full_bridge or classifier_for_eval in {"tst", "tcn"}) and y_pos_true_np is not None:
         scatter_stem = "tcn_full_bridge" if tcn_full_bridge else classifier_for_eval
@@ -2155,6 +2291,26 @@ def main(
         jitter_scale = max(float(np.ptp(y_pos_true_np)), float(np.ptp(y_pos_pred_np)), 1e-3) * 0.005
         jitter_true = y_pos_true_np + rng.normal(0.0, jitter_scale, size=y_pos_true_np.shape)
         jitter_pred = y_pos_pred_np + rng.normal(0.0, jitter_scale, size=y_pos_pred_np.shape)
+
+        error = y_pos_pred_np - y_pos_true_np
+        
+        # Filter out True Negatives (where both true and pred are 0)
+        # We only care about error when a fault exists OR was predicted
+        mask = (y_pos_true_np != 0) | (y_pos_pred_np != 0)
+        if mask.any():
+            filtered_error = error[mask]
+        else:
+            filtered_error = error  # Fallback to avoid empty array if no faults exist
+        
+        mean_error = np.mean(filtered_error)
+        var_error = np.var(filtered_error)
+        mae_error = np.mean(np.abs(filtered_error))
+        rmse_error = np.sqrt(np.mean(filtered_error**2))
+        print(
+            f"[{classifier_plot_label}] Localisation Error (excluding TNs): "
+            f"Mean={mean_error:.4f}, Variance={var_error:.4f}, "
+            f"MAE={mae_error:.4f}, RMSE={rmse_error:.4f}"
+        )
 
         ax.scatter(
             jitter_true,
@@ -2178,11 +2334,20 @@ def main(
         ax.set_xlabel("True fault position", fontsize=13, fontweight="bold", labelpad=10)
         ax.set_ylabel("Predicted fault position", fontsize=13, fontweight="bold", labelpad=10)
         ax.set_title(
-            f"{classifier_plot_label} localisation – predictions vs. ground truth",
+            f"{classifier_plot_label} localisation",
             fontsize=15,
             fontweight="bold",
             pad=18,
         )
+        
+        # Add a text box for metrics
+        textstr = '\n'.join((
+            r'$\mathrm{MAE}=%.4f$' % (mae_error, ),
+            r'$\mathrm{RMSE}=%.4f$' % (rmse_error, )))
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.9)
+        ax.text(0.2, 0.97, textstr, transform=ax.transAxes, fontsize=11,
+                verticalalignment='top', bbox=props)
+        
         ax.legend(frameon=True, fontsize=11, loc="upper left", fancybox=True, framealpha=0.92)
         ax.tick_params(axis="both", labelsize=11, width=1.1, length=6)
         ax.grid(True, linestyle=":", alpha=0.22)
@@ -2191,6 +2356,47 @@ def main(
         scatter_key = scatter_stem
         fig.savefig(scatter_path, dpi=180, bbox_inches="tight")
         plt.close(fig)
+
+        # ---------------------------------------------------------------------
+        # Density (KDE) plot for Actual vs Predicted
+        # ---------------------------------------------------------------------
+        try:
+            # Filter out 0.0s for density plot to focus on fault distribution
+            dens_true = y_pos_true_np[y_pos_true_np > 0]
+            dens_pred = y_pos_pred_np[y_pos_pred_np > 0]
+
+            if dens_true.size > 1 and dens_pred.size > 1:
+                density_path = out_dir / f"{scatter_stem}_density_kde.png"
+                fig_kde, ax_kde = plt.subplots(figsize=(10, 6))
+
+                # Compute KDE
+                kde_true = gaussian_kde(dens_true)
+                kde_pred = gaussian_kde(dens_pred)
+                
+                # Evaluation grid
+                x_grid = np.linspace(
+                    min(dens_true.min(), dens_pred.min()),
+                    max(dens_true.max(), dens_pred.max()),
+                    500
+                )
+
+                ax_kde.plot(x_grid, kde_true(x_grid), color="tab:green", label="Actual Faults", linewidth=2)
+                ax_kde.fill_between(x_grid, kde_true(x_grid), color="tab:green", alpha=0.2)
+                
+                ax_kde.plot(x_grid, kde_pred(x_grid), color="tab:blue", label="Predicted Faults", linewidth=2, linestyle="--")
+                ax_kde.fill_between(x_grid, kde_pred(x_grid), color="tab:blue", alpha=0.1)
+
+                ax_kde.set_xlabel("Fault Position (normalized)", fontsize=12, fontweight="bold")
+                ax_kde.set_ylabel("Density", fontsize=12, fontweight="bold")
+                ax_kde.set_title(f"Fault Position Density (KDE) - {classifier_plot_label}", fontsize=14, fontweight="bold")
+                ax_kde.legend(fontsize=11)
+                ax_kde.grid(True, linestyle=":", alpha=0.3)
+                fig_kde.tight_layout()
+                fig_kde.savefig(density_path, dpi=150)
+                plt.close(fig_kde)
+                print(f"Saved density plot to {density_path}")
+        except Exception as exc:
+            print(f"[WARN] Failed to generate KDE plot: {exc}")
 
     if (radial_y_true is not None and radial_y_pred is not None) or (
             y_pos_true_np is not None and y_pos_pred_np is not None
@@ -2263,7 +2469,7 @@ def main(
     for batch_num, llm_indices in enumerate(llm_batches, start=1):
         attr_summary_map: dict[str, List[str]] = {method: [] for method in explain_methods}
         compute_attr_methods = [m for m in explain_methods if m != "none"]
-        if preds_cls is not None and llm_indices.size > 0 and compute_attr_methods:
+        if use_llm and preds_cls is not None and llm_indices.size > 0 and compute_attr_methods:
             try:
                 bg_size = min(50, idx_eval_cpu.size(0))
                 if bg_size > 0:
@@ -2338,24 +2544,24 @@ def main(
             p_pos = pos_lookup.get(idx_int)
             img_paths.append(
                 _visualise_sample(
-                    classifier,
-                    amp,
-                    snr,
+                    classifier=classifier,
+                    amps=amp,
+                    snr=snr,
                     loss_db=loss_val,
                     reflectance_db=reflectance_val,
-                    t_cls,
-                    p_cls,
-                    t_pos,
-                    p_pos,
-                    idx_int,
-                    out_dir,
+                    true_cls=t_cls,
+                    pred_cls=p_cls,
+                    true_pos=t_pos,
+                    pred_pos=p_pos,
+                    idx=idx_int,
+                    out_dir=out_dir,
                     classifier_label=classifier_display_label,
                     localisation_label=localisation_display_label,
                 )
             )
 
         explain_outputs: dict[str, tuple[str, str, str, bool]] = {}
-        if img_paths:
+        if use_llm and img_paths:
             for method in explain_methods:
                 try:
                     explain_pair = _llm_explain_with_self_reflection(
