@@ -705,6 +705,9 @@ def main(
         if device:
             cfg.device = device
             
+        cfg.use_loss_reflectance = use_loss_reflectance
+        cfg.noise_level = float(train_noise_level)
+            
         train_siamese(processed_path, cfg, OTDR_TCN)
 
     # ----------------------------- TST -------------------------------------#

@@ -1469,9 +1469,14 @@ def main(
         scaler = StandardScaler()
         scaler.fit(train_df[measurements].values.astype(np.float32))
         
+        
         splits = tensorise_splits(train_df, val_df, test_df, scaler, measurement_override=measurements)
         test_X = splits["test"].X.to(device_obj)
         test_y = splits["test"].y_class.cpu().numpy()
+        
+        if test_noise_level > 0.0:
+             print(f"Injecting test noise: {test_noise_level}")
+             test_X += torch.randn_like(test_X) * test_noise_level
         
         # Load Model
         n_classes = int(splits["train"].y_class.max().item() + 1)
