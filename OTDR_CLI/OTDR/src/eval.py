@@ -1469,14 +1469,15 @@ def main(
         scaler = StandardScaler()
         scaler.fit(train_df[measurements].values.astype(np.float32))
         
-        
         splits = tensorise_splits(train_df, val_df, test_df, scaler, measurement_override=measurements)
-        test_X = splits["test"].X.to(device_obj)
+        test_X = splits["test"].X
+
+        if test_noise_level > 0:
+            test_X = test_X + torch.randn_like(test_X) * float(test_noise_level)
+            print(f"[INFO] Added Gaussian noise to test set with σ={test_noise_level:.4f}.")
+            
+        test_X = test_X.to(device_obj)
         test_y = splits["test"].y_class.cpu().numpy()
-        
-        if test_noise_level > 0.0:
-             print(f"Injecting test noise: {test_noise_level}")
-             test_X += torch.randn_like(test_X) * test_noise_level
         
         # Load Model
         n_classes = int(splits["train"].y_class.max().item() + 1)
@@ -2317,6 +2318,12 @@ def main(
             f"MAE={mae_error:.4f}, RMSE={rmse_error:.4f}"
         )
 
+        # Compute mean and variance of actual and predicted values
+        pred_mean = np.mean(y_pos_pred_np)
+        pred_std  = np.std(y_pos_pred_np)
+        true_mean = np.mean(y_pos_true_np)
+        true_std  = np.std(y_pos_true_np)
+
         ax.scatter(
             jitter_true,
             jitter_pred,
@@ -2325,7 +2332,7 @@ def main(
             linewidth=0.6,
             s=55,
             color="tab:blue",
-            label="Predictions",
+            label=f"{'Predictions':<11} \u03bc={pred_mean:.4f}  \u03c3={pred_std:.4f}",
         )
         diag_min = float(min(y_pos_true_np.min(), y_pos_pred_np.min()))
         diag_max = float(max(y_pos_true_np.max(), y_pos_pred_np.max()))
@@ -2334,7 +2341,7 @@ def main(
             [diag_min, diag_max],
             linestyle="--",
             color="tab:red",
-            label="Ideal",
+            label=f"{'Actual':<13} \u03bc={true_mean:.4f}  \u03c3={true_std:.4f}",
         )
         ax.set_xlabel("True fault position", fontsize=13, fontweight="bold", labelpad=10)
         ax.set_ylabel("Predicted fault position", fontsize=13, fontweight="bold", labelpad=10)
@@ -2345,13 +2352,7 @@ def main(
             pad=18,
         )
         
-        # Add a text box for metrics
-        textstr = '\n'.join((
-            r'$\mathrm{MAE}=%.4f$' % (mae_error, ),
-            r'$\mathrm{RMSE}=%.4f$' % (rmse_error, )))
-        props = dict(boxstyle='round', facecolor='wheat', alpha=0.9)
-        ax.text(0.2, 0.97, textstr, transform=ax.transAxes, fontsize=11,
-                verticalalignment='top', bbox=props)
+
         
         ax.legend(frameon=True, fontsize=11, loc="upper left", fancybox=True, framealpha=0.92)
         ax.tick_params(axis="both", labelsize=11, width=1.1, length=6)

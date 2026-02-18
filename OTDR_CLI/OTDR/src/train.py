@@ -700,15 +700,11 @@ def main(
             cfg.epochs = epochs
         if batch_size:
             cfg.batch_size = batch_size
-        if lr:
+        if lr is not None:
             cfg.lr = lr
-        if device:
-            cfg.device = device
+        cfg.device = str(device)
             
-        cfg.use_loss_reflectance = use_loss_reflectance
-        cfg.noise_level = float(train_noise_level)
-            
-        train_siamese(processed_path, cfg, OTDR_TCN)
+        train_siamese(splits, pos_count, cfg, OTDR_TCN)
 
     # ----------------------------- TST -------------------------------------#
     if mode in {"tst", "all"}:

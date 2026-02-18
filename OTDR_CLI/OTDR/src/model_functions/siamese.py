@@ -25,10 +25,6 @@ class TrainConfig:
     margin: float = 2.0
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     out_dir: str = "outputs/siamese"
-    
-    # Feature params
-    use_loss_reflectance: bool = False
-    noise_level: float = 0.0
 
 class SiameseNetwork(nn.Module):
     def __init__(self, base_model: nn.Module):
@@ -118,50 +114,23 @@ class SiameseDataset(Dataset):
         return self.samples_per_epoch
 
 def train_siamese(
-    processed_data_path: Path,
+    splits: dict[str, SplitTensors],
+    pos_count: int,
     config: TrainConfig,
     base_model_cls, # Class ref for TCN
     quiet: bool = False
 ):
-    from data_helper import (
-        load_raw_dataframe, 
-        make_splits, 
-        tensorise_splits, 
-        fit_scaler, 
-        measurement_columns,
-        summarise_feature_layout
-    )
-    
     device = torch.device(config.device)
     out_dir = Path(config.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     
     # 1. Load Data
-    print(f"Loading data from {processed_data_path}")
-    df = load_raw_dataframe(processed_data_path)
-    train_df, val_df, test_df = make_splits(df)
+    # Splits are already tensorised and scaled by train.py
+    # and contain noise if requested.
     
-    defaults = measurement_columns(train_df, include_loss_reflectance=config.use_loss_reflectance)
-    layout = summarise_feature_layout(defaults)
-    pos_count = int(layout["pos_count"])
-    
-    scaler = fit_scaler(train_df[defaults].values.astype(np.float32))
-    
-    tensors = tensorise_splits(
-        train_df, 
-        val_df, 
-        test_df, 
-        scaler, 
-        measurement_override=defaults
-    )
-    
-    if config.noise_level > 0.0:
-        print(f"Injecting noise: {config.noise_level}")
-        tensors["train"].X += torch.randn_like(tensors["train"].X) * config.noise_level
-        tensors["val"].X += torch.randn_like(tensors["val"].X) * config.noise_level
-    
-    train_ds = SiameseDataset(tensors["train"].X, tensors["train"].y_class, samples_per_epoch=2000)
-    val_ds = SiameseDataset(tensors["val"].X, tensors["val"].y_class, samples_per_epoch=500)
+
+    train_ds = SiameseDataset(splits["train"].X, splits["train"].y_class, samples_per_epoch=2000)
+    val_ds = SiameseDataset(splits["val"].X, splits["val"].y_class, samples_per_epoch=500)
     
     train_loader = DataLoader(train_ds, batch_size=config.batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=config.batch_size, shuffle=False)
@@ -185,41 +154,14 @@ def train_siamese(
 
     # 2. Model
     print("Building model...")
-    n_classes = int(tensors["train"].y_class.max().item() + 1)
+    n_classes = int(splits["train"].y_class.max().item() + 1)
     
-    # We need to broadcast the input channels correctly for OTDR_TCN
-    # OTDR_TCN expects (B, C, L) where C is ~2 (Position + SNR)
-    # But our tensors are (B, L, C) from tensorise_splits???
-    # No, check tensorise_splits implementation again.
-    # It calls _prepare_arrays which returns numpy arrays.
-    # If it returns X as (N, F), then tensorise_splits makes it (N, F).
-    # But OTDR_TCN expects (B, 2, L) and handles the conversion internally?
-    # No, train_tcn calls `_to_two_channel` inside the loop.
-    # siamese.py needs to do the same or the model needs to handle it.
+    # Determine actual input channels
+    # Total features - pos_count (positions) - 1 (SNR)
+    num_extras = splits["train"].X.shape[1] - pos_count - 1
+    # TCN inputs: 1 (Pos) + 1 (SNR) + num_extras
+    in_ch = 2 + num_extras
     
-    # Let's use the same logic as train_tcn:
-    # We'll pass the raw input to SiameseNetwork, and SiameseNetwork...
-    # Wait, SiameseNetwork just calls base_model.
-    # So base_model (OTDR_TCN) expects (B, C, L).
-    # But our dataset returns samples from X.
-    # X is (N, F).
-    # We need to reshape/transform X items to (C, L) before passing to model.
-    # OR we can wrap OTDR_TCN to include the transform.
-    
-    # For now, let's assume we do the transform in the Dataset or Collate.
-    # But SiameseDataset just returns X[i].
-    
-    # Let's look at train.py: train_tcn
-    # It iterates dataloader, gets xb. 
-    # xb = _to_two_channel(xb, pos_count=cfg.pos_count)
-    # model(xb)
-    
-    # We must do this in Siamese training loop too!
-    
-    # First finish the instantiation fix:
-    # Determine actual input channels after reshaping
-    # It's 1 (Pos) + 1 (SNR) + num_extras
-    in_ch = 2 + (len(defaults) - 1 - pos_count)
     base_model = base_model_cls(
         in_ch=in_ch,
         mid_ch=64,
