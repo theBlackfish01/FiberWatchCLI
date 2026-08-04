@@ -1,0 +1,22 @@
+{
+  "approach": "b",
+  "candidate_id": "89dab9b6cf1a",
+  "config": {
+    "attribute_weight": 0.25,
+    "batch_size": 256,
+    "description_consistency_weight": 0.0,
+    "dropout": 0.3,
+    "epochs": 16,
+    "latent_dim": 256,
+    "learning_rate": 0.0003,
+    "prototype_mode": "physics",
+    "prototype_weight": 1.0,
+    "seed": 42,
+    "seen_penalty_grid_max": 3.0,
+    "steps_per_epoch": 72,
+    "supcon_weight": 0.0,
+    "temperature": 0.1,
+    "weight_decay": 0.0001
+  },
+  "selection": "successive_halving_inner_only"
+}

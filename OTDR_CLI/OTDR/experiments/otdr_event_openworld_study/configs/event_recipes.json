@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "recipe_id": "otdr-event-grammar-v1",
+  "frozen_utc": "2026-07-20T00:00:00Z",
+  "basis": "General OTDR morphology and class definitions only; no class-conditional sensor statistics were used.",
+  "factor_names": ["positive_reflection", "negative_step", "transition_width", "terminality", "continuation", "slope_contrast", "irregularity", "symmetry", "local_energy", "global_energy", "multiplicity", "dead_zone"],
+  "classes": [
+    {"id": 0, "name": "normal", "mean": [0.03,0.04,0.55,0.02,0.98,0.10,0.05,0.80,0.08,0.22,0.02,0.02], "std": [0.08,0.08,0.25,0.06,0.05,0.15,0.10,0.18,0.10,0.18,0.06,0.06], "atoms": {"normal": 1.0}},
+    {"id": 1, "name": "fiber_tapping", "mean": [0.20,0.48,0.48,0.08,0.92,0.45,0.72,0.35,0.52,0.38,0.28,0.12], "std": [0.22,0.22,0.22,0.10,0.10,0.22,0.18,0.22,0.22,0.20,0.20,0.14], "atoms": {"irregular_mixture": 0.65, "smooth_step": 0.25, "multi_event": 0.10}},
+    {"id": 2, "name": "bad_splice", "mean": [0.12,0.88,0.22,0.06,0.96,0.72,0.25,0.72,0.74,0.62,0.08,0.08], "std": [0.14,0.12,0.14,0.08,0.06,0.16,0.16,0.18,0.16,0.18,0.08,0.08], "atoms": {"abrupt_step": 0.80, "smooth_step": 0.15, "narrow_reflection": 0.05}},
+    {"id": 3, "name": "bending", "mean": [0.05,0.72,0.78,0.05,0.97,0.64,0.18,0.78,0.62,0.66,0.10,0.04], "std": [0.08,0.18,0.14,0.06,0.05,0.18,0.14,0.16,0.18,0.18,0.10,0.06], "atoms": {"broad_attenuation": 0.65, "smooth_step": 0.35}},
+    {"id": 4, "name": "dirty_connector", "mean": [0.67,0.60,0.36,0.12,0.88,0.52,0.88,0.28,0.82,0.60,0.32,0.58], "std": [0.18,0.20,0.20,0.12,0.12,0.20,0.10,0.18,0.12,0.18,0.20,0.18], "atoms": {"irregular_mixture": 0.55, "reflection_dead_zone": 0.35, "multi_event": 0.10}},
+    {"id": 5, "name": "fiber_cut", "mean": [0.62,0.96,0.20,0.98,0.03,0.88,0.35,0.55,0.96,0.94,0.08,0.70], "std": [0.24,0.06,0.14,0.04,0.04,0.10,0.20,0.22,0.06,0.08,0.08,0.20], "atoms": {"terminal_drop": 0.75, "reflection_dead_zone": 0.25}},
+    {"id": 6, "name": "pc_upc_connector", "mean": [0.72,0.22,0.14,0.05,0.96,0.24,0.12,0.90,0.66,0.32,0.06,0.18], "std": [0.15,0.14,0.10,0.06,0.05,0.16,0.10,0.08,0.16,0.16,0.06,0.12], "atoms": {"narrow_reflection": 0.80, "reflection_dead_zone": 0.20}},
+    {"id": 7, "name": "strong_reflector", "mean": [0.98,0.18,0.10,0.08,0.92,0.20,0.15,0.94,0.98,0.42,0.08,0.35], "std": [0.04,0.14,0.07,0.08,0.08,0.14,0.12,0.06,0.04,0.18,0.08,0.18], "atoms": {"narrow_reflection": 0.65, "reflection_dead_zone": 0.35}}
+  ],
+  "renderer_bounds": {"position": [0.12,0.88], "width": [0.025,0.28], "magnitude": [0.08,1.40], "post_level": [-1.40,0.20], "baseline_slope": [-0.80,0.15], "snr_db": [4.0,40.0], "overlap": [0.02,0.20]},
+  "boundary_families": [
+    {"name": "reflection_terminal_conflict", "atoms": ["narrow_reflection","terminal_drop"], "constraint": "high_reflection_mid_continuation"},
+    {"name": "step_width_boundary", "atoms": ["abrupt_step","broad_attenuation"], "constraint": "intermediate_width"},
+    {"name": "connector_irregularity_boundary", "atoms": ["narrow_reflection","irregular_mixture"], "constraint": "ambiguous_regular_irregular"},
+    {"name": "overlapping_events", "atoms": ["multi_event"], "constraint": "two_nearby_different_atoms"},
+    {"name": "out_of_range_magnitude", "atoms": ["narrow_reflection","smooth_step"], "constraint": "magnitude_outside_named_95pct"}
+  ]
+}

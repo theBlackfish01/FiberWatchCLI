@@ -1,0 +1,51 @@
+{
+  "approach": "ec",
+  "candidate_id": "b59a171e91eb",
+  "config": {
+    "backbone": "multiscale",
+    "batch_size": 384,
+    "calibration": "global",
+    "canonicalize": true,
+    "class_dropout_count": 1,
+    "derivative_channels": true,
+    "deterministic_factors": false,
+    "dropout": 0.2,
+    "epochs": 8,
+    "factor_weight": 0.75,
+    "fusion_weights": [
+      0.1,
+      0.7,
+      0.1,
+      0.1
+    ],
+    "global_branch": true,
+    "latent_dim": 96,
+    "learning_rate": 0.001,
+    "patch_size": 19,
+    "recipe_mode": "probabilistic",
+    "residual": true,
+    "residual_penalty": 0.0,
+    "seed": 42,
+    "soft_alignment": true,
+    "steps_per_epoch": 48,
+    "uncertainty_weight": 0.0,
+    "weight_decay": 1e-05,
+    "width": 72
+  },
+  "outer_heldout_real_evaluated": false,
+  "schema_version": 1,
+  "selection": "nested_group_safe_successive_halving_inner_only",
+  "selection_metrics": {
+    "calibration_error": 0.0005869324473975635,
+    "feasible": false,
+    "known_acceptance": 0.8984823944607315,
+    "observed_normal_far": 0.009413067552602437,
+    "parameters": 65144.0,
+    "post_h": 0.3468092216635614,
+    "strict_accuracy": 0.5974737929346868,
+    "unknown_recall": 0.17949887948226878,
+    "worst_fault_recall": 0.0
+  },
+  "selection_protocol": "two_pseudo_unseen_classes_v2",
+  "selector_implementation": "v6"
+}

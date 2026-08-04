@@ -1,0 +1,30 @@
+{
+  "approach": "sgme",
+  "candidate_id": "13b09a2185c3",
+  "config": {
+    "abstention_quantile": 0.0,
+    "agreement_threshold": 0.8,
+    "augmentation_threshold": 0.82,
+    "confidence_threshold": 0.7,
+    "covariance": false,
+    "covariance_shrinkage": 0.5,
+    "graph_iterations": 16,
+    "graph_temperature": 0.24,
+    "k_neighbors": 16,
+    "propagation_alpha": 0.92,
+    "seed": 42,
+    "seen_rejection_threshold": 0.0,
+    "semantic_threshold": 0.55
+  },
+  "outer_heldout_real_evaluated": false,
+  "schema_version": 1,
+  "selection": "nested_group_safe_successive_halving_inner_only",
+  "selection_metrics": {
+    "accepted": 0.0,
+    "coverage": 1.0,
+    "post_h": 0.37666122402951735,
+    "seen_accuracy": 0.6681371744912116,
+    "selective_risk": 0.6298553082678053,
+    "worst_unseen_accuracy": 0.09643674255295051
+  }
+}

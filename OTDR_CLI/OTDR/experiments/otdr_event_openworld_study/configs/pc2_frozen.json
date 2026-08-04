@@ -1,0 +1,48 @@
+{
+  "approach": "pc2",
+  "candidate_id": "dcf4f1ed2be8",
+  "config": {
+    "atom_ablation": "none",
+    "batch_size": 384,
+    "calibration": "mondrian",
+    "cvar_fraction": 0.2,
+    "cvar_weight": 0.2,
+    "dropout": 0.0,
+    "energy_margin": 2.0,
+    "epochs": 9,
+    "factor_weight": 0.25,
+    "fusion_weights": [
+      0.6,
+      0.25,
+      0.1,
+      0.05
+    ],
+    "latent_dim": 40,
+    "learning_rate": 0.001,
+    "named_weight": 0.4,
+    "oe_weight": 0.9,
+    "outlier_mode": "physics",
+    "patch_size": 19,
+    "seed": 42,
+    "steps_per_epoch": 56,
+    "synthetic_fraction": 0.2,
+    "weight_decay": 1e-05,
+    "width": 80
+  },
+  "outer_heldout_real_evaluated": false,
+  "schema_version": 1,
+  "selection": "nested_group_safe_successive_halving_inner_only",
+  "selection_metrics": {
+    "calibration_error": 0.004027316352897747,
+    "feasible": false,
+    "known_acceptance": 0.6030068204739689,
+    "observed_normal_far": 0.014027316352897747,
+    "parameters": 35296.0,
+    "post_h": 0.37327001529292003,
+    "strict_accuracy": 0.624349968897976,
+    "unknown_recall": 0.5087632373125045,
+    "worst_fault_recall": 0.00558659217877095
+  },
+  "selection_protocol": "two_pseudo_unseen_classes_v2",
+  "selector_implementation": "v4"
+}

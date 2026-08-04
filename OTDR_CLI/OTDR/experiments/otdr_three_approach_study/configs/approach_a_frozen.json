@@ -1,0 +1,21 @@
+{
+  "approach": "a",
+  "candidate_id": "43e2e6d7cb1f",
+  "config": {
+    "aggregation": "medoid",
+    "batch_size": 256,
+    "dropout": 0.1,
+    "embedding_dim": 128,
+    "epochs": 16,
+    "hard_negative_margin": 0.15,
+    "hard_negative_weight": 0.1,
+    "learning_rate": 0.0003,
+    "noise_std": 0.02,
+    "seed": 42,
+    "steps_per_epoch": 72,
+    "supcon_weight": 0.25,
+    "temperature": 0.1,
+    "weight_decay": 0.0001
+  },
+  "selection": "successive_halving_inner_only"
+}
