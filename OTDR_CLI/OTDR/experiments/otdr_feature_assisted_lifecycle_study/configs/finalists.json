@@ -1,0 +1,65 @@
+{
+  "candidate_counts": {
+    "cfe": 24,
+    "kpsc": 24,
+    "representation_mcf": 24
+  },
+  "cfe": {
+    "draws": 20,
+    "metric": "cosine",
+    "prototype_method": "quality_weighted",
+    "shots": [
+      1,
+      3,
+      5
+    ],
+    "teen_alpha": 0.2,
+    "teen_temperature": 0.5
+  },
+  "kpsc": {
+    "calibration_mode": "conformal",
+    "fusion": "robust_regret",
+    "fusion_weights": null,
+    "knn_k": 10,
+    "known_acceptance_floor": 0.95,
+    "normal_far_cap": 0.0125,
+    "prototype_metric": "cosine",
+    "prototypes_per_class": 1
+  },
+  "schema_version": 1,
+  "selection_protocol": "nested_group_safe_pseudo_unseen_only",
+  "selection_status": "frozen_before_outer_query",
+  "shared_backbone": {
+    "blocks": 3,
+    "context_width": 24,
+    "dropout": 0.1,
+    "embedding_dim": 32,
+    "fusion": "gated",
+    "kernel_size": 5,
+    "mode": "late_fusion",
+    "n_classes": 8,
+    "smooth_sigma": 1.0,
+    "width": 48
+  },
+  "training": {
+    "batch_size": 256,
+    "competence_weight": 0.05,
+    "context_noise_std": 0.0,
+    "epochs": 8,
+    "learning_rate": 0.0004,
+    "localization_weight": 0.0,
+    "patience": 8,
+    "scalar_dropout": 0.1,
+    "seed": 42,
+    "steps_per_epoch": 20,
+    "supcon_weight": 0.0,
+    "temperature": 0.1,
+    "trace_noise_std": 0.01,
+    "weight_decay": 0.0001
+  },
+  "winner_ids": {
+    "cfe": "5cfc9a7d15b0",
+    "kpsc": "07846363bd44",
+    "representation": "82997f861e45"
+  }
+}

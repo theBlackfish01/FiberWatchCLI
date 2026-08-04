@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "study_type": "confirmatory_fixed_base_memory_replication",
+  "research_question": "Does the frozen fixed-base-memory enrollment result replicate across previously unseen OTDR split seeds without changing the model, features, memory policy, supports, queries, or analysis targets?",
+  "feature_regime": "summary_only",
+  "pairs": [
+    [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7],
+    [2, 3], [2, 4], [2, 5], [2, 6], [2, 7],
+    [3, 4], [3, 5], [3, 6], [3, 7],
+    [4, 5], [4, 6], [4, 7],
+    [5, 6], [5, 7], [6, 7]
+  ],
+  "seeds": [7, 42, 123, 2026, 31415],
+  "execution_seeds": [7, 123, 2026, 31415],
+  "previously_observed_seed": 42,
+  "include_observed_seed_in_combined_analysis": true,
+  "shots": [1, 3, 5],
+  "draws": 20,
+  "base_context_per_class": 20,
+  "context_seeds": [42, 123, 2026],
+  "query_examples_per_class": 100,
+  "methods": ["cached_base_tabpfn_v2", "cached_base_linear_svm"],
+  "base_context_namespace": "tabpfn-cached-base-memory",
+  "support_namespace": "tabpfn-support",
+  "matched_frozen_comparator": "summary_only tabpfn_v2 on identical pair, split seed, support draw, and query cohorts",
+  "device": "cuda:0",
+  "outer_query_tuning": false,
+  "primary_replication_cohort": "the 84 pair/seed units from split seeds 7, 123, 2026, and 31415, which had not been evaluated with fixed base memory when this protocol was frozen",
+  "secondary_combined_cohort": "all 105 pair/seed units after adding the previously observed exploratory seed-42 cohort",
+  "success_criteria": {
+    "primary_metric": "harmonic mean of base-class and enrolled-fault accuracy",
+    "five_shot_mean_h_at_least": 0.95,
+    "five_shot_lower_95_ci_at_least": 0.95,
+    "five_shot_pair_seed_fraction_h_at_least_0_95": 0.9,
+    "pre_enrollment_base_accuracy_mean_at_least": 0.95,
+    "cuda_units_must_equal_executed_units": true,
+    "metric_reconstruction_must_pass": true
+  },
+  "interpretation": "This protocol was frozen after the seed-42 fixed-memory pilot. No hyperparameter, feature, context-size, support, query, or model selection is permitted from the new outer results. The four previously unseen split seeds form the replication cohort; seed 42 is included only in a separately labeled combined estimate."
+}
