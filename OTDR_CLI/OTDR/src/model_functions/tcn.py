@@ -101,7 +101,55 @@ class AttentionPooling(nn.Module):
         return torch.sum(x * weights, dim=-1)  # (B, C)
 
 
-class OTDR_TCN(nn.Module):
+class OTDRTCNBackbone(nn.Module):
+    """Checkpoint-compatible TCN feature extractor shared by OTDR heads."""
+
+    def __init__(
+        self,
+        *,
+        in_ch: int = 2,
+        mid_ch: int = 64,
+        n_blocks: int = 4,
+        k: int = 3,
+        dropout: float = 0.1,
+        pooling: str = "attention",
+    ) -> None:
+        super().__init__()
+        if pooling not in {"mean", "attention", "self_attention"}:
+            raise ValueError("pooling must be mean, attention, or self_attention")
+        layers: list[nn.Module] = []
+        ch = in_ch
+        for b in range(n_blocks):
+            layers.append(TemporalBlock(ch, mid_ch, k, 2 ** b, dropout=dropout))
+            ch = mid_ch
+        self.tcn = nn.Sequential(*layers)
+        self.pooling = pooling
+        self.attn_pool = AttentionPooling(mid_ch) if pooling == "attention" else None
+        if pooling == "self_attention":
+            heads = 4 if mid_ch % 4 == 0 else 1
+            self.self_attention = nn.MultiheadAttention(
+                mid_ch, heads, dropout=dropout, batch_first=True
+            )
+            self.self_attention_norm = nn.LayerNorm(mid_ch)
+        else:
+            self.self_attention = None
+            self.self_attention_norm = None
+        self.output_dim = mid_ch
+
+    def encode(self, x: torch.Tensor) -> torch.Tensor:
+        sequence = self.tcn(x)
+        if self.pooling == "mean":
+            return sequence.mean(dim=-1)
+        if self.pooling == "attention":
+            return self.attn_pool(sequence)
+        tokens = sequence.transpose(1, 2)
+        attended, _ = self.self_attention(
+            tokens, tokens, tokens, need_weights=False
+        )
+        return self.self_attention_norm(tokens + attended).mean(dim=1)
+
+
+class OTDR_TCN(OTDRTCNBackbone):
     """Dilated TCN multitask model.
 
     Parameters
@@ -127,15 +175,16 @@ class OTDR_TCN(nn.Module):
         k: int = 3,
         n_classes: int = 8,
         dropout: float = 0.1,
+        pooling: str = "attention",
     ) -> None:
-        super().__init__()
-        layers: list[nn.Module] = []
-        ch = in_ch
-        for b in range(n_blocks):
-            layers.append(TemporalBlock(ch, mid_ch, k, 2 ** b, dropout=dropout))
-            ch = mid_ch
-        self.tcn = nn.Sequential(*layers)
-        self.attn_pool = AttentionPooling(mid_ch)
+        super().__init__(
+            in_ch=in_ch,
+            mid_ch=mid_ch,
+            n_blocks=n_blocks,
+            k=k,
+            dropout=dropout,
+            pooling=pooling,
+        )
 
         # heads
         self.class_head = nn.Linear(mid_ch, n_classes)
@@ -146,8 +195,7 @@ class OTDR_TCN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """x is expected to be (B, 2, L) already."""
-        h = self.tcn(x)              # (B, mid_ch, L)
-        h = self.attn_pool(h)        # (B, mid_ch)
+        h = self.encode(x)           # (B, mid_ch)
         return self.class_head(h), self.loc_head(h).squeeze(-1)
 
     def _init_weights(self) -> None:

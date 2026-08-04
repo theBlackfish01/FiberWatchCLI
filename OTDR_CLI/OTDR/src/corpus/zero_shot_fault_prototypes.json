@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "classes": [
+    {
+      "id": 0,
+      "name": "normal / no fault",
+      "descriptions": [
+        "A healthy OTDR trace with gradual baseline attenuation and no unexpected localized event.",
+        "The backscatter profile remains smooth across distance without an abrupt step, anomalous peak, or premature end.",
+        "A non-fault condition: no excess localized attenuation and no unexpected Fresnel reflection are visible in the raw trace.",
+        "Unlike a splice, bend, connector fault, cut, or reflector, the trace contains no distinct event morphology beyond the expected baseline.",
+        "Normal fiber operation with a stable trace and no location requiring corrective action."
+      ]
+    },
+    {
+      "id": 1,
+      "name": "fiber tapping",
+      "descriptions": [
+        "A fiber-tapping event caused by localized coupling or intrusion that perturbs the OTDR backscatter trace.",
+        "The raw trace shows a localized disturbance or small attenuation change rather than a clean high reflection or complete termination.",
+        "Typically a weakly reflective or non-reflective localized event with moderate disruption around one distance bin.",
+        "Unlike a cut the trace continues beyond the event; unlike a strong reflector it lacks a dominant narrow Fresnel peak.",
+        "A suspicious localized trace change consistent with physical access or optical coupling to the fiber."
+      ]
+    },
+    {
+      "id": 2,
+      "name": "bad splice",
+      "descriptions": [
+        "A poor fiber splice producing localized excess insertion loss in an OTDR trace.",
+        "The trace exhibits an abrupt downward step followed by continued backscatter at a reduced level.",
+        "Usually a non-reflective loss event, though a small reflection may appear when the splice contains a gap or defect.",
+        "Compared with bending, the transition is generally sharper and more step-like; compared with a cut, backscatter continues afterward.",
+        "A localized splice-quality fault that should be inspected and potentially re-spliced."
+      ]
+    },
+    {
+      "id": 3,
+      "name": "bending event",
+      "descriptions": [
+        "A macro-bend or micro-bend causing localized attenuation without a strong reflective interface.",
+        "The raw OTDR profile shows a gradual or moderately broad reduction in backscatter followed by a lower continuing level.",
+        "This is predominantly a non-reflective loss event with a wider transition than a clean point splice.",
+        "Unlike a connector or reflector it lacks a sharp Fresnel peak; unlike a cut the trace remains visible beyond the bend.",
+        "A localized bend-related attenuation signature suggesting excessive curvature or mechanical stress."
+      ]
+    },
+    {
+      "id": 4,
+      "name": "dirty connector",
+      "descriptions": [
+        "A contaminated or poorly seated connector producing abnormal loss and irregular reflection.",
+        "The OTDR trace contains a connector-like peak or messy localized disturbance with a level change after the event.",
+        "A reflective event whose shape and associated attenuation are less clean than a normal PC or UPC connector.",
+        "Compared with a good connector it has excessive or irregular loss; compared with a strong reflector its peak is less dominant.",
+        "A connector fault consistent with contamination, damage, or poor mating that warrants cleaning and reseating."
+      ]
+    },
+    {
+      "id": 5,
+      "name": "fiber cut",
+      "descriptions": [
+        "A broken fiber causing an abrupt termination of the OTDR backscatter trace.",
+        "The trace shows a sudden large drop or end-of-trace at the break distance, often after a prominent reflection.",
+        "A severe terminal loss event that may be strongly reflective when the broken glass forms an air interface.",
+        "Unlike a reflector or connector, meaningful backscatter does not continue beyond the event location.",
+        "A complete fiber break requiring repair or replacement at the detected termination point."
+      ]
+    },
+    {
+      "id": 6,
+      "name": "PC / UPC connector event",
+      "descriptions": [
+        "A normal physical-contact connector event with small insertion loss and a controlled reflection.",
+        "The raw trace shows a narrow connector-like reflection at an expected point with continued backscatter afterward.",
+        "A clean reflective event with modest amplitude and limited associated attenuation.",
+        "Unlike a dirty connector the event is regular with low excess loss; unlike a strong reflector the peak is comparatively moderate.",
+        "An expected mated PC or UPC connector signature rather than a severe fiber fault."
+      ]
+    },
+    {
+      "id": 7,
+      "name": "strong reflector",
+      "descriptions": [
+        "A highly reflective localized interface producing a strong Fresnel peak in the OTDR trace.",
+        "The raw trace contains a dominant narrow upward spike at one location, with the trace generally continuing afterward.",
+        "A strong reflective event that may arise from an open connector, reflective component, or high-index discontinuity.",
+        "Unlike a fiber cut the signal need not terminate after the peak; unlike a normal connector the reflected peak is much stronger.",
+        "A pronounced reflector that should be matched to planned hardware or investigated as an unexpected open interface."
+      ]
+    }
+  ]
+}
