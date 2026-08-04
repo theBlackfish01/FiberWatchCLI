@@ -198,10 +198,157 @@ python -m src.train --mode all --use-loss-reflectance --data data/OTDR_DATA.csv
 
 Both commands persist a `feature_config` block in the emitted metadata. When the loss/Reflectance flag is enabled the scaler and checkpoints receive a `_lr` suffix; evaluation automatically targets those filenames when `--use-loss-reflectance` is provided and will refuse to run if the requested feature signature diverges from the checkpoint metadata.
 
+### OTDR zero-shot fault classification (experimental)
+
+The zero-shot path aligns CUDA-encoded OTDR traces with five versioned semantic
+descriptions for each class. It uses only `SNR` and `P1` through `P30`; target-derived
+`loss`, `Reflectance`, `Position`, and `Class` fields are never model inputs. Class 0
+is the normal anchor, while all 21 unordered pairs from fault classes 1 through 7
+serve as unseen-class folds.
+
+The command is intentionally CUDA-only and exits instead of silently falling back
+to CPU:
+
+```bash
+cd OTDR_CLI/OTDR
+python -m src.zero_shot train-fold \
+  --data src/data/OTDR_DATA.csv \
+  --prototypes src/corpus/zero_shot_fault_prototypes.json \
+  --holdout 1 --holdout 2 --device cuda:0
+```
+
+Run the complete pairwise benchmark with:
+
+```bash
+python -m src.zero_shot benchmark \
+  --data src/data/OTDR_DATA.csv \
+  --prototypes src/corpus/zero_shot_fault_prototypes.json \
+  --device cuda:0
+```
+
+Artifacts under `models/zero_shot/fold_XX_YY/` include the checkpoint, scaler,
+prototype embeddings, leakage-safe split manifest, CUDA metadata, predictions,
+confusion matrices, calibration curve, and both conventional ZSL and generalized
+ZSL metrics. The generalized headline metric is the harmonic mean of macro seen
+and unseen class accuracy.
+
+### OTDR multi-similarity one-shot classification (experimental)
+
+The multi-similarity one-shot path learns whether two OTDR traces represent the
+same class. A shared TCN encoder feeds a symmetric comparison head containing
+mean L1 distance, RMS L2 distance, cosine similarity, and the full Hadamard
+product. Training uses balanced same/different pairs and binary cross-entropy.
+At inference, a reference gallery supports explicit unknown rejection and can be
+extended with a confirmed example without retraining the network.
+
+It uses the same leakage-safe `SNR` plus `P1` through `P30` feature contract and
+the same 21 pairwise held-out-fault folds as the semantic zero-shot path. CUDA is
+mandatory. The primary benchmark reserves 20% of each held-out class as a
+support pool, evaluates on the disjoint 80% query set, and reports 20
+deterministic one-reference draws by default:
+
+Unknown thresholds are calibrated with five leave-one-seen-fault-out models per
+outer fold. Scores are normalized by the known-validation median and IQR before
+cross-fold aggregation. Uniform and seen-rich galleries receive independent
+calibration. The `balanced` operating point maximizes known/unknown harmonic
+mean; `normal_far` uses the final model's normal-validation 1st percentile.
+
+```bash
+cd OTDR_CLI/OTDR
+python -m src.one_shot train-fold \
+  --data src/data/OTDR_DATA.csv \
+  --holdout 1 --holdout 2 --device cuda:0
+
+python -m src.one_shot evaluate-detection \
+  --fold-dir models/one_shot_crossfit/fold_01_02 \
+  --method learned --regime uniform_one_reference \
+  --operating-point balanced --device cuda:0
+
+python -m src.one_shot evaluate-one-shot \
+  --fold-dir models/one_shot_crossfit/fold_01_02 \
+  --method cosine_1nn --regime uniform_one_reference \
+  --operating-point normal_far --device cuda:0
+```
+
+The same encoded traces are evaluated with the learned multi-similarity head,
+cosine 1NN, and Euclidean 1NN. Every fold writes normalized score tables,
+known/unknown histograms, and ROC curves. Run all 21 folds with `benchmark`.
+
+`enroll-reference` creates a new gallery from confirmed labeled traces, while
+`classify` applies the calibrated rejection threshold. `classify` also accepts
+an optional semantic zero-shot predictions CSV via `--semantic-suggestions`;
+those labels are surfaced only for rejected traces and remain suggestions until
+human confirmation and enrollment.
+
+Learned-head ablations are available by retraining with
+`--similarity-mode l1`, `l2`, `cosine`, or `product`; the default is the complete
+`multi` feature set.
+
+Artifacts under `models/one_shot_crossfit/fold_XX_YY/` include the CUDA-trained
+checkpoint, fitted scaler, uniform and seen-rich galleries, calibration curve,
+GPU and dataset hashes, pre-enrollment detection metrics, and post-enrollment
+seen/unseen metrics across support draws. The validated 12-epoch full experiment
+covered all 21 held-out pairs, both operating points, all three methods, and both
+galleries. Selected aggregate results are:
+
+| Gallery / method / operating point | Detection AUROC | Known acceptance | Unknown recall | Post-enrollment H |
+|---|---:|---:|---:|---:|
+| Uniform / learned / normal-FAR | 0.6108 | 0.9863 | 0.0426 | 0.2136 |
+| Uniform / cosine 1NN / normal-FAR | 0.5326 | 0.9583 | 0.0527 | **0.2933** |
+| Seen-rich / cosine 1NN / balanced | **0.6566** | 0.5602 | **0.6527** | 0.0719 |
+
+These operating points expose the main trade-off: the normal-FAR setting retains
+known traces but detects few unknown faults, while balanced rejection detects more
+unknowns at the cost of known acceptance. The semantic zero-shot implementation
+has unit and CUDA smoke validation, but no completed all-fold result is claimed
+here.
+
+### OTDR fixed-memory TabPFN enrollment
+
+The fixed-memory runner evaluates low-shot enrollment without updating model
+weights. For each held-out pair of fault classes, six base classes retain 20
+group-distinct examples each. The two enrolled classes append 1, 3, or 5 labeled
+examples each. Three fixed context memories are ensembled, and evaluation uses a
+balanced 800-example query with 100 examples per class.
+
+This configuration uses the scaled `SNR`, `loss`, and `Reflectance` fields. The
+class label and fault position are never model inputs. CUDA is mandatory for
+TabPFN execution.
+
+Validated results across all 21 held-out fault pairs and four fresh split seeds
+(84 pair/seed units, 20 support draws per unit) are:
+
+| Shots per enrolled class | Harmonic mean H (95% CI) | Enrolled accuracy | Balanced accuracy | Pair/seed means with H >= 0.95 |
+|---:|---:|---:|---:|---:|
+| 1 | 0.9313 (0.9086-0.9526) | 0.8826 | 0.9706 | 33.3% |
+| 3 | 0.9811 (0.9740-0.9876) | 0.9653 | 0.9913 | 94.0% |
+| 5 | **0.9887 (0.9849-0.9923)** | **0.9788** | **0.9947** | **100%** |
+
+Base-class accuracy remained 1.0000. The five-shot minimum pair/seed mean was
+0.9612. Individual support selection remains relevant: 89.3% of five-shot draws
+reached H >= 0.95, and the lowest single draw was 0.7302. Bad-splice recall was
+the limiting per-class result at 0.9321.
+
+Run one confirmatory unit or resume the full CUDA matrix with:
+
+```bash
+cd OTDR_CLI/OTDR
+
+python -m src.tabpfn_incremental_memory --study confirmatory unit \
+  --pair 1-2 --seed 7 --device cuda:0
+
+python -m src.tabpfn_incremental_memory --study confirmatory matrix \
+  --device cuda:0
+```
+
+The runner stores per-example probabilities, predictions, query/support group
+identities, CUDA metadata, and artifact hashes. Generated experiment artifacts
+and checkpoints are intentionally excluded from version control.
+
 Key flags:
 
 * `--binary-path / --anomaly-path / --tst-path` – swap in specific checkpoints for each cascade stage.
-* `--use-loss-reflectance` – include the leakage-prone `loss`/`Reflectance` scalars. Trained checkpoints and scalers gain a `_lr` suffix and evaluation will look for those files automatically when the flag is set.
+* `--use-loss-reflectance` – include the diagnostic `loss`/`Reflectance` scalars. Trained checkpoints and scalers gain a `_lr` suffix and evaluation will look for those files automatically when the flag is set.
 
 The legacy individual commands (`python -m src.train` / `python -m src.eval`) still work if you prefer manual control.
 

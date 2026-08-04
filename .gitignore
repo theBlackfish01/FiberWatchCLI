@@ -4,3 +4,27 @@ data/
 /models/
 .env
 OTDR_CLI/OTDR/src/config/
+.venv-zsl/
+
+# Python, IDE, and local test state
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.idea/
+tmp/
+
+# Generated checkpoints, run logs, plots, and model outputs
+**/models/
+**/outputs/
+**/wandb/
+OTDR_CLI/OTDR/experiments/
+
+# Generated retrieval indexes/corpora
+OTDR_CLI/OTDR/src/corpus/docs.json
+OTDR_CLI/PHI-OTDR/src/corpus/chunks.jsonl
+OTDR_CLI/PHI-OTDR/src/corpus/chunks.meta.json
+OTDR_CLI/PHI-OTDR/src/corpus/index.faiss
+
+# Local review and development documents
+OTDR_REVIEW.md
+PHI_OTDR_REVIEW.md
