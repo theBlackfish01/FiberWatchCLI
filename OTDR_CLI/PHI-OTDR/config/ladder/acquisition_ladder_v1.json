@@ -1,0 +1,76 @@
+{
+  "data_contract": {
+    "classes": 6,
+    "sessions": 441,
+    "windows": 15418
+  },
+  "dataset_fingerprint_sha256": "df38c1a11ac10481cc376eb791d1bdc699b967041a0f8b89c9f46b11027ddfe1",
+  "evidence_status": "retrospective development; not independent confirmation",
+  "fixed_seed": 20260808,
+  "independent_unit": "recording session prefix before _single_data_<window>",
+  "levels": {
+    "cross_era": {
+      "directions": [
+        "january_to_april_may",
+        "april_may_to_january"
+      ]
+    },
+    "date_class_cell": {
+      "expected_cells": 28,
+      "minimum_sessions": 2,
+      "rule": "hold out an observed date/class cell only when its date contains another class and its class occurs on another date"
+    },
+    "leave_one_date_out": {
+      "expected_dates": 21
+    },
+    "random_session": {
+      "test_fraction": 0.2
+    },
+    "random_window": {
+      "test_fraction": 0.2
+    }
+  },
+  "model": {
+    "C": 1.0,
+    "class_weight": "balanced",
+    "max_iter": 4000,
+    "name": "fixed_standardized_multinomial_logistic",
+    "selection_policy": "fixed a priori for protocol comparison; no target- or fold-specific hyperparameter selection",
+    "solver": "lbfgs"
+  },
+  "morphology_bundle_sha256": "609295dfc34c838079d1bef32f0827a604d785962609e9e03de65db2a3b5ac36",
+  "primary_metrics": [
+    "session_macro_f1_six_classes",
+    "session_balanced_accuracy_observed_classes",
+    "session_worst_observed_class_recall",
+    "session_ece_10"
+  ],
+  "protocol_name": "phi_otdr_acquisition_safe_evaluation_ladder_v1",
+  "representations": [
+    {
+      "ablation": "dynamics",
+      "estimator": "multi_estimator_consensus",
+      "name": "absolute_dynamics",
+      "view": "absolute"
+    },
+    {
+      "ablation": "dynamics",
+      "estimator": "temporal_difference_energy",
+      "name": "registered_position_difference_dynamics",
+      "view": "registered_position"
+    },
+    {
+      "ablation": "fused",
+      "estimator": "multi_estimator_consensus",
+      "name": "invariant_fused",
+      "view": "invariant"
+    }
+  ],
+  "schema_version": 1,
+  "seeds": [
+    20260808,
+    20260809,
+    20260810
+  ],
+  "selection_used_target_outcomes": false
+}

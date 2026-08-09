@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "protocol_name": "phi_otdr_robust_distributional_enrollment_v1",
+  "evidence_status": "retrospective frozen development comparison",
+  "dataset_fingerprint_sha256": "df38c1a11ac10481cc376eb791d1bdc699b967041a0f8b89c9f46b11027ddfe1",
+  "input_window_attributes": "phi_research_v3/morphology_attributes/window_attributes.npz",
+  "input_window_attributes_sha256": "18fd757ade7d2b2144072eb820e959c1aa05f6b8192197b65a93c5708dd6e9bd",
+  "input_session_attributes": "phi_research_v3/morphology_attributes/session_attributes.npz",
+  "input_session_attributes_sha256": "49d439f9ea5d8a45f68e96d1a47ad532ba9efd59be8c9857d09c13d84b7960bd",
+  "input_view": "position_free_morphology",
+  "independent_unit": "recording session",
+  "directions": ["january_to_april_may", "april_may_to_january"],
+  "heldout_classes": ["background", "digging", "knocking", "watering", "shaking", "walking"],
+  "shots": [1, 3, 5],
+  "random_support_draws": 30,
+  "support_seed": 20260808,
+  "projection_seed": 20260809,
+  "projection_count": 32,
+  "quantile_count": 19,
+  "trimmed_quantile_range": [0.15, 0.85],
+  "pca_components": 24,
+  "gallery_neighbors": 3,
+  "methods": {
+    "sliced_wasserstein_gallery": "untrimmed support-session gallery control",
+    "trimmed_sliced_wasserstein_gallery": "central-quantile partial-overlap control",
+    "robust_class_barycenter": "coordinatewise median session barycentre",
+    "support_consensus_weighted": "support barycentre weighted by inverse within-support median distance"
+  },
+  "probability_temperature": 1.0,
+  "abstention": {
+    "calibration_quantiles": [0.8, 0.9, 0.95],
+    "score": "minimum distance plus support disagreement"
+  },
+  "primary_metrics": ["enrollment_h", "session_macro_f1", "worst_class_recall", "enrolled_class_recall"],
+  "secondary_metrics": ["base_class_accuracy", "negative_log_likelihood", "brier_score", "ece_10", "risk_coverage_auc"],
+  "bootstrap_draws": 5000,
+  "multiplicity": "Benjamini-Hochberg within direction-shot metric families",
+  "selection_used_target_outcomes": false,
+  "promotion_gate": "paired mean Enrollment-H improvement with non-inferior worst-draw and no greater than 0.03 loss in base-class accuracy"
+}
