@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "name": "phi_otdr_distributional_enrollment_v3",
+  "frozen_date": "2026-08-08",
+  "evidence_status": "retrospective development; not independent confirmation",
+  "dataset_fingerprint_sha256": "df38c1a11ac10481cc376eb791d1bdc699b967041a0f8b89c9f46b11027ddfe1",
+  "parent_protocol_sha256": "04a4400af3c0fd31e97533e7ba8192ab78b9090514954f69a68fbbb345800594",
+  "input_view": {
+    "name": "registered_position_difference_dynamics",
+    "view": "registered_position",
+    "estimator": "temporal_difference_energy",
+    "ablation": "dynamics"
+  },
+  "outer_folds": "both acquisition directions times six leave-one-class-out folds",
+  "methods": [
+    "class_prototype",
+    "sliced_wasserstein_session_gallery",
+    "registered_distribution_hybrid",
+    "cuda_supervised_siamese_session_embedding"
+  ],
+  "distribution": {
+    "aggregate_pca_components": 32,
+    "sliced_wasserstein_projections": 16,
+    "sliced_wasserstein_quantiles": 11,
+    "session_gallery_neighbors": 3,
+    "fit_policy": "source_train seen-class windows and sessions only within each held-out-class fold"
+  },
+  "support": {
+    "shots": [1, 3, 5],
+    "random_draws": 30,
+    "selectors": ["random", "medoid", "k_center", "pool_coverage"],
+    "candidate_partition": "target_support",
+    "query_partition": "target_query",
+    "session_disjoint_required": true,
+    "query_information_forbidden": true
+  },
+  "detection": {
+    "calibration_partition": "target_calibration seen classes only",
+    "known_acceptance_quantile": 0.95,
+    "primary_scores": ["unknown_auroc", "unknown_aupr", "known_acceptance", "unknown_recall", "detection_h"]
+  },
+  "siamese": {
+    "cuda_required": true,
+    "seeds": [20260808, 20260809, 20260810],
+    "embedding_dim": 64,
+    "hidden_dim": 128,
+    "contrastive_margin_cosine": 0.2,
+    "classification_loss_weight": 1.0,
+    "pair_loss_weight": 0.5,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.001,
+    "max_epochs": 50,
+    "patience": 8,
+    "selection": "source-validation nearest-prototype macro-F1, then NLL"
+  },
+  "primary_post_enrollment_metrics": [
+    "base_class_accuracy",
+    "enrolled_class_recall",
+    "enrollment_h",
+    "session_macro_f1",
+    "worst_class_recall",
+    "worst_random_support_draw"
+  ],
+  "statistical_unit": "recording session",
+  "target_policy": "Target support is used only after pre-enrollment detection. Target query correctness never selects a method, support session, threshold, epoch, or hyperparameter."
+}

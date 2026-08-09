@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "name": "phi_otdr_morphology_before_name_v3",
+  "frozen_date": "2026-08-08",
+  "evidence_status": "retrospective development; not independent confirmation",
+  "dataset_fingerprint_sha256": "df38c1a11ac10481cc376eb791d1bdc699b967041a0f8b89c9f46b11027ddfe1",
+  "parent_protocol_sha256": "04a4400af3c0fd31e97533e7ba8192ab78b9090514954f69a68fbbb345800594",
+  "input_bundle_sha256": "609295dfc34c838079d1bef32f0827a604d785962609e9e03de65db2a3b5ac36",
+  "attribute_families": {
+    "salience": ["log_delta_rms", "log_delta_mean_abs", "log_delta_p95_abs", "log_difference_scale"],
+    "impulsiveness": ["log_burstiness"],
+    "periodicity_frequency": ["periodicity", "spectral_centroid", "very_low_frequency_share", "low_frequency_share", "high_frequency_share"],
+    "temporal_modulation": ["temporal_modulation_cv", "temporal_peak_ratio", "temporal_trend_normalized"],
+    "spatial_morphology": ["global_channel_coherence", "adjacent_channel_coherence", "spatial_width", "spatial_entropy", "spatial_peak_share", "activity_confidence"],
+    "absolute_position": ["absolute_center"]
+  },
+  "session_aggregation": ["mean", "standard_deviation", "q10", "median", "q90", "ordered_window_slope"],
+  "views": ["morphology_only", "position_only", "morphology_plus_position"],
+  "event_name_mapper": {
+    "model": "standardized class-balanced multinomial logistic regression",
+    "C_grid": [0.01, 0.1, 1.0, 10.0],
+    "selection": "source-validation macro-F1 only",
+    "final_fit": "source train plus source validation",
+    "calibration": "temperature selected on source calibration"
+  },
+  "retrieval": {
+    "neighbors": 3,
+    "gallery": "source train plus source validation sessions",
+    "distance": "Euclidean after source-gallery standardization"
+  },
+  "few_shot_remapping": {
+    "shots": [1, 3, 5],
+    "random_draws": 30,
+    "selectors": ["random", "medoid", "k_center", "pool_coverage"],
+    "base_gallery": "source-train seen-class session attributes",
+    "target_support": "held-out-class target-support sessions only",
+    "target_query": "session-disjoint target-query sessions",
+    "query_information_forbidden": true
+  },
+  "controls": [
+    "registered_position temporal-difference dynamics logistic",
+    "invariant fused logistic",
+    "registered robust-variance fused histogram-gradient tree",
+    "class prototype, registered distribution hybrid, sliced-Wasserstein gallery, and CUDA Siamese enrollment"
+  ],
+  "target_policy": "No target-query label, correctness, or metric may select attributes, views, hyperparameters, support sessions, calibration, or stop/go decisions. All target-query results are retrospective evidence.",
+  "semantics_policy": "Attributes are computed from signals. Filename tokens and class names are not attribute inputs. Attribute names are physical interpretations, not independently annotated ground truth.",
+  "stop_go": "Treat the extension as supported only if it improves bidirectional transfer or five-shot remapping without worsening worst-class behavior; otherwise retain it as an interpretable negative/control result."
+}

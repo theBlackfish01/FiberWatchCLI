@@ -1,0 +1,102 @@
+{
+  "data_contract": {
+    "known_exact_duplicate_groups": 1,
+    "known_zero_byte_files": 1,
+    "listed_mat_files": 15419,
+    "readable_mat_files": 15418,
+    "sessions": 441
+  },
+  "dataset_fingerprint_sha256": "df38c1a11ac10481cc376eb791d1bdc699b967041a0f8b89c9f46b11027ddfe1",
+  "directions": [
+    {
+      "derived_from_v2_manifest_sha256": "65c4f5a081d63e2414875033df1cad203165d342a7ddab995661bf8b9df0d076",
+      "manifest": "acquisition_january_to_april_may_v3.json",
+      "manifest_sha256": "d113015b91d800601225487cb1a495f5cc399e5bf315121cacac0c7a94c1d01b",
+      "name": "january_to_april_may"
+    },
+    {
+      "derived_from_v2_manifest_sha256": "d7cb13a0a6043c3706c51e4d8a95cb160f42f312bab4377609e1eeeaeda83a28",
+      "manifest": "acquisition_april_may_to_january_v3.json",
+      "manifest_sha256": "b82500b793c0295451ab552dce2efe58c322944b5555949867175658bc056821",
+      "name": "april_may_to_january"
+    }
+  ],
+  "enrollment_policy": {
+    "draws": 30,
+    "selectors": [
+      "random",
+      "medoid",
+      "k_center",
+      "pool_coverage"
+    ],
+    "shots": [
+      1,
+      3,
+      5
+    ],
+    "support_query_session_disjoint": true
+  },
+  "evidence_status": "retrospective development, not confirmatory",
+  "external_confirmation_required": true,
+  "frozen_date": "2026-08-08",
+  "independent_unit": "recording session prefix before _single_data_<window>",
+  "name": "phi_otdr_spatial_morphology_retrospective_v3",
+  "neural_policy": {
+    "cpu_fallback_forbidden": true,
+    "cuda_required": true,
+    "minimum_seeds_for_claim": 3,
+    "mixed_precision": "allowed and logged",
+    "seeds": [
+      20260808,
+      20260809,
+      20260810
+    ]
+  },
+  "primary_metrics": [
+    "session_macro_f1",
+    "session_balanced_accuracy",
+    "per_class_recall",
+    "worst_class_recall",
+    "acquisition_generalization_gap"
+  ],
+  "primary_question": "Can spatially registered, position-aware morphology reduce acquisition-era sensitivity while preserving session-level activity discrimination?",
+  "registration_estimators": [
+    "temporal_difference_energy",
+    "robust_variance",
+    "spectral_energy",
+    "multi_estimator_consensus"
+  ],
+  "required_controls": [
+    "label_permutation",
+    "era_probe",
+    "source_only_selection",
+    "boundary_clipping_and_energy_retention",
+    "amplitude_only",
+    "dynamics_only",
+    "fused"
+  ],
+  "required_views": [
+    "absolute_channels",
+    "translation_invariant_pooling",
+    "registered_morphology",
+    "registered_plus_position",
+    "dual_branch_absolute_and_registered",
+    "source_channel_shift_augmentation"
+  ],
+  "schema_version": 3,
+  "secondary_metrics": [
+    "negative_log_likelihood",
+    "brier_score",
+    "expected_calibration_error",
+    "era_probe_balanced_accuracy",
+    "risk_coverage",
+    "runtime_and_peak_cuda_memory"
+  ],
+  "selection_policy": "All method selection and stop/go decisions use source development partitions only. Target support/calibration are restricted to declared enrollment/calibration. Historical target-query metrics are evaluated only after each comparison is frozen.",
+  "stop_go": {
+    "external": "No paper-level robustness claim until a new session-separated acquisition domain is evaluated once under a preregistered frozen protocol.",
+    "neural": "Continue only if interpretable morphology establishes transferable signal or a CUDA pilot improves source validation and at least one retrospective direction.",
+    "registration": "Continue if a source-selected registered or invariant view improves either-direction target macro-F1 or worst-class recall without a material source-validation or information-retention penalty; interpret retrospective evidence cautiously."
+  },
+  "uncertainty": "session-cluster bootstrap confidence intervals; paired direction/class comparisons; Benjamini-Hochberg correction for feature families"
+}
