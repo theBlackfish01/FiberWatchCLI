@@ -1,0 +1,4131 @@
+{
+  "dataset_fingerprint_sha256": "a186512a2279d4e45560da7423ea5083380ac76d06ef7b37af53b4281b94ff82",
+  "final_query_access_policy": "No training, preprocessing fit, early stopping, architecture selection, hyperparameter selection, support selection, or threshold calibration may use final_query windows.",
+  "grouping_unit": "recording session (filename prefix before _single_data_<window>)",
+  "known_metadata_limitations": [
+    "No authoritative subject, environment, sensor, or acquisition-condition fields are supplied.",
+    "source_token is not treated as a subject because its naming semantics change across batches.",
+    "The split is session-disjoint but cannot guarantee subject- or environment-disjointness."
+  ],
+  "manifest_sha256": "9c5898a7161275bbe5857d118ad6fa19c80a7213dcd37a3699bf09e2c8c26188",
+  "name": "phi_otdr_session_split_v1",
+  "partition_order": [
+    "train",
+    "validation",
+    "calibration",
+    "support",
+    "final_query"
+  ],
+  "ratios": {
+    "calibration": 0.1,
+    "final_query": 0.1,
+    "support": 0.1,
+    "train": 0.6,
+    "validation": 0.1
+  },
+  "schema_version": 1,
+  "seed": 20260805,
+  "sessions": [
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220104",
+      "partition": "final_query",
+      "session_id": "220104_sys_dig_01",
+      "source_token": "sys",
+      "window_count": 21
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220104",
+      "partition": "train",
+      "session_id": "220104_sys_dig_02",
+      "source_token": "sys",
+      "window_count": 22
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220104",
+      "partition": "train",
+      "session_id": "220104_sys_dig_03",
+      "source_token": "sys",
+      "window_count": 21
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220104",
+      "partition": "validation",
+      "session_id": "220104_sys_dig_04",
+      "source_token": "sys",
+      "window_count": 22
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220104",
+      "partition": "train",
+      "session_id": "220104_sys_dig_05",
+      "source_token": "sys",
+      "window_count": 22
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "final_query",
+      "session_id": "220110_cxm_dig_02",
+      "source_token": "cxm",
+      "window_count": 19
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "final_query",
+      "session_id": "220110_tml_dig_01",
+      "source_token": "tml",
+      "window_count": 21
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "validation",
+      "session_id": "220110_tml_dig_02",
+      "source_token": "tml",
+      "window_count": 23
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "calibration",
+      "session_id": "220110_tml_dig_03",
+      "source_token": "tml",
+      "window_count": 22
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "support",
+      "session_id": "220110_tml_dig_04",
+      "source_token": "tml",
+      "window_count": 21
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "final_query",
+      "session_id": "220110_tml_dig_05",
+      "source_token": "tml",
+      "window_count": 18
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "train",
+      "session_id": "220110_yyn_dig_01",
+      "source_token": "yyn",
+      "window_count": 19
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "train",
+      "session_id": "220110_yyn_dig_02",
+      "source_token": "yyn",
+      "window_count": 20
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "support",
+      "session_id": "220110_yyn_dig_03",
+      "source_token": "yyn",
+      "window_count": 19
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "train",
+      "session_id": "220110_yyn_dig_04",
+      "source_token": "yyn",
+      "window_count": 17
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "train",
+      "session_id": "220110_yyn_dig_05",
+      "source_token": "yyn",
+      "window_count": 17
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220110",
+      "partition": "calibration",
+      "session_id": "220110_yyn_dig_06",
+      "source_token": "yyn",
+      "window_count": 20
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "calibration",
+      "session_id": "220111_cxm_knock_01",
+      "source_token": "cxm",
+      "window_count": 4
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "support",
+      "session_id": "220111_cxm_knock_02",
+      "source_token": "cxm",
+      "window_count": 73
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "train",
+      "session_id": "220111_cxm_knock_03",
+      "source_token": "cxm",
+      "window_count": 58
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "calibration",
+      "session_id": "220111_cxm_knock_04",
+      "source_token": "cxm",
+      "window_count": 32
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "validation",
+      "session_id": "220111_cxm_knock_05",
+      "source_token": "cxm",
+      "window_count": 34
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "train",
+      "session_id": "220111_cxm_knock_06",
+      "source_token": "cxm",
+      "window_count": 33
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "train",
+      "session_id": "220111_cxm_knock_07",
+      "source_token": "cxm",
+      "window_count": 27
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "train",
+      "session_id": "220111_sys_knock_01",
+      "source_token": "sys",
+      "window_count": 38
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "train",
+      "session_id": "220111_sys_knock_02",
+      "source_token": "sys",
+      "window_count": 37
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "train",
+      "session_id": "220111_sys_knock_03",
+      "source_token": "sys",
+      "window_count": 16
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220111",
+      "partition": "validation",
+      "session_id": "220111_sys_knock_04",
+      "source_token": "sys",
+      "window_count": 27
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_cxm_background_01",
+      "source_token": "cxm",
+      "window_count": 38
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_cxm_background_02",
+      "source_token": "cxm",
+      "window_count": 42
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_cxm_background_03",
+      "source_token": "cxm",
+      "window_count": 33
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_cxm_background_04",
+      "source_token": "cxm",
+      "window_count": 34
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_cxm_background_05",
+      "source_token": "cxm",
+      "window_count": 2
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220112",
+      "partition": "support",
+      "session_id": "220112_cxm_background_06",
+      "source_token": "cxm",
+      "window_count": 61
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_cxm_background_07",
+      "source_token": "cxm",
+      "window_count": 60
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_cxm_background_08",
+      "source_token": "cxm",
+      "window_count": 51
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_cxm_background_09",
+      "source_token": "cxm",
+      "window_count": 56
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_cxm_background_10",
+      "source_token": "cxm",
+      "window_count": 39
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_ssm_knock_01",
+      "source_token": "ssm",
+      "window_count": 29
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_ssm_knock_02",
+      "source_token": "ssm",
+      "window_count": 14
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_ssm_knock_03",
+      "source_token": "ssm",
+      "window_count": 28
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_ssm_knock_04",
+      "source_token": "ssm",
+      "window_count": 23
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "calibration",
+      "session_id": "220112_ssm_knock_05",
+      "source_token": "ssm",
+      "window_count": 33
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_yyn_knock_01",
+      "source_token": "yyn",
+      "window_count": 21
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_yyn_knock_02",
+      "source_token": "yyn",
+      "window_count": 40
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "validation",
+      "session_id": "220112_yyn_knock_03",
+      "source_token": "yyn",
+      "window_count": 33
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "final_query",
+      "session_id": "220112_yyn_knock_04",
+      "source_token": "yyn",
+      "window_count": 33
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "support",
+      "session_id": "220112_yyn_knock_05",
+      "source_token": "yyn",
+      "window_count": 26
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_yyn_knock_06",
+      "source_token": "yyn",
+      "window_count": 46
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "train",
+      "session_id": "220112_yyn_knock_07",
+      "source_token": "yyn",
+      "window_count": 18
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "final_query",
+      "session_id": "220112_yyn_knock_08",
+      "source_token": "yyn",
+      "window_count": 35
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220112",
+      "partition": "support",
+      "session_id": "220112_yyn_knock_09",
+      "source_token": "yyn",
+      "window_count": 36
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_dig_01",
+      "source_token": "jzy",
+      "window_count": 35
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220113",
+      "partition": "calibration",
+      "session_id": "220113_jzy_dig_02",
+      "source_token": "jzy",
+      "window_count": 30
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_dig_03",
+      "source_token": "jzy",
+      "window_count": 31
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_dig_04",
+      "source_token": "jzy",
+      "window_count": 30
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_dig_05",
+      "source_token": "jzy",
+      "window_count": 34
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_dig_06",
+      "source_token": "jzy",
+      "window_count": 46
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_dig_07",
+      "source_token": "jzy",
+      "window_count": 30
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_dig_08",
+      "source_token": "jzy",
+      "window_count": 31
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220113",
+      "partition": "final_query",
+      "session_id": "220113_jzy_dig_09",
+      "source_token": "jzy",
+      "window_count": 29
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_dig_10",
+      "source_token": "jzy",
+      "window_count": 29
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_water_01",
+      "source_token": "jzy",
+      "window_count": 4
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_water_02",
+      "source_token": "jzy",
+      "window_count": 16
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220113",
+      "partition": "calibration",
+      "session_id": "220113_jzy_water_03",
+      "source_token": "jzy",
+      "window_count": 39
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220113",
+      "partition": "calibration",
+      "session_id": "220113_jzy_water_04",
+      "source_token": "jzy",
+      "window_count": 27
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220113",
+      "partition": "calibration",
+      "session_id": "220113_jzy_water_05",
+      "source_token": "jzy",
+      "window_count": 38
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220113",
+      "partition": "final_query",
+      "session_id": "220113_jzy_water_06",
+      "source_token": "jzy",
+      "window_count": 32
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_water_07",
+      "source_token": "jzy",
+      "window_count": 36
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220113",
+      "partition": "support",
+      "session_id": "220113_jzy_water_08",
+      "source_token": "jzy",
+      "window_count": 30
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220113",
+      "partition": "support",
+      "session_id": "220113_jzy_water_09",
+      "source_token": "jzy",
+      "window_count": 42
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220113",
+      "partition": "train",
+      "session_id": "220113_jzy_water_10",
+      "source_token": "jzy",
+      "window_count": 37
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "validation",
+      "session_id": "220115_cxm_water_02",
+      "source_token": "cxm",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_03",
+      "source_token": "cxm",
+      "window_count": 17
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_04",
+      "source_token": "cxm",
+      "window_count": 22
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_05",
+      "source_token": "cxm",
+      "window_count": 16
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "validation",
+      "session_id": "220115_cxm_water_06",
+      "source_token": "cxm",
+      "window_count": 9
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_07",
+      "source_token": "cxm",
+      "window_count": 15
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "calibration",
+      "session_id": "220115_cxm_water_08",
+      "source_token": "cxm",
+      "window_count": 17
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_09",
+      "source_token": "cxm",
+      "window_count": 23
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "final_query",
+      "session_id": "220115_cxm_water_10",
+      "source_token": "cxm",
+      "window_count": 24
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "final_query",
+      "session_id": "220115_cxm_water_11",
+      "source_token": "cxm",
+      "window_count": 15
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "final_query",
+      "session_id": "220115_cxm_water_12",
+      "source_token": "cxm",
+      "window_count": 24
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "validation",
+      "session_id": "220115_cxm_water_13",
+      "source_token": "cxm",
+      "window_count": 20
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_14",
+      "source_token": "cxm",
+      "window_count": 25
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_15",
+      "source_token": "cxm",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_16",
+      "source_token": "cxm",
+      "window_count": 21
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "calibration",
+      "session_id": "220115_cxm_water_17",
+      "source_token": "cxm",
+      "window_count": 8
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_18",
+      "source_token": "cxm",
+      "window_count": 24
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_19",
+      "source_token": "cxm",
+      "window_count": 31
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_20",
+      "source_token": "cxm",
+      "window_count": 26
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "calibration",
+      "session_id": "220115_cxm_water_21",
+      "source_token": "cxm",
+      "window_count": 23
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "support",
+      "session_id": "220115_cxm_water_22",
+      "source_token": "cxm",
+      "window_count": 28
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_23",
+      "source_token": "cxm",
+      "window_count": 19
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "support",
+      "session_id": "220115_cxm_water_24",
+      "source_token": "cxm",
+      "window_count": 27
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "calibration",
+      "session_id": "220115_cxm_water_25",
+      "source_token": "cxm",
+      "window_count": 16
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "validation",
+      "session_id": "220115_cxm_water_26",
+      "source_token": "cxm",
+      "window_count": 20
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "train",
+      "session_id": "220115_cxm_water_27",
+      "source_token": "cxm",
+      "window_count": 22
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220115",
+      "partition": "final_query",
+      "session_id": "220115_cxm_water_28",
+      "source_token": "cxm",
+      "window_count": 24
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_cxm_background_01",
+      "source_token": "cxm",
+      "window_count": 45
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220116",
+      "partition": "final_query",
+      "session_id": "220116_cxm_background_02",
+      "source_token": "cxm",
+      "window_count": 43
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220116",
+      "partition": "validation",
+      "session_id": "220116_cxm_background_03",
+      "source_token": "cxm",
+      "window_count": 33
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_cxm_background_04",
+      "source_token": "cxm",
+      "window_count": 21
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_cxm_background_05",
+      "source_token": "cxm",
+      "window_count": 38
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220116",
+      "partition": "calibration",
+      "session_id": "220116_cxm_background_06",
+      "source_token": "cxm",
+      "window_count": 97
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_cxm_background_07",
+      "source_token": "cxm",
+      "window_count": 62
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_cxm_background_08",
+      "source_token": "cxm",
+      "window_count": 62
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220116",
+      "partition": "final_query",
+      "session_id": "220116_cxm_background_09",
+      "source_token": "cxm",
+      "window_count": 68
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_cxm_background_10",
+      "source_token": "cxm",
+      "window_count": 62
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_cxm_dig_01",
+      "source_token": "cxm",
+      "window_count": 28
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_cxm_dig_02",
+      "source_token": "cxm",
+      "window_count": 40
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_cxm_dig_03",
+      "source_token": "cxm",
+      "window_count": 34
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220116",
+      "partition": "support",
+      "session_id": "220116_cxm_dig_04",
+      "source_token": "cxm",
+      "window_count": 38
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_dig_01",
+      "source_token": "yu",
+      "window_count": 40
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_01",
+      "source_token": "yu",
+      "window_count": 15
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "calibration",
+      "session_id": "220116_yu_shake_02",
+      "source_token": "yu",
+      "window_count": 26
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_03",
+      "source_token": "yu",
+      "window_count": 40
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_04",
+      "source_token": "yu",
+      "window_count": 30
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_05",
+      "source_token": "yu",
+      "window_count": 34
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_06",
+      "source_token": "yu",
+      "window_count": 37
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_07",
+      "source_token": "yu",
+      "window_count": 37
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "final_query",
+      "session_id": "220116_yu_shake_08",
+      "source_token": "yu",
+      "window_count": 33
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_09",
+      "source_token": "yu",
+      "window_count": 37
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "validation",
+      "session_id": "220116_yu_shake_10",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "support",
+      "session_id": "220116_yu_shake_11",
+      "source_token": "yu",
+      "window_count": 34
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_12",
+      "source_token": "yu",
+      "window_count": 34
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "final_query",
+      "session_id": "220116_yu_shake_13",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "support",
+      "session_id": "220116_yu_shake_14",
+      "source_token": "yu",
+      "window_count": 37
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_15",
+      "source_token": "yu",
+      "window_count": 36
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "final_query",
+      "session_id": "220116_yu_shake_16",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "calibration",
+      "session_id": "220116_yu_shake_17",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_18",
+      "source_token": "yu",
+      "window_count": 36
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "support",
+      "session_id": "220116_yu_shake_19",
+      "source_token": "yu",
+      "window_count": 36
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "final_query",
+      "session_id": "220116_yu_shake_20",
+      "source_token": "yu",
+      "window_count": 37
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "final_query",
+      "session_id": "220116_yu_shake_21",
+      "source_token": "yu",
+      "window_count": 36
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_22",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_23",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_24",
+      "source_token": "yu",
+      "window_count": 36
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_25",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_26",
+      "source_token": "yu",
+      "window_count": 37
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_27",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_28",
+      "source_token": "yu",
+      "window_count": 33
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_29",
+      "source_token": "yu",
+      "window_count": 37
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_30",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "validation",
+      "session_id": "220116_yu_shake_31",
+      "source_token": "yu",
+      "window_count": 36
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "validation",
+      "session_id": "220116_yu_shake_32",
+      "source_token": "yu",
+      "window_count": 36
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "calibration",
+      "session_id": "220116_yu_shake_33",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_34",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_35",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_36",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_37",
+      "source_token": "yu",
+      "window_count": 36
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "support",
+      "session_id": "220116_yu_shake_38",
+      "source_token": "yu",
+      "window_count": 33
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_39",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_40",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220116",
+      "partition": "train",
+      "session_id": "220116_yu_shake_42",
+      "source_token": "yu",
+      "window_count": 35
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_background_01",
+      "source_token": "cxm",
+      "window_count": 41
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_background_02",
+      "source_token": "cxm",
+      "window_count": 61
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_background_03",
+      "source_token": "cxm",
+      "window_count": 62
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_background_04",
+      "source_token": "cxm",
+      "window_count": 61
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "validation",
+      "session_id": "220117_cxm_background_05",
+      "source_token": "cxm",
+      "window_count": 40
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "calibration",
+      "session_id": "220117_cxm_background_06",
+      "source_token": "cxm",
+      "window_count": 52
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "validation",
+      "session_id": "220117_cxm_background_07",
+      "source_token": "cxm",
+      "window_count": 57
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_background_08",
+      "source_token": "cxm",
+      "window_count": 52
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "support",
+      "session_id": "220117_cxm_background_09",
+      "source_token": "cxm",
+      "window_count": 50
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "calibration",
+      "session_id": "220117_cxm_background_10",
+      "source_token": "cxm",
+      "window_count": 43
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "calibration",
+      "session_id": "220117_cxm_background_11",
+      "source_token": "cxm",
+      "window_count": 20
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_background_12",
+      "source_token": "cxm",
+      "window_count": 33
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_background_13",
+      "source_token": "cxm",
+      "window_count": 10
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_background_14",
+      "source_token": "cxm",
+      "window_count": 35
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220117",
+      "partition": "calibration",
+      "session_id": "220117_cxm_background_15",
+      "source_token": "cxm",
+      "window_count": 1
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "validation",
+      "session_id": "220117_cxm_water_01",
+      "source_token": "cxm",
+      "window_count": 29
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_water_02",
+      "source_token": "cxm",
+      "window_count": 27
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "support",
+      "session_id": "220117_cxm_water_03",
+      "source_token": "cxm",
+      "window_count": 24
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_water_04",
+      "source_token": "cxm",
+      "window_count": 20
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "validation",
+      "session_id": "220117_cxm_water_05",
+      "source_token": "cxm",
+      "window_count": 27
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "final_query",
+      "session_id": "220117_cxm_water_06",
+      "source_token": "cxm",
+      "window_count": 25
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_water_07",
+      "source_token": "cxm",
+      "window_count": 27
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_water_08",
+      "source_token": "cxm",
+      "window_count": 26
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_water_09",
+      "source_token": "cxm",
+      "window_count": 20
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_water_10",
+      "source_token": "cxm",
+      "window_count": 27
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_water_11",
+      "source_token": "cxm",
+      "window_count": 26
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_water_12",
+      "source_token": "cxm",
+      "window_count": 25
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_water_13",
+      "source_token": "cxm",
+      "window_count": 28
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_cxm_water_14",
+      "source_token": "cxm",
+      "window_count": 17
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "calibration",
+      "session_id": "220117_dy_dig_01",
+      "source_token": "dy",
+      "window_count": 39
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_dig_02",
+      "source_token": "dy",
+      "window_count": 37
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "calibration",
+      "session_id": "220117_dy_dig_03",
+      "source_token": "dy",
+      "window_count": 38
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_dig_04",
+      "source_token": "dy",
+      "window_count": 35
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "final_query",
+      "session_id": "220117_dy_dig_05",
+      "source_token": "dy",
+      "window_count": 39
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_dig_06",
+      "source_token": "dy",
+      "window_count": 39
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_dig_07",
+      "source_token": "dy",
+      "window_count": 38
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_dig_08",
+      "source_token": "dy",
+      "window_count": 40
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_dig_09",
+      "source_token": "dy",
+      "window_count": 38
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "validation",
+      "session_id": "220117_dy_dig_10",
+      "source_token": "dy",
+      "window_count": 39
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "support",
+      "session_id": "220117_dy_dig_11",
+      "source_token": "dy",
+      "window_count": 31
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_dig_12",
+      "source_token": "dy",
+      "window_count": 29
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "support",
+      "session_id": "220117_dy_dig_13",
+      "source_token": "dy",
+      "window_count": 31
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_dig_14",
+      "source_token": "dy",
+      "window_count": 39
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_dig_15",
+      "source_token": "dy",
+      "window_count": 34
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_knock_01",
+      "source_token": "dy",
+      "window_count": 45
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_knock_02",
+      "source_token": "dy",
+      "window_count": 25
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_knock_03",
+      "source_token": "dy",
+      "window_count": 27
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_dy_knock_04",
+      "source_token": "dy",
+      "window_count": 38
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220117",
+      "partition": "validation",
+      "session_id": "220117_dy_knock_05",
+      "source_token": "dy",
+      "window_count": 39
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_yzs_run_03",
+      "source_token": "yzs",
+      "window_count": 1
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_yzs_walk_02",
+      "source_token": "yzs",
+      "window_count": 2
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220117",
+      "partition": "train",
+      "session_id": "220117_yzs_walk_03",
+      "source_token": "yzs",
+      "window_count": 1
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_cxm_run_07",
+      "source_token": "cxm",
+      "window_count": 30
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_cxm_run_08",
+      "source_token": "cxm",
+      "window_count": 36
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "calibration",
+      "session_id": "220118_cxm_run_09",
+      "source_token": "cxm",
+      "window_count": 47
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_cxm_run_10",
+      "source_token": "cxm",
+      "window_count": 42
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_cxm_walk_01",
+      "source_token": "cxm",
+      "window_count": 41
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_cxm_walk_02",
+      "source_token": "cxm",
+      "window_count": 34
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_cxm_walk_03",
+      "source_token": "cxm",
+      "window_count": 32
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "final_query",
+      "session_id": "220118_cxm_walk_04",
+      "source_token": "cxm",
+      "window_count": 48
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_cxm_walk_05",
+      "source_token": "cxm",
+      "window_count": 44
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_cxm_walk_06",
+      "source_token": "cxm",
+      "window_count": 36
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "calibration",
+      "session_id": "220118_yu_run_08",
+      "source_token": "yu",
+      "window_count": 30
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "final_query",
+      "session_id": "220118_yu_run_09",
+      "source_token": "yu",
+      "window_count": 34
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "calibration",
+      "session_id": "220118_yu_run_10",
+      "source_token": "yu",
+      "window_count": 31
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "support",
+      "session_id": "220118_yu_walk_01",
+      "source_token": "yu",
+      "window_count": 47
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yu_walk_02",
+      "source_token": "yu",
+      "window_count": 45
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yu_walk_03",
+      "source_token": "yu",
+      "window_count": 50
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "support",
+      "session_id": "220118_yu_walk_04",
+      "source_token": "yu",
+      "window_count": 50
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "calibration",
+      "session_id": "220118_yu_walk_05",
+      "source_token": "yu",
+      "window_count": 39
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yu_walk_06",
+      "source_token": "yu",
+      "window_count": 41
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yu_walk_07",
+      "source_token": "yu",
+      "window_count": 39
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "final_query",
+      "session_id": "220118_yu_walk_short_01",
+      "source_token": "yu",
+      "window_count": 38
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yzs_run_08",
+      "source_token": "yzs",
+      "window_count": 25
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yzs_run_09",
+      "source_token": "yzs",
+      "window_count": 15
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yzs_walk_01",
+      "source_token": "yzs",
+      "window_count": 27
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yzs_walk_02",
+      "source_token": "yzs",
+      "window_count": 35
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yzs_walk_03",
+      "source_token": "yzs",
+      "window_count": 35
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "validation",
+      "session_id": "220118_yzs_walk_04",
+      "source_token": "yzs",
+      "window_count": 21
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yzs_walk_05",
+      "source_token": "yzs",
+      "window_count": 20
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "train",
+      "session_id": "220118_yzs_walk_06",
+      "source_token": "yzs",
+      "window_count": 13
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "support",
+      "session_id": "220118_yzs_walk_07",
+      "source_token": "yzs",
+      "window_count": 20
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220118",
+      "partition": "validation",
+      "session_id": "220118_yzs_walk_10",
+      "source_token": "yzs",
+      "window_count": 16
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220121",
+      "partition": "support",
+      "session_id": "220121_cxm_background_01",
+      "source_token": "cxm",
+      "window_count": 112
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220121",
+      "partition": "support",
+      "session_id": "220121_cxm_background_02",
+      "source_token": "cxm",
+      "window_count": 97
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220121",
+      "partition": "train",
+      "session_id": "220121_cxm_background_03",
+      "source_token": "cxm",
+      "window_count": 112
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220121",
+      "partition": "support",
+      "session_id": "220121_cxm_background_04",
+      "source_token": "cxm",
+      "window_count": 102
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220121",
+      "partition": "calibration",
+      "session_id": "220121_cxm_background_05",
+      "source_token": "cxm",
+      "window_count": 111
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220121",
+      "partition": "train",
+      "session_id": "220121_cxm_dig_01",
+      "source_token": "cxm",
+      "window_count": 50
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220121",
+      "partition": "train",
+      "session_id": "220121_cxm_dig_02",
+      "source_token": "cxm",
+      "window_count": 47
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220121",
+      "partition": "calibration",
+      "session_id": "220121_cxm_dig_03",
+      "source_token": "cxm",
+      "window_count": 43
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220121",
+      "partition": "support",
+      "session_id": "220121_cxm_dig_04",
+      "source_token": "cxm",
+      "window_count": 49
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220121",
+      "partition": "train",
+      "session_id": "220121_cxm_dig_05",
+      "source_token": "cxm",
+      "window_count": 48
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220121",
+      "partition": "train",
+      "session_id": "220121_cxm_dig_06",
+      "source_token": "cxm",
+      "window_count": 49
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220121",
+      "partition": "train",
+      "session_id": "220121_cxm_dig_07",
+      "source_token": "cxm",
+      "window_count": 50
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220121",
+      "partition": "validation",
+      "session_id": "220121_cxm_dig_08",
+      "source_token": "cxm",
+      "window_count": 42
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220122",
+      "partition": "final_query",
+      "session_id": "220122_cxm_knock_01",
+      "source_token": "cxm",
+      "window_count": 96
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_knock_02",
+      "source_token": "cxm",
+      "window_count": 99
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_knock_03",
+      "source_token": "cxm",
+      "window_count": 99
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220122",
+      "partition": "final_query",
+      "session_id": "220122_cxm_knock_04",
+      "source_token": "cxm",
+      "window_count": 96
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220122",
+      "partition": "validation",
+      "session_id": "220122_cxm_knock_05",
+      "source_token": "cxm",
+      "window_count": 101
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_knock_06",
+      "source_token": "cxm",
+      "window_count": 99
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_knock_07",
+      "source_token": "cxm",
+      "window_count": 99
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220122",
+      "partition": "calibration",
+      "session_id": "220122_cxm_knock_08",
+      "source_token": "cxm",
+      "window_count": 112
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_run_09",
+      "source_token": "cxm",
+      "window_count": 57
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "validation",
+      "session_id": "220122_cxm_run_10",
+      "source_token": "cxm",
+      "window_count": 53
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "support",
+      "session_id": "220122_cxm_run_11",
+      "source_token": "cxm",
+      "window_count": 53
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_run_12",
+      "source_token": "cxm",
+      "window_count": 54
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "final_query",
+      "session_id": "220122_cxm_walk_01",
+      "source_token": "cxm",
+      "window_count": 75
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_walk_02",
+      "source_token": "cxm",
+      "window_count": 74
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_walk_03",
+      "source_token": "cxm",
+      "window_count": 74
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_walk_04",
+      "source_token": "cxm",
+      "window_count": 73
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "final_query",
+      "session_id": "220122_cxm_walk_05",
+      "source_token": "cxm",
+      "window_count": 69
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_walk_06",
+      "source_token": "cxm",
+      "window_count": 66
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "support",
+      "session_id": "220122_cxm_walk_07",
+      "source_token": "cxm",
+      "window_count": 68
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220122",
+      "partition": "validation",
+      "session_id": "220122_cxm_walk_08",
+      "source_token": "cxm",
+      "window_count": 55
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220122",
+      "partition": "validation",
+      "session_id": "220122_cxm_water_01",
+      "source_token": "cxm",
+      "window_count": 18
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220122",
+      "partition": "validation",
+      "session_id": "220122_cxm_water_02",
+      "source_token": "cxm",
+      "window_count": 25
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_water_03",
+      "source_token": "cxm",
+      "window_count": 26
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_water_04",
+      "source_token": "cxm",
+      "window_count": 22
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_water_05",
+      "source_token": "cxm",
+      "window_count": 23
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_cxm_water_06",
+      "source_token": "cxm",
+      "window_count": 25
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220122",
+      "partition": "support",
+      "session_id": "220122_cxm_water_07",
+      "source_token": "cxm",
+      "window_count": 20
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220122",
+      "partition": "final_query",
+      "session_id": "220122_cxm_water_08",
+      "source_token": "cxm",
+      "window_count": 22
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_yu_shake_01",
+      "source_token": "yu",
+      "window_count": 47
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220122",
+      "partition": "validation",
+      "session_id": "220122_yu_shake_02",
+      "source_token": "yu",
+      "window_count": 50
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_yu_shake_03",
+      "source_token": "yu",
+      "window_count": 62
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_yu_shake_04",
+      "source_token": "yu",
+      "window_count": 62
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_yu_shake_05",
+      "source_token": "yu",
+      "window_count": 61
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220122",
+      "partition": "final_query",
+      "session_id": "220122_yu_shake_06",
+      "source_token": "yu",
+      "window_count": 63
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220122",
+      "partition": "train",
+      "session_id": "220122_yyn_shake_01",
+      "source_token": "yyn",
+      "window_count": 37
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220122",
+      "partition": "support",
+      "session_id": "220122_yyn_shake_02",
+      "source_token": "yyn",
+      "window_count": 48
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220122",
+      "partition": "validation",
+      "session_id": "220122_yyn_shake_03",
+      "source_token": "yyn",
+      "window_count": 50
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220122",
+      "partition": "calibration",
+      "session_id": "220122_yyn_shake_04",
+      "source_token": "yyn",
+      "window_count": 51
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220402",
+      "partition": "train",
+      "session_id": "220402_sys_water_01",
+      "source_token": "sys",
+      "window_count": 19
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220402",
+      "partition": "train",
+      "session_id": "220402_sys_water_02",
+      "source_token": "sys",
+      "window_count": 15
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220402",
+      "partition": "train",
+      "session_id": "220402_sys_water_03",
+      "source_token": "sys",
+      "window_count": 40
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220402",
+      "partition": "train",
+      "session_id": "220402_sys_water_04",
+      "source_token": "sys",
+      "window_count": 39
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220414",
+      "partition": "train",
+      "session_id": "220414_sys_water_01",
+      "source_token": "sys",
+      "window_count": 21
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "train",
+      "session_id": "220415_sys_water_01",
+      "source_token": "sys",
+      "window_count": 35
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "support",
+      "session_id": "220415_sys_water_02",
+      "source_token": "sys",
+      "window_count": 35
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "train",
+      "session_id": "220415_sys_water_03",
+      "source_token": "sys",
+      "window_count": 31
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "final_query",
+      "session_id": "220415_sys_water_04",
+      "source_token": "sys",
+      "window_count": 19
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "train",
+      "session_id": "220415_sys_water_05",
+      "source_token": "sys",
+      "window_count": 27
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "support",
+      "session_id": "220415_sys_water_06",
+      "source_token": "sys",
+      "window_count": 5
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "train",
+      "session_id": "220415_sys_water_07",
+      "source_token": "sys",
+      "window_count": 24
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "train",
+      "session_id": "220415_sys_water_08",
+      "source_token": "sys",
+      "window_count": 23
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "calibration",
+      "session_id": "220415_sys_water_09",
+      "source_token": "sys",
+      "window_count": 34
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "train",
+      "session_id": "220415_sys_water_10",
+      "source_token": "sys",
+      "window_count": 19
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "train",
+      "session_id": "220415_sys_water_11",
+      "source_token": "sys",
+      "window_count": 13
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220415",
+      "partition": "calibration",
+      "session_id": "220415_sys_water_12",
+      "source_token": "sys",
+      "window_count": 3
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220418",
+      "partition": "support",
+      "session_id": "220418_sys_dig_01",
+      "source_token": "sys",
+      "window_count": 14
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220418",
+      "partition": "train",
+      "session_id": "220418_sys_dig_02",
+      "source_token": "sys",
+      "window_count": 13
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220418",
+      "partition": "train",
+      "session_id": "220418_sys_water_01",
+      "source_token": "sys",
+      "window_count": 10
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220418",
+      "partition": "train",
+      "session_id": "220418_sys_water_02",
+      "source_token": "sys",
+      "window_count": 6
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220428",
+      "partition": "train",
+      "session_id": "220428_dig_01",
+      "source_token": "dig",
+      "window_count": 28
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220428",
+      "partition": "train",
+      "session_id": "220428_dig_02",
+      "source_token": "dig",
+      "window_count": 50
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220428",
+      "partition": "calibration",
+      "session_id": "220428_dig_03",
+      "source_token": "dig",
+      "window_count": 65
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220428",
+      "partition": "validation",
+      "session_id": "220428_dig_04",
+      "source_token": "dig",
+      "window_count": 45
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220428",
+      "partition": "final_query",
+      "session_id": "220428_dig_05",
+      "source_token": "dig",
+      "window_count": 60
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220428",
+      "partition": "train",
+      "session_id": "220428_dig_06",
+      "source_token": "dig",
+      "window_count": 45
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220428",
+      "partition": "calibration",
+      "session_id": "220428_dig_07",
+      "source_token": "dig",
+      "window_count": 106
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220429",
+      "partition": "train",
+      "session_id": "220429_water_01",
+      "source_token": "water",
+      "window_count": 9
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220429",
+      "partition": "train",
+      "session_id": "220429_water_03",
+      "source_token": "water",
+      "window_count": 3
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220429",
+      "partition": "train",
+      "session_id": "220429_water_05",
+      "source_token": "water",
+      "window_count": 22
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220429",
+      "partition": "support",
+      "session_id": "220429_water_07",
+      "source_token": "water",
+      "window_count": 3
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220429",
+      "partition": "train",
+      "session_id": "220429_water_11",
+      "source_token": "water",
+      "window_count": 8
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220429",
+      "partition": "train",
+      "session_id": "220429_water_13",
+      "source_token": "water",
+      "window_count": 13
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "final_query",
+      "session_id": "220509_bkg_01",
+      "source_token": "bkg",
+      "window_count": 23
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_bkg_02",
+      "source_token": "bkg",
+      "window_count": 21
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_bkg_03",
+      "source_token": "bkg",
+      "window_count": 21
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "validation",
+      "session_id": "220509_bkg_04_walk30s",
+      "source_token": "bkg",
+      "window_count": 22
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_bkg_05_walk40s",
+      "source_token": "bkg",
+      "window_count": 20
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_bkg_06_walk40s",
+      "source_token": "bkg",
+      "window_count": 23
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "support",
+      "session_id": "220509_bkg_07_walk60s",
+      "source_token": "bkg",
+      "window_count": 27
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_bkg_08_walk50s",
+      "source_token": "bkg",
+      "window_count": 20
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_bkg_09",
+      "source_token": "bkg",
+      "window_count": 21
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "final_query",
+      "session_id": "220509_bkg_10",
+      "source_token": "bkg",
+      "window_count": 24
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_bkg_11",
+      "source_token": "bkg",
+      "window_count": 21
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_bkg_12",
+      "source_token": "bkg",
+      "window_count": 13
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "validation",
+      "session_id": "220509_bkg_13_heavy_steps_50cm_away",
+      "source_token": "bkg",
+      "window_count": 12
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "final_query",
+      "session_id": "220509_bkg_14_heavy_steps_50cm_away",
+      "source_token": "bkg",
+      "window_count": 13
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_bkg_15_heavy_steps_50cm_away",
+      "source_token": "bkg",
+      "window_count": 28
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220509",
+      "partition": "final_query",
+      "session_id": "220509_bkg_16_heavy_steps_50cm_away",
+      "source_token": "bkg",
+      "window_count": 27
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220509",
+      "partition": "final_query",
+      "session_id": "220509_water_14_normal",
+      "source_token": "water",
+      "window_count": 5
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_water_17_fast",
+      "source_token": "water",
+      "window_count": 3
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_water_18_fast",
+      "source_token": "water",
+      "window_count": 4
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_water_19_fast",
+      "source_token": "water",
+      "window_count": 4
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_water_20_fast",
+      "source_token": "water",
+      "window_count": 6
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220509",
+      "partition": "train",
+      "session_id": "220509_water_21_slow",
+      "source_token": "water",
+      "window_count": 1
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_bkg_evening_17",
+      "source_token": "bkg",
+      "window_count": 39
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_bkg_evening_18",
+      "source_token": "bkg",
+      "window_count": 76
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_bkg_evening_19",
+      "source_token": "bkg",
+      "window_count": 72
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_bkg_evening_20",
+      "source_token": "bkg",
+      "window_count": 72
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_bkg_evening_21",
+      "source_token": "bkg",
+      "window_count": 83
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_bkg_evening_22",
+      "source_token": "bkg",
+      "window_count": 99
+    },
+    {
+      "class_id": 0,
+      "class_name": "background",
+      "date_token": "220517",
+      "partition": "validation",
+      "session_id": "220517_bkg_evening_23",
+      "source_token": "bkg",
+      "window_count": 69
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_digging_fast1",
+      "source_token": "digging",
+      "window_count": 18
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_digging_fast2",
+      "source_token": "digging",
+      "window_count": 14
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_digging_fast3",
+      "source_token": "digging",
+      "window_count": 41
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_digging_fast4",
+      "source_token": "digging",
+      "window_count": 20
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "validation",
+      "session_id": "220517_digging_median1",
+      "source_token": "digging",
+      "window_count": 22
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_digging_median2",
+      "source_token": "digging",
+      "window_count": 22
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_digging_median3",
+      "source_token": "digging",
+      "window_count": 28
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "validation",
+      "session_id": "220517_digging_median4",
+      "source_token": "digging",
+      "window_count": 32
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "validation",
+      "session_id": "220517_digging_slow1",
+      "source_token": "digging",
+      "window_count": 38
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "support",
+      "session_id": "220517_digging_slow3",
+      "source_token": "digging",
+      "window_count": 44
+    },
+    {
+      "class_id": 1,
+      "class_name": "digging",
+      "date_token": "220517",
+      "partition": "final_query",
+      "session_id": "220517_digging_slow4",
+      "source_token": "digging",
+      "window_count": 34
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_knocking_center_fast1",
+      "source_token": "knocking",
+      "window_count": 10
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "calibration",
+      "session_id": "220517_knocking_center_fast2",
+      "source_token": "knocking",
+      "window_count": 12
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "calibration",
+      "session_id": "220517_knocking_center_median1",
+      "source_token": "knocking",
+      "window_count": 16
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_knocking_center_median2",
+      "source_token": "knocking",
+      "window_count": 20
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_knocking_center_slow1",
+      "source_token": "knocking",
+      "window_count": 25
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_knocking_center_slow2",
+      "source_token": "knocking",
+      "window_count": 28
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "support",
+      "session_id": "220517_knocking_edge_fast1",
+      "source_token": "knocking",
+      "window_count": 9
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_knocking_edge_fast2",
+      "source_token": "knocking",
+      "window_count": 10
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_knocking_edge_median1",
+      "source_token": "knocking",
+      "window_count": 13
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "support",
+      "session_id": "220517_knocking_edge_median2",
+      "source_token": "knocking",
+      "window_count": 16
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_knocking_edge_slow1",
+      "source_token": "knocking",
+      "window_count": 20
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_knocking_edge_slow2",
+      "source_token": "knocking",
+      "window_count": 24
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_knocking_fiber_fast1",
+      "source_token": "knocking",
+      "window_count": 12
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_knocking_fiber_median1",
+      "source_token": "knocking",
+      "window_count": 14
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220517",
+      "partition": "validation",
+      "session_id": "220517_knocking_fiber_slow1",
+      "source_token": "knocking",
+      "window_count": 23
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_shaking_1down",
+      "source_token": "shaking",
+      "window_count": 71
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "calibration",
+      "session_id": "220517_shaking_1up",
+      "source_token": "shaking",
+      "window_count": 71
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_shaking_2down",
+      "source_token": "shaking",
+      "window_count": 72
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "support",
+      "session_id": "220517_shaking_2up",
+      "source_token": "shaking",
+      "window_count": 72
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "calibration",
+      "session_id": "220517_shaking_3down",
+      "source_token": "shaking",
+      "window_count": 72
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "validation",
+      "session_id": "220517_shaking_3up",
+      "source_token": "shaking",
+      "window_count": 74
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_shaking_4down",
+      "source_token": "shaking",
+      "window_count": 72
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_shaking_4up",
+      "source_token": "shaking",
+      "window_count": 72
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_shaking_5down",
+      "source_token": "shaking",
+      "window_count": 71
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_shaking_5up",
+      "source_token": "shaking",
+      "window_count": 72
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_shaking_test2",
+      "source_token": "shaking",
+      "window_count": 23
+    },
+    {
+      "class_id": 4,
+      "class_name": "shaking",
+      "date_token": "220517",
+      "partition": "train",
+      "session_id": "220517_shaking_test3",
+      "source_token": "shaking",
+      "window_count": 36
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_knocking_center_fast",
+      "source_token": "knocking",
+      "window_count": 72
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220518",
+      "partition": "final_query",
+      "session_id": "220518_knocking_center_slow",
+      "source_token": "knocking",
+      "window_count": 75
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_knocking_edge_fast",
+      "source_token": "knocking",
+      "window_count": 75
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_knocking_edge_slow",
+      "source_token": "knocking",
+      "window_count": 23
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220518",
+      "partition": "final_query",
+      "session_id": "220518_knocking_edge_slow1",
+      "source_token": "knocking",
+      "window_count": 74
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220518",
+      "partition": "support",
+      "session_id": "220518_knocking_fiber_fast",
+      "source_token": "knocking",
+      "window_count": 80
+    },
+    {
+      "class_id": 2,
+      "class_name": "knocking",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_knocking_fiber_slow",
+      "source_token": "knocking",
+      "window_count": 79
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "calibration",
+      "session_id": "220518_water_fast1",
+      "source_token": "water",
+      "window_count": 8
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_fast10",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "validation",
+      "session_id": "220518_water_fast11",
+      "source_token": "water",
+      "window_count": 12
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_fast12",
+      "source_token": "water",
+      "window_count": 10
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "calibration",
+      "session_id": "220518_water_fast13",
+      "source_token": "water",
+      "window_count": 10
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "validation",
+      "session_id": "220518_water_fast14",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "support",
+      "session_id": "220518_water_fast15",
+      "source_token": "water",
+      "window_count": 13
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_fast16",
+      "source_token": "water",
+      "window_count": 10
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_fast9",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_median10",
+      "source_token": "water",
+      "window_count": 12
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_median11",
+      "source_token": "water",
+      "window_count": 12
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_median12",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_median13",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "support",
+      "session_id": "220518_water_median14",
+      "source_token": "water",
+      "window_count": 12
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_median15",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "validation",
+      "session_id": "220518_water_median16",
+      "source_token": "water",
+      "window_count": 12
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_median9",
+      "source_token": "water",
+      "window_count": 10
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_slow10",
+      "source_token": "water",
+      "window_count": 10
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_slow11",
+      "source_token": "water",
+      "window_count": 10
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_slow12",
+      "source_token": "water",
+      "window_count": 10
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "final_query",
+      "session_id": "220518_water_slow13",
+      "source_token": "water",
+      "window_count": 9
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_slow14",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "final_query",
+      "session_id": "220518_water_slow15",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_slow16",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_slow2",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "support",
+      "session_id": "220518_water_slow3",
+      "source_token": "water",
+      "window_count": 10
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_slow4",
+      "source_token": "water",
+      "window_count": 12
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_slow5",
+      "source_token": "water",
+      "window_count": 12
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "validation",
+      "session_id": "220518_water_slow6",
+      "source_token": "water",
+      "window_count": 12
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "final_query",
+      "session_id": "220518_water_slow7",
+      "source_token": "water",
+      "window_count": 11
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "calibration",
+      "session_id": "220518_water_slow8",
+      "source_token": "water",
+      "window_count": 10
+    },
+    {
+      "class_id": 3,
+      "class_name": "watering",
+      "date_token": "220518",
+      "partition": "train",
+      "session_id": "220518_water_slow9",
+      "source_token": "water",
+      "window_count": 10
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "final_query",
+      "session_id": "220519_walk_fast1",
+      "source_token": "walk",
+      "window_count": 17
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "train",
+      "session_id": "220519_walk_fast2",
+      "source_token": "walk",
+      "window_count": 8
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "train",
+      "session_id": "220519_walk_median1",
+      "source_token": "walk",
+      "window_count": 45
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "calibration",
+      "session_id": "220519_walk_median2",
+      "source_token": "walk",
+      "window_count": 34
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "validation",
+      "session_id": "220519_walk_run1",
+      "source_token": "walk",
+      "window_count": 60
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "train",
+      "session_id": "220519_walk_run2",
+      "source_token": "walk",
+      "window_count": 47
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "train",
+      "session_id": "220519_walk_runfast1",
+      "source_token": "walk",
+      "window_count": 69
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "validation",
+      "session_id": "220519_walk_runfast2",
+      "source_token": "walk",
+      "window_count": 67
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "calibration",
+      "session_id": "220519_walk_singlefoot_median1",
+      "source_token": "walk",
+      "window_count": 36
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "train",
+      "session_id": "220519_walk_singlefoot_median2",
+      "source_token": "walk",
+      "window_count": 44
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "support",
+      "session_id": "220519_walk_slow1",
+      "source_token": "walk",
+      "window_count": 53
+    },
+    {
+      "class_id": 5,
+      "class_name": "walking",
+      "date_token": "220519",
+      "partition": "train",
+      "session_id": "220519_walk_slow2",
+      "source_token": "walk",
+      "window_count": 39
+    }
+  ],
+  "summary": {
+    "calibration": {
+      "background": {
+        "sessions": 6,
+        "windows": 324
+      },
+      "digging": {
+        "sessions": 8,
+        "windows": 363
+      },
+      "knocking": {
+        "sessions": 6,
+        "windows": 209
+      },
+      "shaking": {
+        "sessions": 6,
+        "windows": 290
+      },
+      "walking": {
+        "sessions": 6,
+        "windows": 217
+      },
+      "watering": {
+        "sessions": 12,
+        "windows": 233
+      }
+    },
+    "final_query": {
+      "background": {
+        "sessions": 6,
+        "windows": 198
+      },
+      "digging": {
+        "sessions": 8,
+        "windows": 241
+      },
+      "knocking": {
+        "sessions": 6,
+        "windows": 409
+      },
+      "shaking": {
+        "sessions": 6,
+        "windows": 239
+      },
+      "walking": {
+        "sessions": 6,
+        "windows": 281
+      },
+      "watering": {
+        "sessions": 12,
+        "windows": 221
+      }
+    },
+    "support": {
+      "background": {
+        "sessions": 6,
+        "windows": 449
+      },
+      "digging": {
+        "sessions": 8,
+        "windows": 247
+      },
+      "knocking": {
+        "sessions": 6,
+        "windows": 240
+      },
+      "shaking": {
+        "sessions": 6,
+        "windows": 260
+      },
+      "walking": {
+        "sessions": 6,
+        "windows": 291
+      },
+      "watering": {
+        "sessions": 12,
+        "windows": 249
+      }
+    },
+    "train": {
+      "background": {
+        "sessions": 39,
+        "windows": 1741
+      },
+      "digging": {
+        "sessions": 43,
+        "windows": 1398
+      },
+      "knocking": {
+        "sessions": 36,
+        "windows": 1384
+      },
+      "shaking": {
+        "sessions": 39,
+        "windows": 1658
+      },
+      "walking": {
+        "sessions": 34,
+        "windows": 1294
+      },
+      "watering": {
+        "sessions": 74,
+        "windows": 1305
+      }
+    },
+    "validation": {
+      "background": {
+        "sessions": 6,
+        "windows": 233
+      },
+      "digging": {
+        "sessions": 8,
+        "windows": 263
+      },
+      "knocking": {
+        "sessions": 6,
+        "windows": 257
+      },
+      "shaking": {
+        "sessions": 6,
+        "windows": 281
+      },
+      "walking": {
+        "sessions": 6,
+        "windows": 272
+      },
+      "watering": {
+        "sessions": 12,
+        "windows": 206
+      }
+    }
+  }
+}

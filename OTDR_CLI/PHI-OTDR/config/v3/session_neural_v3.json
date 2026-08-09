@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "name": "phi_otdr_session_neural_v3",
+  "frozen_date": "2026-08-08",
+  "evidence_status": "retrospective development; not independent confirmation",
+  "dataset_fingerprint_sha256": "df38c1a11ac10481cc376eb791d1bdc699b967041a0f8b89c9f46b11027ddfe1",
+  "parent_protocol_sha256": "04a4400af3c0fd31e97533e7ba8192ab78b9090514954f69a68fbbb345800594",
+  "views": [
+    {
+      "name": "absolute_dynamics",
+      "view": "absolute",
+      "estimator": "multi_estimator_consensus",
+      "ablation": "dynamics"
+    },
+    {
+      "name": "registered_position_difference_dynamics",
+      "view": "registered_position",
+      "estimator": "temporal_difference_energy",
+      "ablation": "dynamics"
+    }
+  ],
+  "architectures": ["deepsets", "attention"],
+  "seeds": [20260808, 20260809, 20260810],
+  "model": {
+    "hidden_dim": 128,
+    "dropout": 0.15,
+    "pooling": "masked session pooling over all available windows",
+    "time_feature": "within-session window index normalized to [-1, 1]"
+  },
+  "training": {
+    "learning_rates": [0.0001, 0.0003, 0.001],
+    "weight_decay": 0.001,
+    "batch_size_sessions": 16,
+    "max_epochs": 50,
+    "patience": 8,
+    "gradient_clip_norm": 5.0,
+    "class_weighting": "inverse source-train session frequency",
+    "selection": "source-validation macro-F1, then source-validation NLL",
+    "refit_after_selection": false,
+    "temperature_calibration": "source_calibration only"
+  },
+  "cuda": {
+    "required": true,
+    "cpu_fallback": false,
+    "automatic_mixed_precision": true,
+    "precision": "float16 autocast with float32 parameters"
+  },
+  "target_policy": "No target calibration, support, or query row is used for fitting, preprocessing, early stopping, hyperparameter selection, or checkpoint selection. Target query is inferred once from the source-selected checkpoint.",
+  "required_outputs": [
+    "source-validation histories",
+    "checkpoint and configuration hashes",
+    "session target predictions",
+    "per-class and worst-class metrics",
+    "calibration metrics",
+    "CUDA device and peak-memory logs",
+    "training and inference runtime"
+  ]
+}

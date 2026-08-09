@@ -42,7 +42,42 @@ Both tracks include **visual diagnostics** and an optional **LLM explainability*
 
 * Each sample is a **(T × C)** matrix — **time** across the x-axis, **channels (distance bins)** on the y-axis, values represent normalized backscatter intensity/phase features.
 * We render this as a **heatmap** so humans (and the LLM) see temporal envelopes across channels.
+* **Dataset source:** [BJTU Sensor Team — Phi-OTDR dataset and codes](https://github.com/BJTUSensor/Phi-OTDR_dataset_and_codes)
 * Models consume the **raw tensor**, not a PNG. The plotted PNGs are only for inspection/explanation.
+
+### Φ-OTDR acquisition-generalization research status
+
+The complete BJTU inventory contains 15,418 readable windows grouped into 441 recording sessions, six classes, 21 dates, and two acquisition eras. Evaluation uses the recording session—not an individual window—as the independent unit. Training, validation, calibration, support, and query sessions are disjoint where the protocol defines those roles.
+
+| Evaluation | Representation or method | Session macro-F1 / Enrollment-H |
+|---|---|---:|
+| Random complete-session split | Tested fixed-classifier representations | 0.988–0.996 macro-F1 |
+| January → April–May | Absolute, registered-difference, and invariant-fused representations | 0.431–0.522 macro-F1 |
+| April–May → January | Absolute, registered-difference, and invariant-fused representations | 0.404–0.699 macro-F1 |
+| Five-shot session enrollment, January → April–May | Sliced-Wasserstein matching | 0.480 Enrollment-H |
+| Five-shot session enrollment, April–May → January | Sliced-Wasserstein matching | 0.738 Enrollment-H |
+
+The random-session result does not carry over to acquisition-era transfer. The measured shift is class-conditional, and the tested symmetric factorization did not improve both directions. These are retrospective results on one public dataset; they are not evidence of deployment, site, operator, subject, or interrogator generalization.
+
+The research implementation is organized as follows:
+
+* [`config/`](OTDR_CLI/PHI-OTDR/config/) contains versioned split manifests, protocol locks, and CRLF/LF-invariant SHA-256 sidecars.
+* [`src/phi_research/`](OTDR_CLI/PHI-OTDR/src/phi_research/) contains dataset contracts, feature extraction, session aggregation, acquisition-era evaluation, open-set evaluation, neural baselines, factorization, and enrollment methods.
+* [`tests/`](OTDR_CLI/PHI-OTDR/tests/) checks split disjointness, leakage controls, feature contracts, metrics, protocol hashing, CUDA cache behavior, and artifact validation.
+* `experiments/`, raw `.mat` files, model checkpoints, generated reports, and local caches are intentionally ignored.
+
+From `OTDR_CLI/PHI-OTDR`, expose the research package and inspect any frozen runner before supplying local data and output paths:
+
+```bash
+export PYTHONPATH=src
+python -m phi_research.evaluation_ladder_v1 --help
+python -m phi_research.shift_forensics_v1 --help
+python -m phi_research.factorization_v1 --help
+python -m phi_research.robust_enrollment_v1 --help
+pytest -q
+```
+
+On PowerShell, use `$env:PYTHONPATH = "src"`. Neural training and frozen neural inference enforce CUDA availability and do not silently fall back to CPU.
 
 ---
 

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "protocol_name": "phi_otdr_morphology_acquisition_factorization_v1",
+  "evidence_status": "retrospective frozen development comparison",
+  "dataset_fingerprint_sha256": "df38c1a11ac10481cc376eb791d1bdc699b967041a0f8b89c9f46b11027ddfe1",
+  "input_session_attributes": "phi_research_v3/morphology_attributes/session_attributes.npz",
+  "input_session_attributes_sha256": "49d439f9ea5d8a45f68e96d1a47ad532ba9efd59be8c9857d09c13d84b7960bd",
+  "input_view": "position_free_morphology_114",
+  "independent_unit": "recording session",
+  "seeds": [20260808, 20260809, 20260810],
+  "classifier": {
+    "name": "standardized_balanced_multinomial_logistic",
+    "C": 1.0,
+    "max_iter": 4000,
+    "solver": "lbfgs"
+  },
+  "methods": {
+    "baseline": {"target_access": "none"},
+    "source_date_residual": {"target_access": "none", "description": "remove source-training date means and apply the source grand mean to unseen groups"},
+    "source_nuisance_projection_rank4": {"target_access": "none", "rank": 4, "ridge": 1.0},
+    "target_unlabelled_mean_alignment": {"target_access": "unlabelled evaluation-group features", "description": "align the unlabelled target group mean to the source-training mean"},
+    "target_unlabelled_coral": {"target_access": "unlabelled evaluation-group features", "eigenvalue_floor": 0.001, "shrinkage": 0.1}
+  },
+  "evaluation_levels": [
+    "random_session",
+    "heldout_date_class_cell",
+    "leave_one_date_out",
+    "cross_era"
+  ],
+  "random_session_test_fraction": 0.2,
+  "minimum_cell_sessions": 2,
+  "primary_metrics": ["session_macro_f1", "balanced_accuracy", "worst_class_recall", "ece_10"],
+  "secondary_metrics": ["negative_log_likelihood", "brier_score", "era_probe_balanced_accuracy"],
+  "graph_analysis": {
+    "model": "two_way_additive_ridge_on_date_class_cell_means",
+    "ridge": 1.0,
+    "edge_validation": "leave_one_eligible_date_class_cell_out",
+    "permutation_draws": 1000
+  },
+  "bootstrap_draws": 5000,
+  "selection_used_target_outcomes": false,
+  "promotion_gate": "a method must improve at least one hard protocol without reducing the opposite cross-era direction or pooled worst-class recall by more than 0.03"
+}

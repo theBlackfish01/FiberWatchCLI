@@ -1,0 +1,10 @@
+# Environment used for the 2026-08-05 session-safe Phi-OTDR research run.
+# Install the CUDA wheel from PyTorch's official index, for example:
+#   python -m pip install --extra-index-url https://download.pytorch.org/whl/cu128 -r requirements-research.txt
+numpy==2.5.1
+scipy==1.18.0
+scikit-learn==1.6.1
+joblib==1.5.3
+matplotlib==3.10.9
+torch==2.11.0+cu128
+pytest==9.1.1

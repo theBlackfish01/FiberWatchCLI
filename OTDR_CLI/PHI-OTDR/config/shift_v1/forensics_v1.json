@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "protocol_name": "phi_otdr_acquisition_shift_forensics_v1",
+  "evidence_status": "retrospective exploratory diagnosis",
+  "dataset_fingerprint_sha256": "df38c1a11ac10481cc376eb791d1bdc699b967041a0f8b89c9f46b11027ddfe1",
+  "morphology_bundle_sha256": "609295dfc34c838079d1bef32f0827a604d785962609e9e03de65db2a3b5ac36",
+  "ladder_payload_sha256": "01e203b8f8bfc4f7b176fdd8a59be39f5204f0d0523730bdab892ae93dc63c38",
+  "independent_unit": "recording session",
+  "seed": 20260809,
+  "bootstrap_draws": 5000,
+  "target_cells": [
+    ["220517", "knocking"],
+    ["220518", "knocking"],
+    ["220117", "walking"],
+    ["220116", "shaking"],
+    ["220519", "walking"],
+    ["220428", "digging"]
+  ],
+  "feature_groups": {
+    "amplitude": ["amplitude_global_", "amplitude_log_scale"],
+    "temporal_dynamics": ["dynamics_delta_", "dynamics_temporal_"],
+    "frequency": ["dynamics_spectrum_", "_spectral_centroid_mean"],
+    "correlation": ["dynamics_correlation_"],
+    "spatial_profile": ["_profile_ch"],
+    "spatial_location": ["_center", "_confidence"]
+  },
+  "representative_rule": "within each declared cohort choose the session nearest its cohort median in robustly standardized session-feature space",
+  "nearest_neighbor_rule": "training sessions only within the evaluated fold; Euclidean distance after training-only robust scaling",
+  "multiple_testing": "Benjamini-Hochberg within each target-cell feature-family analysis",
+  "selection_used_target_outcomes": true,
+  "selection_note": "The named cells were selected from historically exposed ladder outcomes; all findings are diagnostic, not confirmatory."
+}

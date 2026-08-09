@@ -18,6 +18,8 @@ tmp/
 **/outputs/
 **/wandb/
 OTDR_CLI/OTDR/experiments/
+OTDR_CLI/PHI-OTDR/experiments/
+/output/
 
 # Generated retrieval indexes/corpora
 OTDR_CLI/OTDR/src/corpus/docs.json
@@ -28,3 +30,6 @@ OTDR_CLI/PHI-OTDR/src/corpus/index.faiss
 # Local review and development documents
 OTDR_REVIEW.md
 PHI_OTDR_REVIEW.md
+OTDR_CLI/PHI-OTDR/ACQUISITION_ERA_RESEARCH_REPORT.md
+OTDR_CLI/PHI-OTDR/RESEARCH_REPORT.md
+OTDR_CLI/PHI-OTDR/src/phi_research/shift_finalize_v1.py

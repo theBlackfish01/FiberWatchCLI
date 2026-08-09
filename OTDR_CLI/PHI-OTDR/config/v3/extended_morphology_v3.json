@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "name": "PHI-OTDR v3 wavelet and spatial-rank morphology control",
+  "evidence_status": "retrospective development; not confirmatory",
+  "dataset_fingerprint_sha256": "df38c1a11ac10481cc376eb791d1bdc699b967041a0f8b89c9f46b11027ddfe1",
+  "input_session_attributes_sha256": "49d439f9ea5d8a45f68e96d1a47ad532ba9efd59be8c9857d09c13d84b7960bd",
+  "temporal_stride": 5,
+  "wavelet": {
+    "family": "orthonormal Haar",
+    "levels": 4,
+    "signal": "first temporal difference after stride",
+    "features": [
+      "detail energy share at levels 1-4",
+      "level-4 approximation energy share",
+      "wavelet-scale entropy"
+    ]
+  },
+  "spatial_rank": {
+    "matrix": "12-channel temporal-difference covariance",
+    "feature": "entropy effective rank divided by 12",
+    "zero_energy_policy": "return zero"
+  },
+  "session_aggregation": [
+    "mean",
+    "standard_deviation",
+    "q10",
+    "median",
+    "q90",
+    "ordered_slope"
+  ],
+  "views": [
+    "wavelet_rank_only",
+    "morphology_plus_wavelet_rank"
+  ],
+  "model": {
+    "family": "standardized multinomial logistic regression",
+    "C_grid": [0.01, 0.1, 1.0, 10.0],
+    "maximum_iterations": 5000,
+    "selection_partition": "source_validation",
+    "calibration_partition": "source_calibration",
+    "final_fit_partitions": ["source_train", "source_validation"]
+  },
+  "selection_used_target_query": false,
+  "external_confirmation_required": true,
+  "limitations": [
+    "This is a bounded missing-control analysis, not a new post-hoc primary model search.",
+    "The Haar transform is computed directly to avoid adding an unnecessary package dependency.",
+    "Target-query outcomes are retrospective and cannot establish external generalization."
+  ]
+}
