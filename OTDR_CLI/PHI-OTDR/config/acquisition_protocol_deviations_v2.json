@@ -1,0 +1,32 @@
+{
+  "schema_version": "phi-acquisition-protocol-deviations-v2",
+  "confirmatory_lock_sha256": "f53383632311e4c4fb3ac50e60b0d17dcba5564e4c84b984560426fa3885ac33",
+  "recorded_after_query_access": true,
+  "deviations": [
+    {
+      "id": "encoder-description",
+      "classification": "documentation defect; no model change",
+      "locked_text": "64-32 MLP embedding with classification head",
+      "actual_implementation": "FeatureEncoder uses Linear(256)-LayerNorm-GELU-Dropout, Linear(128)-LayerNorm-GELU-Dropout, Linear(64), then a fold-local classification head",
+      "impact": "The actual architecture is the same implementation used by development pilots. Results and checkpoints are internally consistent, but the frozen prose description is wrong. The lock is preserved instead of rewritten."
+    },
+    {
+      "id": "first-direction-resume",
+      "classification": "execution interruption; artifact-safe resume",
+      "actual_implementation": "The first January-to-April-May process was terminated after 27 of 36 neural fits because output buffering made it appear stalled. A resume guard reloads only a fold with all three complete artifacts: best_model.pt, scaler.joblib, and training.json. The entire metric table was regenerated in the successful rerun.",
+      "impact": "No scientific setting or result-selection rule changed."
+    },
+    {
+      "id": "raw-target-inference",
+      "classification": "planned control unresolved",
+      "actual_implementation": "Frozen CNN and TCN source-era checkpoints exist, but the original das_data MAT root is absent from the checkout and the persistent cache contains source_train/source_validation only.",
+      "impact": "No target-era CNN/TCN result is claimed. Engineered-feature and open-world target confirmations are complete."
+    },
+    {
+      "id": "raw-target-inference-resolution",
+      "classification": "post-confirmatory recovery of a previously unresolved planned control",
+      "actual_implementation": "On 2026-08-06, two user-provided upstream archive parts restored the complete 15,419-file das_data tree. The four pre-existing CNN/TCN checkpoints were evaluated once on CUDA without fitting or selection. Original-inventory metrics were reconstructed by masking the complete-query prediction arrays; complete-data metrics are sensitivity analyses.",
+      "impact": "The best frozen neural target session macro-F1 is 0.339 for January-to-April-May and 0.387 for April-May-to-January. This confirms severe source-to-target degradation and does not overturn the engineered dynamics baseline. The complete-data sensitivity yields no net gain in correct session decisions. Evidence is under experiments/phi_research_v2/recovered_dataset/."
+    }
+  ]
+}

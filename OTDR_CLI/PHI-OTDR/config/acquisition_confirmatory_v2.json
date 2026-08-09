@@ -1,0 +1,88 @@
+{
+  "schema_version": "phi-acquisition-confirmatory-v2",
+  "frozen_at": "2026-08-05",
+  "final_query_used_at_freeze": false,
+  "scope": "PHI-OTDR only; bidirectional January versus April-May acquisition-era transfer",
+  "directions": {
+    "january_to_april_may": {
+      "manifest": "acquisition_january_to_april_may_v2.json",
+      "source_era": "january",
+      "target_era": "april_may"
+    },
+    "april_may_to_january": {
+      "manifest": "acquisition_april_may_to_january_v2.json",
+      "source_era": "april_may",
+      "target_era": "january"
+    }
+  },
+  "partitions": {
+    "fit": ["source_train"],
+    "early_stopping_only": ["source_validation"],
+    "strict_source_threshold": ["source_calibration"],
+    "primary_target_threshold": ["target_calibration"],
+    "enrollment_only": ["target_support"],
+    "single_confirmatory_evaluation": ["target_query"]
+  },
+  "closed_set_controls": {
+    "feature_views": ["amplitude", "dynamics", "full"],
+    "fixed_estimators": ["logistic", "extra_trees", "hist_gradient_boosting"],
+    "raw_neural": ["cnn", "tcn"],
+    "raw_neural_seed": 20260805,
+    "selection_rule": "evaluate all already-fitted development controls; no post-query selection"
+  },
+  "open_world": {
+    "outer_protocol": "leave one of six event classes unknown",
+    "feature_view": "dynamics",
+    "window_preprocessing": "source_train seen classes only: StandardScaler then PCA(24)",
+    "detection_descriptor": "session mean",
+    "detection_score": "negative mean distance to the three nearest source_train sessions of each seen class",
+    "threshold_quantile": 0.05,
+    "threshold_modes": ["target_calibration_primary", "source_calibration_strict"],
+    "enrollment_descriptor": "19 quantiles over 24 deterministic random projections (sliced-Wasserstein approximation)",
+    "enrollment_classifier": "negative mean distance to three nearest enrolled/source session descriptors",
+    "support_shots": [1, 3, 5],
+    "support_strategies": ["medoid_primary", "random_control"],
+    "random_support_draws": 30,
+    "aligned_encoder": {
+      "architecture": "64-32 MLP embedding with classification head",
+      "alignment": "class-conditional acquisition-date center alignment",
+      "weights": [0.0, 100.0],
+      "primary_weight": 100.0,
+      "epochs": 40,
+      "patience": 6,
+      "batch_size": 512,
+      "optimizer": "AdamW(lr=0.001, weight_decay=0.0001)",
+      "precision": "CUDA float16 autocast; float32 alignment loss",
+      "cuda_required": true
+    }
+  },
+  "seeds": [20260805, 20260806, 20260807],
+  "metrics": {
+    "primary_pre_enrollment": ["unknown_auroc", "detection_h", "oscr"],
+    "primary_post_enrollment": ["enrollment_h", "base_accuracy", "enrolled_recall"],
+    "closed_set": ["session_macro_f1", "worst_class_recall"],
+    "calibration": ["ece_15bin", "brier", "negative_log_likelihood", "risk_coverage"],
+    "uncertainty": ["class_conditional_conformal_prediction_sets"],
+    "reporting_unit": "session"
+  },
+  "statistics": {
+    "confidence_interval": "class-cluster bootstrap, 10000 draws",
+    "paired_test": "two-sided Wilcoxon signed-rank over held-out-class means",
+    "alpha": 0.05,
+    "multiplicity": "report exact p-values and treat six held-out classes as the inferential clusters"
+  },
+  "stop_go_decisions_frozen": {
+    "continue_sliced_wasserstein_medoid": true,
+    "stop_ordered_trajectory_as_primary": true,
+    "continue_conditional_alignment_weight_100": true,
+    "motif_tokenization": "not confirmatory: no physical motif labels and continuous distributional modeling already produced a positive development signal"
+  },
+  "validity_statements": [
+    "No target_query observation may fit preprocessing, choose a model, set a threshold, select support, or change this protocol.",
+    "The target_calibration partition contains known-class labels for threshold calibration only; each held-out class is excluded in its fold.",
+    "The target_support partition is used only after detection for unknown-class enrollment.",
+    "All windows from a session remain in one partition.",
+    "Acquisition era is observed, but site, fiber, subject, and environment identifiers are unavailable; conclusions must not claim invariance to those factors.",
+    "The target query is prospectively protected only relative to v2 development; repository-wide historical analyses exposed all files and are disclosed."
+  ]
+}

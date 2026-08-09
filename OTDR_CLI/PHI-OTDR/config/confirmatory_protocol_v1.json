@@ -1,0 +1,56 @@
+{
+  "name": "phi_otdr_open_world_confirmatory_v1",
+  "locked_date": "2026-08-05",
+  "split_manifest": "research_split_v1.json",
+  "split_manifest_sha256": "9c5898a7161275bbe5857d118ad6fa19c80a7213dcd37a3699bf09e2c8c26188",
+  "dataset_fingerprint_sha256": "a186512a2279d4e45560da7423ea5083380ac76d06ef7b37af53b4281b94ff82",
+  "development_seeds": [20260805, 20260806, 20260807],
+  "outer_protocol": "six leave-one-class-out folds",
+  "independent_unit": "recording session prefix before _single_data_<window>",
+  "features": {
+    "regime": "full",
+    "count": 339,
+    "views": ["amplitude", "temporal dynamics", "normalized spectrum", "spatial correlation"],
+    "fit": "StandardScaler fit on training windows from the five seen classes only"
+  },
+  "encoder": {
+    "type": "supervised FeatureEncoder",
+    "hidden_dimensions": [256, 128],
+    "embedding_dimension": 64,
+    "outer_holdout_access": "held-out class excluded from encoder and scaler fitting",
+    "checkpoint_selection": "seen-class validation window macro-F1 only"
+  },
+  "pre_enrollment": {
+    "gallery": "training-session embeddings from the five seen classes",
+    "score": "negative class-conditional Ledoit-Wolf Mahalanobis distance",
+    "threshold": "5th percentile of known calibration-session confidence (target 95% known acceptance)",
+    "unknown_class_access": "none during threshold calibration"
+  },
+  "post_enrollment": {
+    "gallery": "training sessions plus held-out-class support sessions",
+    "score": "negative mean Euclidean distance to the three nearest sessions in each class",
+    "shots": [1, 3, 5],
+    "support_unit": "complete labeled recording session",
+    "support_draws": 20,
+    "network_retraining_after_enrollment": false
+  },
+  "control": "same session-level 3-NN Euclidean lifecycle on standardized full features without the learned encoder",
+  "final_query_policy": "final_query is used once by this locked evaluator and never for fitting, selection, calibration, or support choice",
+  "primary_metrics": [
+    "session unknown AUROC",
+    "session known acceptance",
+    "session unknown recall",
+    "session detection harmonic mean",
+    "OSCR",
+    "post-enrollment base accuracy",
+    "post-enrollment enrolled recall",
+    "post-enrollment harmonic mean"
+  ],
+  "uncertainty": "three encoder seeds; 20 deterministic support draws; class-cluster bootstrap confidence intervals",
+  "development_evidence": [
+    "experiments/phi_research_v1/density_open/development_results.json",
+    "experiments/phi_research_v1/density_open/seed20260806_results.json",
+    "experiments/phi_research_v1/density_open/seed20260807_results.json"
+  ],
+  "no_further_model_selection_after_lock": true
+}

@@ -1,0 +1,89 @@
+{
+  "name": "phi_otdr_acquisition_robust_open_world_v2",
+  "locked_date": "2026-08-05",
+  "dataset_fingerprint_sha256": "a186512a2279d4e45560da7423ea5083380ac76d06ef7b37af53b4281b94ff82",
+  "directions": [
+    {
+      "name": "january_to_april_may",
+      "manifest": "acquisition_january_to_april_may_v2.json",
+      "manifest_sha256": "65c4f5a081d63e2414875033df1cad203165d342a7ddab995661bf8b9df0d076"
+    },
+    {
+      "name": "april_may_to_january",
+      "manifest": "acquisition_april_may_to_january_v2.json",
+      "manifest_sha256": "d7cb13a0a6043c3706c51e4d8a95cb160f42f312bab4377609e1eeeaeda83a28"
+    }
+  ],
+  "independent_unit": "recording session prefix before _single_data_<window>",
+  "era_semantics": "filename-derived acquisition era only; not a verified site, subject, fiber, environment, or interrogator identity",
+  "legacy_exposure": "All files were inventoried in v1. The v1 final query was evaluated under a mixed-era protocol, and non-final v1 sessions informed fixed exploratory cross-era diagnostics. V2 target queries are locked prospectively for v2 method development but are not globally untouched historical data.",
+  "development_access": {
+    "source_train": "fit preprocessing, representations, and models",
+    "source_validation": "model selection, early stopping, hyperparameter selection, stop/go decisions, and inner pseudo-unknown enrollment episodes",
+    "source_calibration": "source-only decision thresholds only",
+    "target_calibration": "target-known decision thresholds only; held-out unknown class excluded in each fold",
+    "target_support": "post-detection enrollment candidates only; complete sessions; never mixed with target query",
+    "target_query": "one locked confirmatory evaluation after all development choices are frozen"
+  },
+  "target_query_policy": "No fitting, preprocessing selection, representation selection, model selection, early stopping, threshold calibration, support selection, stop/go decision, or protocol revision may use target_query data or metrics.",
+  "outer_protocol": "two acquisition directions times six leave-one-class-out folds",
+  "seeds": [
+    20260805,
+    20260806,
+    20260807
+  ],
+  "support_shots": [
+    1,
+    3,
+    5
+  ],
+  "support_draws": 30,
+  "calibration_modes": {
+    "primary": "known target_calibration sessions with the held-out class excluded",
+    "strict_zero_target_label_control": "known source_calibration sessions only"
+  },
+  "required_feature_ablations": [
+    "amplitude_summary",
+    "dynamics_morphology",
+    "raw_trace",
+    "fused",
+    "acquisition_nuisance_probe"
+  ],
+  "required_session_aggregators": [
+    "mean",
+    "robust_quantiles",
+    "distributional_distance",
+    "ordered_trajectory"
+  ],
+  "required_support_selection_controls": [
+    "random",
+    "medoid",
+    "farthest_first",
+    "facility_location",
+    "uncertainty_diversity"
+  ],
+  "provisional_stop_go_gates": {
+    "trajectory": "continue if source-validation inner episodes improve enrollment H, worst-class recall, worst-draw stability, or calibrated risk materially over mean pooling",
+    "active_enrollment": "continue if a deterministic selector improves low-shot or worst-draw behavior over random support",
+    "morphology_factorization": "continue if cross-era confirmation improves without unacceptable within-era discrimination or calibration loss",
+    "tokenization": "attempt only after continuous distributional modeling; retain only with predictive or inspectability value"
+  },
+  "primary_metrics": [
+    "target-query session macro-F1",
+    "balanced accuracy",
+    "worst-class recall",
+    "acquisition generalization gap",
+    "unknown AUROC and AUPR",
+    "OSCR",
+    "known acceptance",
+    "unknown recall",
+    "open-world H-score",
+    "1/3/5-session enrollment H-score",
+    "worst support draw",
+    "risk-coverage",
+    "Brier score and ECE"
+  ],
+  "uncertainty": "session or held-out-class clustered intervals; paired comparisons across held-out classes and acquisition directions; multiple CUDA seeds for stochastic neural conclusions",
+  "cuda_policy": "all eligible neural training and inference must assert CUDA availability and log GPU, CUDA/PyTorch versions, precision, peak memory, runtime, and inference time; no silent CPU fallback",
+  "no_protocol_changes_after_target_query_access": true
+}
