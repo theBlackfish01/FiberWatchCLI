@@ -224,7 +224,7 @@ def freeze_v3(
                 "CUDA pilot improves source validation and at least one retrospective direction."
             ),
             "external": (
-                "No paper-level robustness claim until a new session-separated acquisition domain "
+                "No external robustness claim until a new session-separated acquisition domain "
                 "is evaluated once under a preregistered frozen protocol."
             ),
         },

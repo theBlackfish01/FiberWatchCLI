@@ -94,7 +94,7 @@
   ],
   "selection_policy": "All method selection and stop/go decisions use source development partitions only. Target support/calibration are restricted to declared enrollment/calibration. Historical target-query metrics are evaluated only after each comparison is frozen.",
   "stop_go": {
-    "external": "No paper-level robustness claim until a new session-separated acquisition domain is evaluated once under a preregistered frozen protocol.",
+    "external": "No external robustness claim until a new session-separated acquisition domain is evaluated once under a preregistered frozen protocol.",
     "neural": "Continue only if interpretable morphology establishes transferable signal or a CUDA pilot improves source validation and at least one retrospective direction.",
     "registration": "Continue if a source-selected registered or invariant view improves either-direction target macro-F1 or worst-class recall without a material source-validation or information-retention penalty; interpret retrospective evidence cautiously."
   },
